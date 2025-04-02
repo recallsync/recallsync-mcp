@@ -17,6 +17,7 @@
     "@modelcontextprotocol/sdk": "^1.8.0",
     "@types/cors": "^2.8.17",
     "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
     "node-fetch": "^3.3.2"
   },
   "devDependencies": {

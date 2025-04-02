@@ -28,12 +28,6 @@ npm start
 docker-compose up --build
 ```
 
-## Usage
-
-The server provides the following prompt:
-
-- `google-get`: Makes a GET request to Google.com and returns the response
-
 ## Development
 
 - The server is written in TypeScript
