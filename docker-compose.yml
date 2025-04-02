@@ -10,7 +10,5 @@ services:
     environment:
       - NODE_ENV=production
     restart: unless-stopped
-    volumes:
-      - .:/app
     stdin_open: true
     tty: true
