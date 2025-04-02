@@ -6,7 +6,12 @@ COPY package*.json ./
 RUN npm install
 
 COPY . .
-RUN npm run build && ls -la dist/
+RUN echo "Building TypeScript files..." && \
+    npm run build && \
+    echo "Build complete. Contents of dist directory:" && \
+    ls -la dist/ && \
+    echo "Contents of root directory:" && \
+    ls -la
 
 FROM node:20-slim
 
@@ -20,6 +25,7 @@ COPY --from=builder /app/dist ./dist
 ENV NODE_ENV=production
 
 # Verify files are copied correctly
-RUN ls -la dist/
+RUN echo "Contents of dist directory in final image:" && \
+    ls -la dist/
 
 CMD ["npm", "start"] 
