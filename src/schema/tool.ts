@@ -19,3 +19,23 @@ export const FindLeadSchema = z
   });
 
 export type FindLeadRequest = z.infer<typeof FindLeadSchema>;
+
+export const CreateTagSchema = z.object({
+  name: z.string().min(1, "Tag name is required"),
+});
+
+export type CreateTagRequest = z.infer<typeof CreateTagSchema>;
+
+export const UpdateTagSchema = z.object({
+  id: z.string().min(1, "Tag ID is required"),
+  name: z.string().min(1, "Tag name is required"),
+});
+
+export type UpdateTagRequest = z.infer<typeof UpdateTagSchema>;
+
+export const UpdateLeadSchema = z.object({
+  id: z.string().min(1, "Lead ID is required"),
+  status: z.string().min(1, "Status is required"),
+});
+
+export type UpdateLeadRequest = z.infer<typeof UpdateLeadSchema>;
