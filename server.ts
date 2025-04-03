@@ -12,7 +12,19 @@ import {
   leadTools,
   handleCreateLead,
   handleFindLead,
+  handleGetLeads,
+  handleGetLead,
+  handleUpdateLead,
+  handleDeleteLead,
 } from "./src/tools/lead.js";
+import {
+  tagTools,
+  handleCreateTag,
+  handleGetTags,
+  handleGetTag,
+  handleUpdateTag,
+  handleDeleteTag,
+} from "./src/tools/tag.js";
 import dotenv from "dotenv";
 
 dotenv.config();
@@ -43,7 +55,7 @@ const server = new Server(
 // Register the tools
 server.setRequestHandler(ListToolsRequestSchema, async () => {
   return {
-    tools: [...leadTools],
+    tools: [...leadTools, ...tagTools],
   };
 });
 
@@ -54,7 +66,24 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       return handleCreateLead(request);
     case "find-lead":
       return handleFindLead(request);
-
+    case "get-leads":
+      return handleGetLeads(request);
+    case "get-lead":
+      return handleGetLead(request);
+    case "update-lead":
+      return handleUpdateLead(request);
+    case "delete-lead":
+      return handleDeleteLead(request);
+    case "create-tag":
+      return handleCreateTag(request);
+    case "get-tags":
+      return handleGetTags(request);
+    case "get-tag":
+      return handleGetTag(request);
+    case "update-tag":
+      return handleUpdateTag(request);
+    case "delete-tag":
+      return handleDeleteTag(request);
     default:
       throw new Error("Unknown tool");
   }
