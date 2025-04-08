@@ -67,7 +67,7 @@ export const leadTools = [
   },
   {
     name: "get-lead",
-    description: "Get a specific lead by ID",
+    description: "Get details of a specific lead by its lead id.",
     arguments: [],
     inputSchema: {
       type: "object",
@@ -288,6 +288,7 @@ export async function handleGetLeads(request: CallToolRequest) {
           }${lead.email ? ` - Email: ${lead.email}` : ""}`;
         })
         .join("\n");
+
       return {
         content: [
           {

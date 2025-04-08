@@ -25,6 +25,40 @@ import {
   handleUpdateTag,
   handleDeleteTag,
 } from "./src/tools/tag.js";
+import {
+  meetingTools,
+  handleCreateMeeting,
+  handleGetMeetings,
+  handleGetMeetingsByLead,
+  handleUpdateMeeting,
+  handleUpdateMeetingByLead,
+  handleUpdateMeetingStatus,
+  handleUpdateOverdueNoShow,
+} from "./src/tools/meeting.js";
+import {
+  noteTools,
+  handleCreateNote,
+  handleGetNotes,
+  handleUpdateNote,
+  handleDeleteNote,
+} from "./src/tools/note.js";
+import {
+  followUpTools,
+  handleCreateFollowUp,
+  handleGetFollowUp,
+  handleGetAllFollowUps,
+  handleUpdateFollowUp,
+  handleDeleteFollowUp,
+} from "./src/tools/followUp.js";
+import {
+  voiceCampaignTools,
+  handleFindVoiceLead,
+  handleAddLeadToCampaign,
+  handleGetVoiceLead,
+  handleUpdateCampaignStatus,
+  handleFindLeadToCall,
+  handleGetAllVoiceCampaigns,
+} from "./src/tools/voiceCampaign.js";
 import dotenv from "dotenv";
 
 dotenv.config();
@@ -55,7 +89,14 @@ const server = new Server(
 // Register the tools
 server.setRequestHandler(ListToolsRequestSchema, async () => {
   return {
-    tools: [...leadTools, ...tagTools],
+    tools: [
+      ...leadTools,
+      ...tagTools,
+      ...meetingTools,
+      ...noteTools,
+      ...followUpTools,
+      ...voiceCampaignTools,
+    ],
   };
 });
 
@@ -84,6 +125,50 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       return handleUpdateTag(request);
     case "delete-tag":
       return handleDeleteTag(request);
+    case "create-meeting":
+      return handleCreateMeeting(request);
+    case "get-meetings":
+      return handleGetMeetings(request);
+    case "get-meetings-by-lead":
+      return handleGetMeetingsByLead(request);
+    case "update-meeting":
+      return handleUpdateMeeting(request);
+    case "update-meeting-by-lead":
+      return handleUpdateMeetingByLead(request);
+    case "update-meeting-status":
+      return handleUpdateMeetingStatus(request);
+    case "update-overdue-no-show":
+      return handleUpdateOverdueNoShow(request);
+    case "create-note":
+      return handleCreateNote(request);
+    case "get-notes":
+      return handleGetNotes(request);
+    case "update-note":
+      return handleUpdateNote(request);
+    case "delete-note":
+      return handleDeleteNote(request);
+    case "create-follow-up":
+      return handleCreateFollowUp(request);
+    case "get-follow-up":
+      return handleGetFollowUp(request);
+    case "get-all-follow-ups":
+      return handleGetAllFollowUps(request);
+    case "update-follow-up":
+      return handleUpdateFollowUp(request);
+    case "delete-follow-up":
+      return handleDeleteFollowUp(request);
+    case "find-voice-lead":
+      return handleFindVoiceLead(request);
+    case "add-lead-to-campaign":
+      return handleAddLeadToCampaign(request);
+    case "get-voice-lead":
+      return handleGetVoiceLead(request);
+    case "update-campaign-status":
+      return handleUpdateCampaignStatus(request);
+    case "find-lead-to-call":
+      return handleFindLeadToCall(request);
+    case "get-all-voice-campaigns":
+      return handleGetAllVoiceCampaigns(request);
     default:
       throw new Error("Unknown tool");
   }

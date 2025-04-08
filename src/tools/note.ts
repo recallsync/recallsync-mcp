@@ -1,92 +1,78 @@
-import {
-  CallToolRequestSchema,
-  CallToolRequest,
-} from "@modelcontextprotocol/sdk/types.js";
+import { CallToolRequest } from "@modelcontextprotocol/sdk/types.js";
 import { API_ENDPOINTS } from "../constants/tool.js";
 import {
-  CreateTagSchema,
-  CreateTagRequest,
-  UpdateTagSchema,
-  UpdateTagRequest,
+  CreateNoteSchema,
+  CreateNoteRequest,
+  UpdateNoteSchema,
+  UpdateNoteRequest,
+  GetNotesSchema,
+  GetNotesRequest,
 } from "../schema/tool.js";
 
-export const tagTools = [
+export const noteTools = [
   {
-    name: "create-tag",
-    description: "Create a new tag for leads",
+    name: "create-note",
+    description: "Create a new note for a lead",
     arguments: [],
     inputSchema: {
       type: "object",
       properties: {
-        name: {
+        leadId: {
           type: "string",
-          description: "Name of the tag",
+          description: "ID of the lead to create a note for",
+        },
+        content: {
+          type: "string",
+          description: "Content of the note",
         },
       },
-      required: ["name"],
+      required: ["leadId", "content"],
     },
   },
   {
-    name: "get-tags",
-    description: "Get all available tags",
+    name: "get-notes",
+    description: "Get all notes for a lead",
     arguments: [],
     inputSchema: {
       type: "object",
       properties: {
-        all: {
-          type: "boolean",
-          description: "Optional parameter to get all tags",
-          default: true,
+        leadId: {
+          type: "string",
+          description: "ID of the lead to get notes for",
         },
       },
-      required: [],
-      additionalProperties: false,
+      required: ["leadId"],
     },
   },
   {
-    name: "get-tag",
-    description: "Get a specific tag by ID",
+    name: "update-note",
+    description: "Update an existing note",
     arguments: [],
     inputSchema: {
       type: "object",
       properties: {
         id: {
           type: "string",
-          description: "ID of the tag to retrieve",
+          description: "ID of the note to update",
+        },
+        content: {
+          type: "string",
+          description: "New content for the note",
         },
       },
-      required: ["id"],
+      required: ["id", "content"],
     },
   },
   {
-    name: "update-tag",
-    description: "Update a tag by ID",
+    name: "delete-note",
+    description: "Delete a note",
     arguments: [],
     inputSchema: {
       type: "object",
       properties: {
         id: {
           type: "string",
-          description: "ID of the tag to update",
-        },
-        name: {
-          type: "string",
-          description: "New name for the tag",
-        },
-      },
-      required: ["id", "name"],
-    },
-  },
-  {
-    name: "delete-tag",
-    description: "Delete a tag by ID",
-    arguments: [],
-    inputSchema: {
-      type: "object",
-      properties: {
-        id: {
-          type: "string",
-          description: "ID of the tag to delete",
+          description: "ID of the note to delete",
         },
       },
       required: ["id"],
@@ -94,12 +80,15 @@ export const tagTools = [
   },
 ];
 
-export async function handleCreateTag(request: CallToolRequest) {
+export async function handleCreateNote(request: CallToolRequest) {
   try {
-    const args = request.params.arguments as unknown as CreateTagRequest;
-    const result = CreateTagSchema.safeParse(args);
+    const args = request.params.arguments as unknown as CreateNoteRequest;
+
+    // Validate the input using Zod
+    const result = CreateNoteSchema.safeParse(args);
 
     if (!result.success) {
+      // Format Zod errors into a readable message
       const errorMessages = result.error.errors
         .map((err) => `${err.path.join(".")}: ${err.message}`)
         .join(", ");
@@ -107,15 +96,15 @@ export async function handleCreateTag(request: CallToolRequest) {
         content: [
           {
             type: "text",
-            text: `Failed to create tag: ${errorMessages}`,
+            text: `Failed to create note: ${errorMessages}. Please provide the missing or incorrect information.`,
           },
         ],
       };
     }
 
-    const { name } = result.data;
-    const url = `${process.env.BASE_URL}${API_ENDPOINTS.TAG.CREATE_TAG}`;
-    const body = { name };
+    const { leadId, content } = result.data;
+    const url = `${process.env.BASE_URL}${API_ENDPOINTS.NOTE.CREATE_NOTE}`;
+    const body = { leadId, content };
 
     const response = await fetch(url, {
       method: "POST",
@@ -131,7 +120,7 @@ export async function handleCreateTag(request: CallToolRequest) {
         content: [
           {
             type: "text",
-            text: `Failed to create tag: ${response.statusText}`,
+            text: `Failed to create note: ${response.statusText}`,
           },
         ],
       };
@@ -142,7 +131,7 @@ export async function handleCreateTag(request: CallToolRequest) {
       content: [
         {
           type: "text",
-          text: `Successfully created tag: ${JSON.stringify(data)}`,
+          text: `Successfully created note: ${JSON.stringify(data)}`,
         },
       ],
     };
@@ -153,112 +142,22 @@ export async function handleCreateTag(request: CallToolRequest) {
       content: [
         {
           type: "text",
-          text: `Failed to execute create-tag tool: ${errorMessage}`,
+          text: `Failed to execute create-note tool: ${errorMessage}`,
         },
       ],
     };
   }
 }
 
-export async function handleGetTags(request: CallToolRequest) {
+export async function handleGetNotes(request: CallToolRequest) {
   try {
-    const url = `${process.env.BASE_URL}${API_ENDPOINTS.TAG.GET_TAGS}`;
+    const args = request.params.arguments as unknown as GetNotesRequest;
 
-    const response = await fetch(url, {
-      method: "GET",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${process.env.API_TOKEN}`,
-      },
-    });
-
-    if (!response.ok) {
-      return {
-        content: [
-          {
-            type: "text",
-            text: `Failed to get tags: ${response.statusText}`,
-          },
-        ],
-      };
-    }
-
-    const data = await response.json();
-    return {
-      content: [
-        {
-          type: "text",
-          text: `Available tags: ${JSON.stringify(data)}`,
-        },
-      ],
-    };
-  } catch (error: unknown) {
-    const errorMessage =
-      error instanceof Error ? error.message : "Unknown error occurred";
-    return {
-      content: [
-        {
-          type: "text",
-          text: `Failed to execute get-tags tool: ${errorMessage}`,
-        },
-      ],
-    };
-  }
-}
-
-export async function handleGetTag(request: CallToolRequest) {
-  try {
-    const { id } = request.params.arguments as { id: string };
-    const url = `${process.env.BASE_URL}${API_ENDPOINTS.TAG.GET_TAG}/${id}`;
-
-    const response = await fetch(url, {
-      method: "GET",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${process.env.API_TOKEN}`,
-      },
-    });
-
-    if (!response.ok) {
-      return {
-        content: [
-          {
-            type: "text",
-            text: `Failed to get tag: ${response.statusText}`,
-          },
-        ],
-      };
-    }
-
-    const data = await response.json();
-    return {
-      content: [
-        {
-          type: "text",
-          text: `Tag details: ${JSON.stringify(data)}`,
-        },
-      ],
-    };
-  } catch (error: unknown) {
-    const errorMessage =
-      error instanceof Error ? error.message : "Unknown error occurred";
-    return {
-      content: [
-        {
-          type: "text",
-          text: `Failed to execute get-tag tool: ${errorMessage}`,
-        },
-      ],
-    };
-  }
-}
-
-export async function handleUpdateTag(request: CallToolRequest) {
-  try {
-    const args = request.params.arguments as unknown as UpdateTagRequest;
-    const result = UpdateTagSchema.safeParse(args);
+    // Validate the input using Zod
+    const result = GetNotesSchema.safeParse(args);
 
     if (!result.success) {
+      // Format Zod errors into a readable message
       const errorMessages = result.error.errors
         .map((err) => `${err.path.join(".")}: ${err.message}`)
         .join(", ");
@@ -266,15 +165,84 @@ export async function handleUpdateTag(request: CallToolRequest) {
         content: [
           {
             type: "text",
-            text: `Failed to update tag: ${errorMessages}`,
+            text: `Failed to get notes: ${errorMessages}. Please provide the lead ID.`,
           },
         ],
       };
     }
 
-    const { id, name } = result.data;
-    const url = `${process.env.BASE_URL}${API_ENDPOINTS.TAG.UPDATE_TAG}/${id}`;
-    const body = { name };
+    const { leadId } = result.data;
+    const url = `${process.env.BASE_URL}${API_ENDPOINTS.NOTE.GET_NOTES}`;
+    const queryParams = new URLSearchParams();
+    queryParams.append("leadId", leadId);
+
+    const response = await fetch(`${url}?${queryParams.toString()}`, {
+      method: "GET",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${process.env.API_TOKEN}`,
+      },
+    });
+
+    if (!response.ok) {
+      return {
+        content: [
+          {
+            type: "text",
+            text: `Failed to get notes: ${response.statusText}`,
+          },
+        ],
+      };
+    }
+
+    const data = await response.json();
+    return {
+      content: [
+        {
+          type: "text",
+          text: `Retrieved notes: ${JSON.stringify(data)}`,
+        },
+      ],
+    };
+  } catch (error: unknown) {
+    const errorMessage =
+      error instanceof Error ? error.message : "Unknown error occurred";
+    return {
+      content: [
+        {
+          type: "text",
+          text: `Failed to execute get-notes tool: ${errorMessage}`,
+        },
+      ],
+    };
+  }
+}
+
+export async function handleUpdateNote(request: CallToolRequest) {
+  try {
+    const args = request.params.arguments as unknown as UpdateNoteRequest;
+
+    // Validate the input using Zod
+    const result = UpdateNoteSchema.safeParse(args);
+
+    if (!result.success) {
+      // Format Zod errors into a readable message
+      const errorMessages = result.error.errors
+        .map((err) => `${err.path.join(".")}: ${err.message}`)
+        .join(", ");
+      return {
+        content: [
+          {
+            type: "text",
+            text: `Failed to update note: ${errorMessages}. Please provide the note ID and new content.`,
+          },
+        ],
+      };
+    }
+
+    const { id, content } = result.data;
+    const url = `${process.env.BASE_URL}${API_ENDPOINTS.NOTE.UPDATE_NOTE}`;
+    const body = { id, content };
 
     const response = await fetch(url, {
       method: "PUT",
@@ -290,7 +258,7 @@ export async function handleUpdateTag(request: CallToolRequest) {
         content: [
           {
             type: "text",
-            text: `Failed to update tag: ${response.statusText}`,
+            text: `Failed to update note: ${response.statusText}`,
           },
         ],
       };
@@ -301,7 +269,7 @@ export async function handleUpdateTag(request: CallToolRequest) {
       content: [
         {
           type: "text",
-          text: `Successfully updated tag: ${JSON.stringify(data)}`,
+          text: `Successfully updated note: ${JSON.stringify(data)}`,
         },
       ],
     };
@@ -312,17 +280,29 @@ export async function handleUpdateTag(request: CallToolRequest) {
       content: [
         {
           type: "text",
-          text: `Failed to execute update-tag tool: ${errorMessage}`,
+          text: `Failed to execute update-note tool: ${errorMessage}`,
         },
       ],
     };
   }
 }
 
-export async function handleDeleteTag(request: CallToolRequest) {
+export async function handleDeleteNote(request: CallToolRequest) {
   try {
-    const { id } = request.params.arguments as { id: string };
-    const url = `${process.env.BASE_URL}${API_ENDPOINTS.TAG.DELETE_TAG}/${id}`;
+    const args = request.params.arguments as { id: string };
+
+    if (!args.id) {
+      return {
+        content: [
+          {
+            type: "text",
+            text: "Failed to delete note: Note ID is required",
+          },
+        ],
+      };
+    }
+
+    const url = `${process.env.BASE_URL}${API_ENDPOINTS.NOTE.DELETE_NOTE}/${args.id}`;
 
     const response = await fetch(url, {
       method: "DELETE",
@@ -337,7 +317,7 @@ export async function handleDeleteTag(request: CallToolRequest) {
         content: [
           {
             type: "text",
-            text: `Failed to delete tag: ${response.statusText}`,
+            text: `Failed to delete note: ${response.statusText}`,
           },
         ],
       };
@@ -347,7 +327,7 @@ export async function handleDeleteTag(request: CallToolRequest) {
       content: [
         {
           type: "text",
-          text: `Successfully deleted tag with ID: ${id}`,
+          text: "Successfully deleted note",
         },
       ],
     };
@@ -358,7 +338,7 @@ export async function handleDeleteTag(request: CallToolRequest) {
       content: [
         {
           type: "text",
-          text: `Failed to execute delete-tag tool: ${errorMessage}`,
+          text: `Failed to execute delete-note tool: ${errorMessage}`,
         },
       ],
     };
