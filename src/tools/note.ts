@@ -27,6 +27,7 @@ export const noteTools = [
         },
       },
       required: ["leadId", "content"],
+      additionalProperties: false,
     },
   },
   {
@@ -42,6 +43,7 @@ export const noteTools = [
         },
       },
       required: ["leadId"],
+      additionalProperties: false,
     },
   },
   {
@@ -61,6 +63,7 @@ export const noteTools = [
         },
       },
       required: ["id", "content"],
+      additionalProperties: false,
     },
   },
   {
@@ -76,6 +79,7 @@ export const noteTools = [
         },
       },
       required: ["id"],
+      additionalProperties: false,
     },
   },
 ];

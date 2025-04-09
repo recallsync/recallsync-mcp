@@ -19,14 +19,91 @@ export const leadTools = [
       properties: {
         name: {
           type: "string",
-          description: "Name of the lead",
+          description: "Full name of the lead",
+        },
+        firstName: {
+          type: "string",
+          description: "First name of the lead",
+        },
+        lastName: {
+          type: "string",
+          description: "Last name of the lead",
+        },
+        email: {
+          type: "string",
+          description: "Primary email address of the lead",
+        },
+        bestEmail: {
+          type: "string",
+          description: "Best email address to reach the lead",
         },
         phone: {
           type: "string",
-          description: "Phone number of the lead",
+          description: "Primary phone number of the lead",
+        },
+        bestPhone: {
+          type: "string",
+          description: "Best phone number to reach the lead",
+        },
+        dateOfBirth: {
+          type: "string",
+          description: "Date of birth (ISO format)",
+        },
+        ianaTimezone: {
+          type: "string",
+          description: "IANA timezone (e.g., Asia/Kolkata)",
+        },
+        country: {
+          type: "string",
+          description: "Country of the lead",
+        },
+        city: {
+          type: "string",
+          description: "City of the lead",
+        },
+        state: {
+          type: "string",
+          description: "State of the lead",
+        },
+        zipCode: {
+          type: "string",
+          description: "Zip code of the lead",
+        },
+        address: {
+          type: "string",
+          description: "Address of the lead",
+        },
+        company: {
+          type: "string",
+          description: "Company name",
+        },
+        companyAddress: {
+          type: "string",
+          description: "Company address",
+        },
+        industry: {
+          type: "string",
+          description: "Industry (e.g., Real Estate, Marketing)",
+        },
+        website: {
+          type: "string",
+          description: "Website URL",
+        },
+        message: {
+          type: "string",
+          description: "Message sent by the lead",
+        },
+        source: {
+          type: "string",
+          description: "Lead source (website, social media, referral, etc.)",
+        },
+        note: {
+          type: "string",
+          description: "Note about the lead by agency/agent",
         },
       },
       required: ["name", "phone"],
+      additionalProperties: false,
     },
   },
   {
@@ -45,16 +122,33 @@ export const leadTools = [
           description: "Phone number of the lead",
         },
       },
-      required: ["email", "phone"],
+      required: [],
+      additionalProperties: false,
     },
   },
   {
     name: "get-leads",
-    description: "Get all leads in the system",
+    description:
+      "Get all leads in the system with optional filters for status, status type, and quality",
     arguments: [],
     inputSchema: {
       type: "object",
       properties: {
+        status: {
+          type: "string",
+          description: "Optional parameter status to filter leads",
+          enum: ["NEW", "CONTACTED", "RETRYING", "JUNK", "BOOKED"],
+        },
+        statusType: {
+          type: "string",
+          description: "Optional parameter statusType to filter leads",
+          enum: ["HOT", "WARM", "COLD"],
+        },
+        quality: {
+          type: "string",
+          description: "Optional parameter quality to filter leads",
+          enum: ["UNQUALIFIED", "LOW", "MEDIUM", "HIGH", "PERFECT"],
+        },
         all: {
           type: "boolean",
           description: "Optional parameter to get all leads",
@@ -78,6 +172,7 @@ export const leadTools = [
         },
       },
       required: ["id"],
+      additionalProperties: false,
     },
   },
   {
@@ -94,9 +189,46 @@ export const leadTools = [
         status: {
           type: "string",
           description: "New status for the lead",
+          enum: ["NEW", "CONTACTED", "RETRYING", "JUNK", "BOOKED"],
+        },
+        statusType: {
+          type: "string",
+          description: "New status type for the lead",
+          enum: ["HOT", "WARM", "COLD"],
+        },
+        quality: {
+          type: "string",
+          description: "New quality rating for the lead",
+          enum: ["UNQUALIFIED", "LOW", "MEDIUM", "HIGH", "PERFECT"],
+        },
+        // Add other updateable fields from create-lead schema
+        firstName: {
+          type: "string",
+          description: "First name of the lead",
+        },
+        lastName: {
+          type: "string",
+          description: "Last name of the lead",
+        },
+        email: {
+          type: "string",
+          description: "Primary email address of the lead",
+        },
+        bestEmail: {
+          type: "string",
+          description: "Best email address to reach the lead",
+        },
+        bestPhone: {
+          type: "string",
+          description: "Best phone number to reach the lead",
+        },
+        note: {
+          type: "string",
+          description: "Note about the lead by agency/agent",
         },
       },
-      required: ["id", "status"],
+      required: ["id"],
+      additionalProperties: false,
     },
   },
   {
@@ -112,6 +244,7 @@ export const leadTools = [
         },
       },
       required: ["id"],
+      additionalProperties: false,
     },
   },
 ];

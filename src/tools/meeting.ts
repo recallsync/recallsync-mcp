@@ -39,37 +39,46 @@ export const meetingTools = [
         },
         messageOfLead: {
           type: "string",
-          description: "Message from the lead (optional)",
+          description: "Message from the lead",
         },
         meetingUrl: {
           type: "string",
-          description: "URL for the meeting (optional)",
+          description: "URL for the meeting",
         },
       },
-      required: ["leadId", "calMeetingID", "calMeetingUID", "startTime"],
+      required: [
+        "leadId",
+        "calMeetingID",
+        "calMeetingUID",
+        "startTime",
+        "messageOfLead",
+        "meetingUrl",
+      ],
+      additionalProperties: false,
     },
   },
   {
     name: "get-meetings",
     description:
-      "Retrieve meetings from the system with optional filtering. Available filters: 1) leadId - to get meetings for a specific lead, 2) status - to filter by meeting status (UPCOMING, NO_SHOW, COMPLETED). Example: 'get all upcoming meetings' will automatically apply the UPCOMING status filter.",
+      "Get all meetings with optional filters. You can filter by leadId and/or status. Available status values: UPCOMING (scheduled meetings), SUCCESS (completed meetings), NO_SHOW (lead didn't attend), CANCELLED (cancelled meetings), RESCHEDULED (meetings that were rescheduled)",
     arguments: [],
     inputSchema: {
       type: "object",
       properties: {
+        leadId: {
+          type: "string",
+          description:
+            "Optional lead ID to filter meetings for a specific lead",
+        },
+        status: {
+          type: "string",
+          description: "Optional status to filter meetings",
+          enum: ["UPCOMING", "SUCCESS", "NO_SHOW", "CANCELLED", "RESCHEDULED"],
+        },
         all: {
           type: "boolean",
           description: "Optional parameter to get all meetings",
           default: true,
-        },
-        leadId: {
-          type: "string",
-          description: "Optional lead ID to filter meetings",
-        },
-        status: {
-          type: "string",
-          description:
-            "Optional status to filter meetings - status can be 'UPCOMING' - 'NO_SHOW' - 'COMPLETED'",
         },
       },
       required: [],
@@ -78,7 +87,7 @@ export const meetingTools = [
   },
   {
     name: "get-meetings-by-lead",
-    description: "Get meetings for a specific lead",
+    description: "Get meetings for a specific lead with optional status filter",
     arguments: [],
     inputSchema: {
       type: "object",
@@ -90,9 +99,27 @@ export const meetingTools = [
         status: {
           type: "string",
           description: "Optional status to filter meetings",
+          enum: ["UPCOMING", "SUCCESS", "NO_SHOW", "CANCELLED", "RESCHEDULED"],
         },
       },
       required: ["leadId"],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: "get-meeting-by-uid",
+    description: "Get meeting details by its UID",
+    arguments: [],
+    inputSchema: {
+      type: "object",
+      properties: {
+        meetingUID: {
+          type: "string",
+          description: "UID of the meeting to retrieve",
+        },
+      },
+      required: ["meetingUID"],
+      additionalProperties: false,
     },
   },
   {
@@ -113,9 +140,11 @@ export const meetingTools = [
         status: {
           type: "string",
           description: "New status for the meeting",
+          enum: ["UPCOMING", "SUCCESS", "NO_SHOW", "CANCELLED", "RESCHEDULED"],
         },
       },
       required: ["meetingUID"],
+      additionalProperties: false,
     },
   },
   {
@@ -132,9 +161,11 @@ export const meetingTools = [
         status: {
           type: "string",
           description: "New status for the meeting",
+          enum: ["UPCOMING", "SUCCESS", "NO_SHOW", "CANCELLED", "RESCHEDULED"],
         },
       },
       required: ["leadId", "status"],
+      additionalProperties: false,
     },
   },
   {
@@ -151,9 +182,11 @@ export const meetingTools = [
         status: {
           type: "string",
           description: "New status for the meeting",
+          enum: ["UPCOMING", "SUCCESS", "NO_SHOW", "CANCELLED", "RESCHEDULED"],
         },
       },
       required: ["meetingId", "status"],
+      additionalProperties: false,
     },
   },
   {
@@ -165,16 +198,19 @@ export const meetingTools = [
       properties: {
         unit: {
           type: "string",
-          description: "Time unit (HOUR, DAY, WEEK)",
-          enum: ["HOUR", "DAY", "WEEK"],
+          description: "Time unit (hours, day, week)",
+          enum: ["hours", "day", "week"],
+          default: "hours",
         },
         amount: {
           type: "number",
           description: "Number of units",
+          default: 12,
         },
         markLeadAsCold: {
           type: "boolean",
           description: "Whether to mark the lead as cold",
+          default: false,
         },
       },
       required: [],
@@ -252,7 +288,6 @@ export async function handleCreateMeeting(request: CallToolRequest) {
 export async function handleGetMeetings(request: CallToolRequest) {
   try {
     const args = request.params.arguments as {
-      all?: boolean;
       leadId?: string;
       status?: string;
     };

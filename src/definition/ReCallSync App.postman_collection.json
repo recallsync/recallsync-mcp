@@ -4,7 +4,7 @@
 		"name": "ReCallSync App",
 		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
 		"_exporter_id": "42804595",
-		"_collection_link": "https://recallsync-team.postman.co/workspace/ReCallSync-Team-Workspace~d0a05f72-0d83-4cb5-8d49-4c2fee006c85/collection/42804595-ecda89ca-b14d-4c9e-861a-045de14c7dc5?action=share&source=collection_link&creator=42804595"
+		"_collection_link": "https://recallsync-team.postman.co/workspace/d0a05f72-0d83-4cb5-8d49-4c2fee006c85/collection/42804595-ecda89ca-b14d-4c9e-861a-045de14c7dc5?action=share&source=collection_link&creator=42804595"
 	},
 	"item": [
 		{
@@ -96,7 +96,7 @@
 								"method": "GET",
 								"header": [],
 								"url": {
-									"raw": "{{base_url}}/campaign/voice/find-lead/?email=            piyushpandey802120@gmail.com\n",
+									"raw": "{{base_url}}/campaign/voice/find-lead/?email=piyushpandey802120@gmail.com\n",
 									"host": [
 										"{{base_url}}"
 									],
@@ -109,10 +109,11 @@
 									"query": [
 										{
 											"key": "email",
-											"value": "            piyushpandey802120@gmail.com\n"
+											"value": "piyushpandey802120@gmail.com\n"
 										}
 									]
-								}
+								},
+								"description": "# Get Lead by Email\n\nThis endpoint allows you to retrieve lead information by providing the lead's email address.\n\n## Request\n\n### Query Parameters\n\n- `email` (string, required): The email address of the lead.\n    \n\n## Response\n\nUpon a successful request, the server will respond with the lead information in the response body."
 							},
 							"response": []
 						},
@@ -141,7 +142,7 @@
 										"voice"
 									]
 								},
-								"description": "Get all voice campaigns for the current agency"
+								"description": "### Get Voice Campaigns\n\nThis endpoint retrieves all voice campaigns for the current agency.\n\n#### Request\n\n- Method: GET\n    \n- URL: `{{base_url}}/campaign/voice`\n    \n\n#### Response\n\n- Status: 200\n    \n- Content-Type: application/json\n    \n- \\[ { \"id\": \"\", \"name\": \"\", \"description\": \"\", \"status\": \"\", \"withRetries\": true, \"withFollowUp\": true, \"retries\": 0, \"maxRetryAttempts\": 0, \"callBackDelay\": 0, \"concurrentCalls\": 0, \"startDate\": \"\", \"startTime\": \"\", \"workingHoursStart\": \"\", \"workingHoursEnd\": \"\", \"timeZone\": \"\", \"settingsUpdated\": true, \"agencyId\": \"\", \"vapiAssistants\": \\[ { \"id\": \"\", \"name\": \"\" } \\], \"isVapiAssistant\": true, \"createdAt\": \"\", \"updatedAt\": \"\", \"assistants\": \\[\\] }\\]"
 							},
 							"response": []
 						},
@@ -172,12 +173,26 @@
 										"add-lead",
 										"92174e43-959e-457d-bdfc-472147bd79d7"
 									]
-								}
+								},
+								"description": "This endpoint allows the addition of a lead to a specific voice campaign.\n\nThe HTTP POST request should be made to {{base_url}}/campaign/voice/{Id}\n\n### Request Parameters\n\n- No specific request parameters were provided.\n    \n\n### Request Headers\n\n- Content-Type: application/json\n    \n- Authorization: Bearer {your_access_token}"
 							},
 							"response": []
 						},
 						{
 							"name": "get leads by status",
+							"event": [
+								{
+									"listen": "test",
+									"script": {
+										"exec": [
+											"// Adding description for the request and response body\r",
+											""
+										],
+										"type": "text/javascript",
+										"packages": {}
+									}
+								}
+							],
 							"request": {
 								"auth": {
 									"type": "bearer",
@@ -192,7 +207,7 @@
 								"method": "GET",
 								"header": [],
 								"url": {
-									"raw": "{{base_url}}/campaign/voice/?status=TESTING",
+									"raw": "{{base_url}}/campaign/voice/?status=DRAFT",
 									"host": [
 										"{{base_url}}"
 									],
@@ -204,10 +219,11 @@
 									"query": [
 										{
 											"key": "status",
-											"value": "TESTING"
+											"value": "DRAFT"
 										}
 									]
-								}
+								},
+								"description": "# Get Voice Campaigns\n\nThis endpoint retrieves voice campaigns with a specified status.\n\n## Request\n\n### Endpoint\n\n`GET /campaign/voice/`\n\n### Query Parameters\n\n- `status` (string, required) - The status of the voice campaigns.\n    \n- status must be like-TESTING, DRAFT,ACTIVE, PAUSED, COMPLETED, FAILED"
 							},
 							"response": []
 						},
@@ -246,7 +262,8 @@
 										"lead",
 										"026a5424-9087-4312-b3f3-c975d207149b"
 									]
-								}
+								},
+								"description": "### Update Voice Campaign Lead Status\n\nThis endpoint allows the user to update the status of a specific lead in a voice campaign.\n\n#### Request\n\n- Method: PUT\n    \n- Endpoint: `{{base_url}}/campaign/voice/lead/026a5424-9087-4312-b3f3-c975d207149b`\n    \n- { \"status\": \"FAILED\"}"
 							},
 							"response": []
 						},
@@ -306,16 +323,17 @@
 									}
 								},
 								"url": {
-									"raw": "{{base_url}}/campaign/voice/bdc07b0a-310b-46b4-ab41-484d51836483",
+									"raw": "{{base_url}}/campaign/voice/56baf77b-3c16-4461-80a6-1ecdc28c8b39",
 									"host": [
 										"{{base_url}}"
 									],
 									"path": [
 										"campaign",
 										"voice",
-										"bdc07b0a-310b-46b4-ab41-484d51836483"
+										"56baf77b-3c16-4461-80a6-1ecdc28c8b39"
 									]
-								}
+								},
+								"description": "### Update Voice Campaign Status\n\nThis endpoint allows the user to update the status of a specific voice campaign.\n\n#### Request Body\n\n- `status` (string, required): The new status to be assigned to the voice campaign.\n    \n\n**Note**\n\n- Campaign status must be ACTIVE"
 							},
 							"response": []
 						},
@@ -346,7 +364,7 @@
 										"find"
 									]
 								},
-								"description": "StartFragmentFind lead to call by campaign id for the current agencyEndFragment"
+								"description": "### Get Campaign Voice Find\n\nThis endpoint retrieves a lead to call by campaign ID for the current agency.\n\nFind lead to call by campaign id\n\n#### Request\n\n- Method: `GET`\n    \n- URL: `{{base_url}}/campaign/voice/92458d5e-be4f-4a28-85f8-71ea1fc2eb56/find`\n    \n\n#### Response\n\nThe response for this request can be documented as a JSON schema. However, since the response data is not provided, the JSON schema for the response cannot be generated at the moment."
 							},
 							"response": []
 						}
@@ -397,7 +415,8 @@
 										"leads",
 										"tag"
 									]
-								}
+								},
+								"description": "This endpoint allows you to tag a lead by sending an HTTP POST request to the specified URL.\n\n{{base_url}}/leads/tag  \n  \n\n### Request Body\n\n- name (text, required): The name of the lead to be tagged.\n    \n\n### Response\n\nThe response of this request is a JSON schema representing the structure of the response data."
 							},
 							"response": []
 						},
@@ -425,7 +444,8 @@
 										"leads",
 										"tag"
 									]
-								}
+								},
+								"description": "# Retrieve Leads by Tag\n\nThis endpoint ({{base_url}}/leads/tag) allows you to retrieve leads based on their assigned tag.\n\n## Request\n\n### Request Body\n\nThis endpoint does not require a request body.\n\n## Response\n\nThe response will be a JSON object with the following properties:\n\n- `status` (string): The status of the response, indicating success or failure.\n    \n- `message` (string): A message providing additional information about the response status.\n    \n- `data` (array): An array of lead objects, each containing information about a lead."
 							},
 							"response": []
 						},
@@ -454,7 +474,8 @@
 										"tag",
 										"daed4390-e519-4a06-88c4-c1f683ee65f1"
 									]
-								}
+								},
+								"description": "This endpoint ({{base_url}}/leads/tag/Id) sends an HTTP DELETE request to remove a specific tag associated with a lead. The request should include the tag ID in the URL path.\n\n### Request Body\n\nThis request does not require a request body.\n\n### Response\n\nUpon a successful deletion, the response will not include a body, but will confirm the successful removal of the tag. If the tag ID is not found, an error message will be returned."
 							},
 							"response": []
 						},
@@ -483,7 +504,8 @@
 										"tag",
 										"13a5963d-71e4-4ac6-a44a-82ee04111146"
 									]
-								}
+								},
+								"description": "This endpoint ({{base_url}}/leads/tag/id) makes an HTTP GET request to retrieve information about a specific lead with the provided tag ID.\n\n### Request Body\n\nThis endpoint does not require a request body.\n\n### Response Body\n\n- The response will include details about the lead, such as their name, contact information, and any associated tags or categories."
 							},
 							"response": []
 						},
@@ -521,7 +543,8 @@
 										"tag",
 										"13a5963d-71e4-4ac6-a44a-82ee04111146"
 									]
-								}
+								},
+								"description": "### Update Lead Tag\n\nThis endpoint is used to update the tag for a specific lead.\n\n#### Request\n\n- Method: PUT\n    \n- URL: `{{base_url}}/leads/tag/13a5963d-71e4-4ac6-a44a-82ee04111146`\n    \n- Body:\n    \n    - name (text, required): The new tag name for the lead.\n        \n\n#### Response\n\nThe response for this request used to update the particular tag by it's id"
 							},
 							"response": []
 						}
@@ -550,7 +573,8 @@
 							"path": [
 								"leads"
 							]
-						}
+						},
+						"description": "### Get Leads\n\nThis endpoint retrieves a list of leads.\n\n#### Request\n\n- Method: GET\n    \n- URL: `{{base_url}}/leads`\n    \n\n#### Response\n\n- Status: 200\n    \n- Content-Type: application/json\n    \n\n``` json\n{\n    \"leads\": []\n}\n\n ```"
 					},
 					"response": []
 				},
@@ -585,7 +609,8 @@
 									"value": "null"
 								}
 							]
-						}
+						},
+						"description": "### Get Lead by Email\n\nThis endpoint retrieves lead information based on the provided email.\n\n#### Request\n\n- Method: GET\n    \n- URL: `{{base_url}}/leads/find/?email=vishal.chp.99@gmail.com`"
 					},
 					"response": []
 				},
@@ -621,7 +646,8 @@
 							"path": [
 								"leads"
 							]
-						}
+						},
+						"description": "### Create Lead\n\nThis endpoint {{base_url}}/leads allows you to create a new lead.\n\n**Request Body**\n\n- name (string, required): The name of the lead.\n    \n- phone (string, required): The phone number of the lead."
 					},
 					"response": []
 				},
@@ -659,7 +685,8 @@
 								"lead",
 								"92174e43-959e-457d-bdfc-472147bd79d7"
 							]
-						}
+						},
+						"description": "# Update Lead Status\n\nThis endpoint {{base_url}}/leads/lead/{Id} is used to update the status of a lead.\n\n## Request\n\n### Request Body\n\n- `status` (string, required): The new status of the lead. Possible values include \"BOOKED\"."
 					},
 					"response": []
 				},
@@ -688,7 +715,8 @@
 								"lead",
 								"e80d9080-0f3d-44d5-844a-cbb7b195187c"
 							]
-						}
+						},
+						"description": "# Retrieve Lead Details\n\nThis endpoint retrieves the details of a specific lead identified by the unique lead ID.\n\n## Request\n\n### Request Body\n\nThis request does not require a request body.\n\n### Request Parameters\n\n- `base_url` (string, required): The base URL for the API.\n    \n\n### Endpoint\n\n`GET {{base_url}}/leads/lead/{id}`\n\n## Response\n\n### 200 OK\n\n### Response Body\n\nThe response body contains the details of the lead including the lead ID, first name, last name, email, phone, status, creation date, and last update date."
 					},
 					"response": []
 				},
@@ -716,7 +744,8 @@
 								"leads",
 								"lead"
 							]
-						}
+						},
+						"description": "### Delete Lead\n\nThis endpoint {{base_url}}/leads/lead/{id} is used to delete a lead.\n\n#### Request Body\n\nThis request does not require a request body.\n\n#### Response\n\nThe response for this request is a JSON schema describing the structure of the response body. The schema includes the properties and data types of the response."
 					},
 					"response": []
 				}
@@ -759,7 +788,7 @@
 								"tDfG1k6nCygJrgWKUboDda"
 							]
 						},
-						"description": "Update meeting by calMeetingUID"
+						"description": "### Update Meeting\n\nThis endpoint ({{base_url}}/meeting/uid) is used to update a specific meeting by meeting unique identifier.\n\n#### Request Body\n\n- `startTime` (string): The updated start time of the meeting in ISO 8601 format.\n    \n- `status` (string): The updated status of the meeting.\n    \n\n#### Response Body\n\nThe response will contain the updated details of the meeting."
 					},
 					"response": []
 				},
@@ -796,7 +825,7 @@
 								}
 							]
 						},
-						"description": "Get meeting by lead Id of a particular id"
+						"description": "### Get Meeting by Lead ID\n\nThis endpoint makes an HTTP GET request to retrieve meeting details based on the lead ID provided in the URL.\n\n#### Request\n\nThe request does not contain a request body.\n\n- URL parameters:\n    \n    - `base_url`:{{base_url}}/meeting/lead/id\n        \n    - Pass the lead ID for which the meeting is to be retrieved.\n        \n\n#### Response\n\nUpon a successful request, the user can expect a JSON response containing the meeting details associated with the lead ID. The response may include information such as meeting date, time, location, and any additional details related to the meeting."
 					},
 					"response": []
 				},
@@ -834,7 +863,7 @@
 								""
 							]
 						},
-						"description": "Create a new meeting"
+						"description": "### Create a new meeting\n\nThis api endpoint ({{base_url}}/meeting) is used to create the new meeting\n\n#### Request Body\n\n- **leadId**:\n    \n- **calMeetingID**:\n    \n- **calMeetingUID**:\n    \n- **startTime**:\n    \n- **messageOfLead**:\n    \n\n#### Response Body\n\nThe response body contains the details of the newly created meeting."
 					},
 					"response": []
 				},
@@ -876,7 +905,7 @@
 								}
 							]
 						},
-						"description": "Get all the meetings"
+						"description": "# Get All Meetings\n\nThis endpoint ({{base_url}}/meeting) is used to retrieve all the meetings.\n\n### Request Body\n\nThis request does not require a request body.\n\n### Response Body\n\nresponse contained an array of meeting objects with various properties such as id, calMeetingID, startTime, messageOfLead, and more"
 					},
 					"response": []
 				},
@@ -999,7 +1028,7 @@
 								"fd6c39fe-029f-45c5-af6a-3f4c05e4ab5c"
 							]
 						},
-						"description": "Update meeting by leadId"
+						"description": "### Update Meeting by Lead ID\n\nThis endpoint allows updating a meeting by providing the lead ID in the URL.\n\n#### Request Body\n\n- Raw JSON\n    \n    - `status`: (string) The updated status of the meeting.\n        \n\n#### Request URL\n\n- `{{base_url}}/meeting/lead/leadid`\n    \n\n#### Response\n\nUpon a successful request, a response with the updated meeting details will be received.\n\nThis endpoint is used to update a meeting by its lead ID.\n\n#### Request Body\n\n- `status` (string, required): The new status of the meeting.\n    \n\nExample:\n\n``` json\n{\n    \"status\": \"SUCCESS\"\n}\n\n ```"
 					},
 					"response": []
 				},
@@ -1008,7 +1037,7 @@
 					"request": {
 						"method": "GET",
 						"header": [],
-						"description": "Get meeting by MeetingUID"
+						"description": "### Get Meeting Details\n\nThis endpoint ({{base_url}}/meeting/meetinguid) retrieves the details of a specific meeting identified by its MeetingUID.\n\n#### Request Body\n\nThis request does not require a request body.\n\n#### Response Body\n\n- `meeting_id`: The unique identifier for the meeting.\n    \n- `meeting_title`: The title of the meeting.\n    \n- `start_time`: The start time of the meeting.\n    \n- `end_time`: The end time of the meeting.\n    \n- `participants`: An array of participants' details.\n    \n    - `participant_id`: The unique identifier for the participant.\n        \n    - `participant_name`: The name of the participant.\n        \n    - `participant_email`: The email address of the participant."
 					},
 					"response": []
 				},
@@ -1038,7 +1067,8 @@
 								"07ea66af-d749-4f1e-94a4-61b39515bf4e",
 								"upcoming"
 							]
-						}
+						},
+						"description": "### Retrieve Upcoming Meeting for Lead\n\nThis endpoint is used to retrieve the upcoming meeting details for a specific lead.\n\n#### Request\n\n- Method: GET\n    \n- URL: `{{base_url}}/meeting/lead/leadid/upcoming`\n    \n\n#### Response\n\nThis endpoint response the meeting of any upcoming meeting if it exist there"
 					},
 					"response": []
 				}
@@ -1195,7 +1225,7 @@
 										"pipeline"
 									]
 								},
-								"description": "GET all the pipelines"
+								"description": "### GET Pipeline\n\nThis endpoint ({{base_url}}/pipeline) is used to retrieve all the pipelines.\n\n#### Request\n\nThere are no request parameters for this endpoint.\n\n#### Response\n\nThe response for this request is a JSON object representing the pipeline data. To document the response as a JSON schema, the following structure can be used:\n\n``` json\n{\n}\n\n ```"
 							},
 							"response": []
 						},
@@ -1224,7 +1254,7 @@
 										"cd063f21-9431-4b30-b4e8-a58c1ff0582c"
 									]
 								},
-								"description": "GET a specific Pipeline by providing the Id of the pipeline in the search params"
+								"description": "### Get Pipeline by ID\n\nThis endpoint retrieves a specific Pipeline by providing the ID of the pipeline in the search parameters.\n\n#### Request\n\n- Method: GET\n    \n- URL: `{{base_url}}/pipeline/id`\n    \n\n#### Response\n\nThe response for this request is a JSON object representing the Pipeline. Below is the JSON schema for the response:\n\n``` json\n{\n}\n\n ```"
 							},
 							"response": []
 						},
@@ -1262,7 +1292,7 @@
 										"675bd6f9-302f-4e9b-8173-8db5c2ba0387"
 									]
 								},
-								"description": "UPDATE a specific Pipeline by providing the Id of the pipeline in the search params"
+								"description": "### Update Pipeline\n\nThis endpoint allows you to update a specific Pipeline by providing the Id of the pipeline in the search params.\n\n#### Request\n\n- Method: PUT\n    \n- URL: `http://localhost:3000/api/rest/pipeline/id`\n    \n\n#### Request Body\n\n- **name**: The updated name of the pipeline.\n    \n\n#### Response\n\nThe response will contain the updated details of the pipeline."
 							},
 							"response": []
 						},
@@ -1304,7 +1334,8 @@
 									"path": [
 										"pipeline"
 									]
-								}
+								},
+								"description": "### POST /pipeline\n\nThis endpoint is used to create a new pipeline.\n\n#### Request\n\n- Method: POST\n    \n- URL: `http://localhost:3000/api/rest/pipeline`\n    \n\n#### Request Body\n\n- name (string, required): The name of the pipeline.\n    \n\n#### Response\n\nThe response for this request is a JSON object which contain all the detail about your pipeline"
 							},
 							"response": []
 						},
@@ -1333,7 +1364,7 @@
 										"cd063f21-9431-4b30-b4e8-a58c1ff0582c"
 									]
 								},
-								"description": "DELETE a specific Pipeline by providing the Id of the pipeline in the search params"
+								"description": "### Delete Pipeline\n\nDeletes a specific Pipeline by providing the Id of the pipeline in the search params.\n\n#### Request\n\n- Method: DELETE\n    \n- URL: `{{base_url}}/pipeline/cd063f21-9431-4b30-b4e8-a58c1ff0582c`\n    \n\n#### Response\n\nThe response for this request is a JSON schema. The schema includes the structure and data types of the response body."
 							},
 							"response": []
 						},
@@ -1401,7 +1432,7 @@
 										}
 									]
 								},
-								"description": "Fetch all opportunities\n\nFilter by either pipelineId or stageId - Get all opportunities inside that stage\n\nif stageId is provided - pipelineId won't be used\n\nAlso we can filter our Opportunities by useing date"
+								"description": "### GET Opportunities\n\nThis endpoint ([http://localhost:3000/api/rest/pipeline/opportunity?pipelineid=id](http://localhost:3000/api/rest/pipeline)) is used to retrieve all the opportunities.\n\n#### Response\n\nThe response for this request is a JSON object representing the opportunity data. To document the response as a JSON schema, the following structure can be used:\n\n``` json\n{\n}\n\n ```"
 							},
 							"response": []
 						},
@@ -1439,7 +1470,7 @@
 										"opportunity"
 									]
 								},
-								"description": "Creating new opportunity by using -\n\n\\[name, leadId, pipelineId,stageid\\]"
+								"description": "### POST(create) Opportunity\n\nThis endpoint is used to create a new opportunity.\n\n#### Request\n\n- Method: POST\n    \n- URL: `http://localhost:3000/api/rest/pipeline/opportunity`\n    \n\n#### Request Body\n\n- name\n    \n- description\n    \n- value\n    \n- leadid\n    \n- pipelineid\n    \n- stageid\n    \n\n#### Response\n\nThe response for this request is a JSON object which contain all the detail about your pipeline"
 							},
 							"response": []
 						},
@@ -1478,7 +1509,7 @@
 										"8027f079-ad75-4d73-bc8c-4bda8e207dcc"
 									]
 								},
-								"description": "UPDEATE a specigic Opportunity by providing the Id of that Opportunity."
+								"description": "### Update Opportunity\n\nThis endpoint allows you to update a specific Pipeline by providing the Id of the pipeline in the search params.\n\n#### Request\n\n- Method: PUT\n    \n- URL: `http://localhost:3000/api/rest/pipeline/opportunity/id`\n    \n\n#### Response\n\nThe response will contain the updated details of the pipeline."
 							},
 							"response": []
 						},
@@ -1508,7 +1539,7 @@
 										"8027f079-ad75-4d73-bc8c-4bda8e207dcc"
 									]
 								},
-								"description": "GET a specigic Opportunity by providing the Id of that Opportunity."
+								"description": "### Get Opportunity by ID\n\nThis endpoint retrieves a specific opportunity by providing the ID of the pipeline in the search parameters.\n\n#### Request\n\n- Method: GET\n    \n- URL: `{{base_url}}/pipeline/opportunity/id`\n    \n\n#### Response\n\nThe response for this request is a JSON object representing the Oppoertunity. Below is the JSON schema for the response:\n\n``` json\n{\n}\n\n ```"
 							},
 							"response": []
 						},
@@ -1538,7 +1569,7 @@
 										"8027f079-ad75-4d73-bc8c-4bda8e207dcc"
 									]
 								},
-								"description": "DELETE a specigic Opportunity by providing the Id of that Opportunity."
+								"description": "### Delete Opportunity\n\nDeletes a specific opportunity by providing the Id of the pipeline in the search params.\n\n#### Request\n\n- Method: DELETE\n    \n- URL: `{{base_url}}/pipeline/opportunity/id`\n    \n\n#### Response\n\nThe response for this request is a JSON schema. The schema includes the structure and data types of the response body."
 							},
 							"response": []
 						}
@@ -1694,7 +1725,7 @@
 								"follow-up"
 							]
 						},
-						"description": "Get all calls"
+						"description": "### POST(create)/Followup\n\nThis endpoint is used to create a new pipeline.\n\n#### Request\n\n- Method: POST\n    \n- URL: `http://localhost:3000/api/rest/follow-up`\n    \n\n#### Request Body\n\n- leadId\n    \n- followUpAt\n    \n- reason\n    \n- summary\n    \n- type\n    \n\n#### Response\n\nThe response for this request is a JSON object which contain all the detail about your followup"
 					},
 					"response": []
 				},
@@ -1732,7 +1763,7 @@
 								"cb2117e5-23d8-48b4-996d-20869e7afa69"
 							]
 						},
-						"description": "Get all calls"
+						"description": "### Update Followup\n\nThis endpoint allows you to update a particular followup by providing the Id of the pipeline in the search params.\n\n#### Request\n\n- Method: PUT\n    \n- URL: `http://localhost:3000/api/rest/follow-up/id`\n    \n\n#### Request Body\n\n- attempts: The updated name of the pipeline.\n    \n\n#### Response\n\nThis will update all your followups"
 					},
 					"response": []
 				},
@@ -1770,7 +1801,7 @@
 								"cb2117e5-23d8-48b4-996d-20869e7afa69"
 							]
 						},
-						"description": "Get all calls"
+						"description": "### Delete Followup\n\nDeletes a specific follow-up by providing the Id of the pipeline in the search params.\n\n#### Request\n\n- Method: DELETE\n    \n- URL: `{{base_url}}/follow-up/id`\n    \n\n#### Response\n\nThis will delete follow-up of that particular id"
 					},
 					"response": []
 				},
@@ -1811,7 +1842,7 @@
 								"caf6fdde-3b47-4a0e-9bd3-862949c4c981"
 							]
 						},
-						"description": "Get all calls"
+						"description": "### Get Followup by ID\n\nThis endpoint retrieves a specific follow-up by providing the ID of the pipeline in the search parameters.\n\n#### Request\n\n- Method: GET\n    \n- URL: `{{base_url}}/follow-up/id`\n    \n\n#### Response\n\nThe response for this request is a JSON object representing the followup. Below is the JSON schema for the response:\n\n``` json\n{\n}\n\n ```"
 					},
 					"response": []
 				},
@@ -1863,7 +1894,7 @@
 								}
 							]
 						},
-						"description": "Get all calls"
+						"description": "### GET Followup\n\nThis endpoint ({{base_url}}/follow-up?type=) required following type AI_AGENT, HUMAN_AGNET is used to retrieve all the followup in the particlular type.\n\n#### Request\n\nThere is one request param type.\n\n#### Response\n\nThe response for this request is a JSON object representing the pipeline data. To document the response as a JSON schema, the following structure can be used:\n\n``` json\n\"followups\":[\n]\n\n ```"
 					},
 					"response": []
 				}

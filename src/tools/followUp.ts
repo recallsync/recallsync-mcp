@@ -31,9 +31,32 @@ export const followUpTools = [
           type: "string",
           description: "Reason for the follow-up",
         },
+        notes: {
+          type: "string",
+          description: "Additional notes about the follow-up",
+        },
         summary: {
           type: "string",
-          description: "Summary of the follow-up (optional)",
+          description: "Summary of the follow-up",
+        },
+        status: {
+          type: "string",
+          description: "Status of the follow-up",
+          enum: [
+            "PENDING",
+            "COMPLETED",
+            "RESCHEDULED",
+            "NO_SHOW",
+            "NOT_INTERESTED",
+            "DROPPED",
+          ],
+          default: "PENDING",
+        },
+        priority: {
+          type: "string",
+          description: "Priority level of the follow-up",
+          enum: ["LOW", "MEDIUM", "HIGH"],
+          default: "LOW",
         },
         type: {
           type: "string",
@@ -64,15 +87,33 @@ export const followUpTools = [
   },
   {
     name: "get-all-follow-ups",
-    description: "Get all follow-ups, optionally filtered by type",
+    description:
+      "Get all follow-ups, optionally filtered by type, status, or priority",
     arguments: [],
     inputSchema: {
       type: "object",
       properties: {
         type: {
           type: "string",
-          description: "Filter follow-ups by type (HUMAN_AGENT or AI_AGENT)",
+          description: "Filter follow-ups by type",
           enum: ["HUMAN_AGENT", "AI_AGENT"],
+        },
+        status: {
+          type: "string",
+          description: "Filter follow-ups by status",
+          enum: [
+            "PENDING",
+            "COMPLETED",
+            "RESCHEDULED",
+            "NO_SHOW",
+            "NOT_INTERESTED",
+            "DROPPED",
+          ],
+        },
+        priority: {
+          type: "string",
+          description: "Filter follow-ups by priority",
+          enum: ["LOW", "MEDIUM", "HIGH"],
         },
         all: {
           type: "boolean",
@@ -95,25 +136,34 @@ export const followUpTools = [
           type: "string",
           description: "ID of the follow-up to update",
         },
+        status: {
+          type: "string",
+          description: "New status for the follow-up",
+          enum: [
+            "PENDING",
+            "COMPLETED",
+            "RESCHEDULED",
+            "NO_SHOW",
+            "NOT_INTERESTED",
+            "DROPPED",
+          ],
+        },
+        priority: {
+          type: "string",
+          description: "New priority level",
+          enum: ["LOW", "MEDIUM", "HIGH"],
+        },
         followUpAt: {
           type: "string",
-          description: "New date and time for the follow-up (ISO format)",
+          description: "New follow-up date and time (ISO format)",
         },
-        reason: {
+        notes: {
           type: "string",
-          description: "New reason for the follow-up",
-        },
-        summary: {
-          type: "string",
-          description: "New summary of the follow-up",
+          description: "Additional notes about the follow-up",
         },
         attempts: {
           type: "number",
           description: "Number of follow-up attempts made",
-        },
-        status: {
-          type: "string",
-          description: "Status of the follow-up",
         },
       },
       required: ["id"],
@@ -160,7 +210,16 @@ export async function handleCreateFollowUp(request: CallToolRequest) {
       };
     }
 
-    const { leadId, followUpAt, reason, summary, type } = result.data;
+    const {
+      leadId,
+      followUpAt,
+      reason,
+      summary,
+      notes,
+      status,
+      priority,
+      type,
+    } = result.data;
 
     const response = await fetch(
       `${process.env.BASE_URL}${API_ENDPOINTS.FOLLOW_UP.CREATE_FOLLOW_UP}`,
@@ -175,6 +234,9 @@ export async function handleCreateFollowUp(request: CallToolRequest) {
           followUpAt,
           reason,
           summary,
+          notes,
+          status,
+          priority,
           type,
         }),
       }
@@ -313,15 +375,26 @@ export async function handleGetAllFollowUps(request: CallToolRequest) {
       };
     }
 
-    const { type, all } = result.data;
+    const { type, status, priority } = result.data;
 
     let url = `${process.env.BASE_URL}${API_ENDPOINTS.FOLLOW_UP.GET_ALL_FOLLOW_UPS}`;
+    const params = new URLSearchParams();
 
     if (type) {
-      url += `?type=${type}`;
+      params.append("type", type);
     }
 
-    const response = await fetch(url, {
+    if (status) {
+      params.append("status", status);
+    }
+
+    if (priority) {
+      params.append("priority", priority);
+    }
+
+    const finalUrl = params.toString() ? `${url}?${params.toString()}` : url;
+
+    const response = await fetch(finalUrl, {
       method: "GET",
       headers: {
         "Content-Type": "application/json",
@@ -393,15 +466,7 @@ export async function handleUpdateFollowUp(request: CallToolRequest) {
       };
     }
 
-    const { id, followUpAt, reason, summary, attempts, status } = result.data;
-
-    const updateData: Record<string, any> = {};
-
-    if (followUpAt) updateData.followUpAt = followUpAt;
-    if (reason) updateData.reason = reason;
-    if (summary) updateData.summary = summary;
-    if (attempts !== undefined) updateData.attempts = attempts;
-    if (status) updateData.status = status;
+    const { id, status, priority, followUpAt, notes, attempts } = result.data;
 
     const response = await fetch(
       `${process.env.BASE_URL}${API_ENDPOINTS.FOLLOW_UP.UPDATE_FOLLOW_UP}/${id}`,
@@ -411,7 +476,13 @@ export async function handleUpdateFollowUp(request: CallToolRequest) {
           "Content-Type": "application/json",
           Authorization: `Bearer ${process.env.API_TOKEN}`,
         },
-        body: JSON.stringify(updateData),
+        body: JSON.stringify({
+          status,
+          priority,
+          followUpAt,
+          notes,
+          attempts,
+        }),
       }
     );
 

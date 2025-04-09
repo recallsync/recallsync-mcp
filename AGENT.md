@@ -10,6 +10,38 @@ When developing new tools for the MCP SDK, follow these steps:
 
 2. **Schema Design Guidelines**:
 
+   - **IMPORTANT: The `all` Parameter**
+
+     - For ANY tool that retrieves multiple items (like "get leads", "get meetings", etc.), ALWAYS include an `all` parameter
+     - This parameter is CRITICAL for natural language processing to work correctly
+     - Without this parameter, the tool will fail validation when users say "get all [items]"
+     - Example:
+       ```typescript
+       inputSchema: {
+         type: "object",
+         properties: {
+           // Other optional parameters...
+           all: {
+             type: "boolean",
+             description: "Optional parameter to get all items",
+             default: true
+           }
+         },
+         required: [], // Make all properties optional
+         additionalProperties: false
+       }
+       ```
+     - This allows the tool to work with both "get items" and "get all items" commands
+     - Tools that ALWAYS need the `all` parameter:
+       - `get-leads`
+       - `get-meetings`
+       - `get-all-follow-ups`
+       - `get-tags`
+       - `get-all-voice-campaigns`
+     - Tools that DON'T need the `all` parameter:
+       - Tools that require a specific ID (like `get-notes` which requires a `leadId`)
+       - Tools that create, update, or delete items
+
    - For tools that don't require input (like "get all leads"), use an optional boolean parameter that matches the natural language
    - Example:
      ```typescript

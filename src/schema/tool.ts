@@ -114,7 +114,19 @@ export const CreateFollowUpSchema = z.object({
   leadId: z.string().min(1, "Lead ID is required"),
   followUpAt: z.string().min(1, "Follow-up date and time is required"),
   reason: z.string().min(1, "Reason for follow-up is required"),
+  notes: z.string().optional(),
   summary: z.string().optional(),
+  status: z
+    .enum([
+      "PENDING",
+      "COMPLETED",
+      "RESCHEDULED",
+      "NO_SHOW",
+      "NOT_INTERESTED",
+      "DROPPED",
+    ])
+    .default("PENDING"),
+  priority: z.enum(["LOW", "MEDIUM", "HIGH"]).default("LOW"),
   type: z.enum(["HUMAN_AGENT", "AI_AGENT"]).default("HUMAN_AGENT"),
 });
 
@@ -122,11 +134,20 @@ export type CreateFollowUpRequest = z.infer<typeof CreateFollowUpSchema>;
 
 export const UpdateFollowUpSchema = z.object({
   id: z.string().min(1, "Follow-up ID is required"),
+  status: z
+    .enum([
+      "PENDING",
+      "COMPLETED",
+      "RESCHEDULED",
+      "NO_SHOW",
+      "NOT_INTERESTED",
+      "DROPPED",
+    ])
+    .optional(),
+  priority: z.enum(["LOW", "MEDIUM", "HIGH"]).optional(),
   followUpAt: z.string().optional(),
-  reason: z.string().optional(),
-  summary: z.string().optional(),
+  notes: z.string().optional(),
   attempts: z.number().optional(),
-  status: z.string().optional(),
 });
 
 export type UpdateFollowUpRequest = z.infer<typeof UpdateFollowUpSchema>;
@@ -139,7 +160,17 @@ export type GetFollowUpRequest = z.infer<typeof GetFollowUpSchema>;
 
 export const GetAllFollowUpsSchema = z.object({
   type: z.enum(["HUMAN_AGENT", "AI_AGENT"]).optional(),
-  all: z.boolean().optional().default(true),
+  status: z
+    .enum([
+      "PENDING",
+      "COMPLETED",
+      "RESCHEDULED",
+      "NO_SHOW",
+      "NOT_INTERESTED",
+      "DROPPED",
+    ])
+    .optional(),
+  priority: z.enum(["LOW", "MEDIUM", "HIGH"]).optional(),
 });
 
 export type GetAllFollowUpsRequest = z.infer<typeof GetAllFollowUpsSchema>;
