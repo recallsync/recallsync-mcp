@@ -210,16 +210,15 @@ export async function handleCreateFollowUp(request: CallToolRequest) {
       };
     }
 
-    const {
+    const { leadId, followUpAt, reason, summary, type } = result.data;
+
+    const requestBody = {
       leadId,
       followUpAt,
       reason,
       summary,
-      notes,
-      status,
-      priority,
       type,
-    } = result.data;
+    };
 
     const response = await fetch(
       `${process.env.BASE_URL}${API_ENDPOINTS.FOLLOW_UP.CREATE_FOLLOW_UP}`,
@@ -229,16 +228,7 @@ export async function handleCreateFollowUp(request: CallToolRequest) {
           "Content-Type": "application/json",
           Authorization: `Bearer ${process.env.API_TOKEN}`,
         },
-        body: JSON.stringify({
-          leadId,
-          followUpAt,
-          reason,
-          summary,
-          notes,
-          status,
-          priority,
-          type,
-        }),
+        body: JSON.stringify(requestBody),
       }
     );
 
@@ -248,22 +238,25 @@ export async function handleCreateFollowUp(request: CallToolRequest) {
         content: [
           {
             type: "text",
-            text: errorData.message || "Failed to create follow-up",
+            text: `Failed to create follow-up: ${
+              errorData.message || response.statusText
+            }. Status: ${response.status}`,
           },
         ],
       };
     }
 
     const data = await response.json();
+
     return {
       content: [
         {
           type: "text",
-          text: `Follow-up created successfully with ID: ${data.id}`,
+          text: `Follow-up created successfully for lead ID: ${leadId}`,
         },
         {
-          type: "data",
-          data: data,
+          type: "text",
+          text: JSON.stringify(data, null, 2),
         },
       ],
     };
@@ -273,7 +266,9 @@ export async function handleCreateFollowUp(request: CallToolRequest) {
       content: [
         {
           type: "text",
-          text: "An error occurred while creating the follow-up",
+          text: `An error occurred while creating the follow-up: ${
+            error instanceof Error ? error.message : "Unknown error"
+          }`,
         },
       ],
     };
@@ -321,22 +316,23 @@ export async function handleGetFollowUp(request: CallToolRequest) {
         content: [
           {
             type: "text",
-            text: errorData.message || "Failed to get follow-up",
+            text: errorData.message || `Failed to get follow-up with ID: ${id}`,
           },
         ],
       };
     }
 
     const data = await response.json();
+
     return {
       content: [
         {
           type: "text",
-          text: `Follow-up details retrieved successfully`,
+          text: `Follow-up details retrieved successfully for ID: ${id}`,
         },
         {
-          type: "data",
-          data: data,
+          type: "text",
+          text: JSON.stringify(data, null, 2),
         },
       ],
     };
@@ -415,19 +411,17 @@ export async function handleGetAllFollowUps(request: CallToolRequest) {
     }
 
     const data = await response.json();
+    const followUps = Array.isArray(data) ? data : [data];
 
-    // Return the data in the expected format with a content array
     return {
       content: [
         {
           type: "text",
-          text: `Retrieved ${
-            Array.isArray(data) ? data.length : 1
-          } follow-up(s)`,
+          text: `Retrieved ${followUps.length} follow-up(s)`,
         },
         {
-          type: "data",
-          data: Array.isArray(data) ? data : [data],
+          type: "text",
+          text: JSON.stringify(followUps, null, 2),
         },
       ],
     };
@@ -454,7 +448,7 @@ export async function handleUpdateFollowUp(request: CallToolRequest) {
     if (!result.success) {
       // Format Zod errors into a readable message
       const errorMessages = result.error.errors
-        .map((err) => `${err.path.join(".")}: ${err.message}`)
+        .map((err: any) => `${err.path.join(".")}: ${err.message}`)
         .join(", ");
       return {
         content: [
@@ -466,7 +460,25 @@ export async function handleUpdateFollowUp(request: CallToolRequest) {
       };
     }
 
-    const { id, status, priority, followUpAt, notes, attempts } = result.data;
+    const {
+      id,
+      followUpAt,
+      reason,
+      summary,
+      attempts,
+      status,
+      priority,
+      notes,
+    } = result.data;
+
+    const updateData: Record<string, any> = {};
+    if (followUpAt) updateData.followUpAt = followUpAt;
+    if (reason) updateData.reason = reason;
+    if (summary) updateData.summary = summary;
+    if (attempts !== undefined) updateData.attempts = attempts;
+    if (status) updateData.status = status;
+    if (priority) updateData.priority = priority;
+    if (notes) updateData.notes = notes;
 
     const response = await fetch(
       `${process.env.BASE_URL}${API_ENDPOINTS.FOLLOW_UP.UPDATE_FOLLOW_UP}/${id}`,
@@ -488,26 +500,30 @@ export async function handleUpdateFollowUp(request: CallToolRequest) {
 
     if (!response.ok) {
       const errorData = await response.json();
+      console.error("Error response:", errorData);
       return {
         content: [
           {
             type: "text",
-            text: errorData.message || "Failed to update follow-up",
+            text: `Failed to update follow-up: ${
+              errorData.message || response.statusText
+            }. Status: ${response.status}`,
           },
         ],
       };
     }
 
     const data = await response.json();
+
     return {
       content: [
         {
           type: "text",
-          text: `Follow-up updated successfully`,
+          text: `Follow-up with ID ${id} updated successfully`,
         },
         {
-          type: "data",
-          data: data,
+          type: "text",
+          text: JSON.stringify(data, null, 2),
         },
       ],
     };
@@ -517,7 +533,9 @@ export async function handleUpdateFollowUp(request: CallToolRequest) {
       content: [
         {
           type: "text",
-          text: "An error occurred while updating the follow-up",
+          text: `An error occurred while updating the follow-up: ${
+            error instanceof Error ? error.message : "Unknown error"
+          }`,
         },
       ],
     };
@@ -528,7 +546,6 @@ export async function handleDeleteFollowUp(request: CallToolRequest) {
   try {
     const args = request.params.arguments as unknown as GetFollowUpRequest;
 
-    // Validate the input using Zod
     const result = GetFollowUpSchema.safeParse(args);
 
     if (!result.success) {
@@ -536,6 +553,7 @@ export async function handleDeleteFollowUp(request: CallToolRequest) {
       const errorMessages = result.error.errors
         .map((err) => `${err.path.join(".")}: ${err.message}`)
         .join(", ");
+      console.error("Validation failed:", errorMessages);
       return {
         content: [
           {
@@ -548,27 +566,48 @@ export async function handleDeleteFollowUp(request: CallToolRequest) {
 
     const { id } = result.data;
 
-    const response = await fetch(
-      `${process.env.BASE_URL}${API_ENDPOINTS.FOLLOW_UP.DELETE_FOLLOW_UP}/${id}`,
-      {
-        method: "DELETE",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${process.env.API_TOKEN}`,
-        },
-      }
-    );
+    const url = `${process.env.BASE_URL}${API_ENDPOINTS.FOLLOW_UP.DELETE_FOLLOW_UP}/${id}`;
+
+    const response = await fetch(url, {
+      method: "DELETE",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${process.env.API_TOKEN}`,
+      },
+    });
 
     if (!response.ok) {
-      const errorData = await response.json();
+      let errorMessage = `Failed to delete follow-up. Status: ${response.status}`;
+      try {
+        const errorData = await response.json();
+        console.error("Error response data:", errorData);
+        errorMessage = `Failed to delete follow-up: ${
+          errorData.message || response.statusText
+        }. Status: ${response.status}`;
+      } catch (e) {
+        console.error("Error parsing error response:", e);
+        const text = await response.text();
+        errorMessage = `Failed to delete follow-up: ${
+          text || response.statusText
+        }. Status: ${response.status}`;
+      }
+
       return {
         content: [
           {
             type: "text",
-            text: errorData.message || "Failed to delete follow-up",
+            text: errorMessage,
           },
         ],
       };
+    }
+
+    let responseData;
+    try {
+      responseData = await response.json();
+    } catch (e) {
+      console.log("No JSON response body");
+      responseData = { success: true, id };
     }
 
     return {
@@ -578,8 +617,8 @@ export async function handleDeleteFollowUp(request: CallToolRequest) {
           text: `Follow-up with ID ${id} deleted successfully`,
         },
         {
-          type: "data",
-          data: { success: true, id },
+          type: "text",
+          text: JSON.stringify(responseData, null, 2),
         },
       ],
     };
@@ -589,7 +628,9 @@ export async function handleDeleteFollowUp(request: CallToolRequest) {
       content: [
         {
           type: "text",
-          text: "An error occurred while deleting the follow-up",
+          text: `An error occurred while deleting the follow-up: ${
+            error instanceof Error ? error.message : "Unknown error"
+          }`,
         },
       ],
     };

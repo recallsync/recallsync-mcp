@@ -16,6 +16,7 @@ import {
   handleGetLead,
   handleUpdateLead,
   handleDeleteLead,
+  handleGetLeadByName,
 } from "./src/tools/lead.js";
 import {
   tagTools,
@@ -38,9 +39,11 @@ import {
 import {
   noteTools,
   handleCreateNote,
-  handleGetNotes,
+  handleGetNote,
+  handleGetAllNotes,
   handleUpdateNote,
   handleDeleteNote,
+  handleGetNoteById,
 } from "./src/tools/note.js";
 import {
   followUpTools,
@@ -111,6 +114,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       return handleGetLeads(request);
     case "get-lead":
       return handleGetLead(request);
+    case "get-lead-by-name":
+      return handleGetLeadByName(request);
     case "update-lead":
       return handleUpdateLead(request);
     case "delete-lead":
@@ -139,14 +144,6 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       return handleUpdateMeetingStatus(request);
     case "update-overdue-no-show":
       return handleUpdateOverdueNoShow(request);
-    case "create-note":
-      return handleCreateNote(request);
-    case "get-notes":
-      return handleGetNotes(request);
-    case "update-note":
-      return handleUpdateNote(request);
-    case "delete-note":
-      return handleDeleteNote(request);
     case "create-follow-up":
       return handleCreateFollowUp(request);
     case "get-follow-up":
@@ -169,6 +166,18 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       return handleFindLeadToCall(request);
     case "get-all-voice-campaigns":
       return handleGetAllVoiceCampaigns(request);
+    case "create-note":
+      return handleCreateNote(request);
+    case "get-note":
+      return handleGetNote(request);
+    case "get-lead-notes":
+      return handleGetAllNotes(request);
+    case "get-note-by-id":
+      return handleGetNoteById(request);
+    case "update-note":
+      return handleUpdateNote(request);
+    case "delete-note":
+      return handleDeleteNote(request);
     default:
       throw new Error("Unknown tool");
   }
@@ -211,10 +220,10 @@ app.post("/messages", async (req: Request, res: Response) => {
   const sessionId = req.query.sessionId as string;
   const transport = transports[sessionId];
   const api_token = req.headers["api_token"] as string;
-  if (!api_token) {
-    res.status(401).send("Unauthorized");
-    return;
-  }
+  // if (!api_token) {
+  //   res.status(401).send("Unauthorized");
+  //   return;
+  // }
 
   if (transport) {
     try {
