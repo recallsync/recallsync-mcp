@@ -91,26 +91,42 @@ export type UpdateOverdueNoShowRequest = z.infer<
 // Note related schemas
 export const CreateNoteSchema = z.object({
   leadId: z.string().min(1, "Lead ID is required"),
-  content: z.string().min(1, "Note content is required"),
+  note: z.string().min(1, "Note content is required"),
 });
 
 export type CreateNoteRequest = z.infer<typeof CreateNoteSchema>;
 
+export const GetNoteSchema = z.object({
+  leadId: z.string().min(1, "Lead ID is required"),
+  noteId: z.string().min(1, "Note ID is required"),
+});
+
+export type GetNoteRequest = z.infer<typeof GetNoteSchema>;
+
+export const GetAllNotesSchema = z.object({
+  leadId: z.string().min(1, "Lead ID is required"),
+  all: z.boolean().optional().default(true),
+});
+
+export type GetAllNotesRequest = z.infer<typeof GetAllNotesSchema>;
+
 export const UpdateNoteSchema = z.object({
-  id: z.string().min(1, "Note ID is required"),
-  content: z.string().min(1, "Note content is required"),
+  leadId: z.string().min(1, "Lead ID is required"),
+  noteId: z.string().min(1, "Note ID is required"),
+  note: z.string().min(1, "Note content is required"),
 });
 
 export type UpdateNoteRequest = z.infer<typeof UpdateNoteSchema>;
 
-export const GetNotesSchema = z.object({
+export const DeleteNoteSchema = z.object({
   leadId: z.string().min(1, "Lead ID is required"),
+  noteId: z.string().min(1, "Note ID is required"),
 });
 
-export type GetNotesRequest = z.infer<typeof GetNotesSchema>;
+export type DeleteNoteRequest = z.infer<typeof DeleteNoteSchema>;
 
 // Follow-up related schemas
-export const CreateFollowUpSchema = z.object({
+export const baseFollowUpSchema = z.object({
   leadId: z.string().min(1, "Lead ID is required"),
   followUpAt: z.string().min(1, "Follow-up date and time is required"),
   reason: z.string().min(1, "Reason for follow-up is required"),
@@ -129,24 +145,12 @@ export const CreateFollowUpSchema = z.object({
   priority: z.enum(["LOW", "MEDIUM", "HIGH"]).default("LOW"),
   type: z.enum(["HUMAN_AGENT", "AI_AGENT"]).default("HUMAN_AGENT"),
 });
+export const CreateFollowUpSchema = baseFollowUpSchema;
 
 export type CreateFollowUpRequest = z.infer<typeof CreateFollowUpSchema>;
 
-export const UpdateFollowUpSchema = z.object({
+export const UpdateFollowUpSchema = baseFollowUpSchema.extend({
   id: z.string().min(1, "Follow-up ID is required"),
-  status: z
-    .enum([
-      "PENDING",
-      "COMPLETED",
-      "RESCHEDULED",
-      "NO_SHOW",
-      "NOT_INTERESTED",
-      "DROPPED",
-    ])
-    .optional(),
-  priority: z.enum(["LOW", "MEDIUM", "HIGH"]).optional(),
-  followUpAt: z.string().optional(),
-  notes: z.string().optional(),
   attempts: z.number().optional(),
 });
 

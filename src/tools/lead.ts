@@ -133,6 +133,7 @@ export const leadTools = [
     arguments: [],
     inputSchema: {
       type: "object",
+
       properties: {
         status: {
           type: "string",
@@ -152,7 +153,6 @@ export const leadTools = [
         all: {
           type: "boolean",
           description: "Optional parameter to get all leads",
-          default: true,
         },
       },
       required: [],
@@ -162,6 +162,7 @@ export const leadTools = [
   {
     name: "get-lead",
     description: "Get details of a specific lead by its lead id.",
+
     arguments: [],
     inputSchema: {
       type: "object",
@@ -245,6 +246,21 @@ export const leadTools = [
       },
       required: ["id"],
       additionalProperties: false,
+    },
+  },
+  {
+    name: "get-lead-by-name",
+    description: "Get details of a specific lead by their name",
+    arguments: [],
+    inputSchema: {
+      type: "object",
+      properties: {
+        name: {
+          type: "string",
+          description: "Name of the lead to retrieve",
+        },
+      },
+      required: ["name"],
     },
   },
 ];
@@ -390,7 +406,8 @@ export async function handleFindLead(request: CallToolRequest) {
 
 export async function handleGetLeads(request: CallToolRequest) {
   try {
-    const url = `${process.env.BASE_URL}${API_ENDPOINTS.LEAD.GET_LEADS}`;
+    const url = `${process.env.BASE_URL}/leads`;
+
     const response = await fetch(url, {
       method: "GET",
       headers: {
@@ -398,23 +415,40 @@ export async function handleGetLeads(request: CallToolRequest) {
         Authorization: `Bearer ${process.env.API_TOKEN}`,
       },
     });
-
     if (!response.ok) {
+      let errorMessage = response.statusText;
+      try {
+        const errorData = await response.text();
+        console.error("Get All Leads Error Response:", errorData);
+        // Try to parse as JSON if it looks like JSON
+        if (
+          errorData.trim().startsWith("{") ||
+          errorData.trim().startsWith("[")
+        ) {
+          const jsonError = JSON.parse(errorData);
+          errorMessage = jsonError.message || errorData;
+        } else {
+          errorMessage = errorData;
+        }
+      } catch (e) {
+        console.error("Failed to parse error response:", e);
+      }
       return {
         content: [
           {
             type: "text",
-            text: `Failed to get leads: ${response.statusText}`,
+            text: `Failed to get leads: ${errorMessage}`,
           },
         ],
       };
     }
 
-    const data = await response.json();
-    const leads = data.leads;
-    // Format the response in a more readable way
-    if (Array.isArray(leads) && leads.length > 0) {
-      const formattedLeads = leads
+    const res = await response.json();
+    const data = res.leads;
+
+    // format the response in a more readable way
+    if (Array.isArray(data) && data.length > 0) {
+      const formattedLeads = data
         .map((lead: any) => {
           return `- ${lead.name} (ID: ${lead.id})${
             lead.phone ? ` - Phone: ${lead.phone}` : ""
@@ -426,11 +460,11 @@ export async function handleGetLeads(request: CallToolRequest) {
         content: [
           {
             type: "text",
-            text: `Found ${leads.length} leads:\n${formattedLeads}`,
+            text: `Found ${data.length} leads:\n${formattedLeads}`,
           },
         ],
       };
-    } else if (Array.isArray(leads) && leads.length === 0) {
+    } else if (Array.isArray(data) && data.length === 0) {
       return {
         content: [
           {
@@ -450,13 +484,14 @@ export async function handleGetLeads(request: CallToolRequest) {
       };
     }
   } catch (error: unknown) {
-    const errorMessage =
-      error instanceof Error ? error.message : "Unknown error occurred";
+    console.error("Get All Leads Exception:", error);
     return {
       content: [
         {
           type: "text",
-          text: `Failed to execute get-leads tool: ${errorMessage}`,
+          text: `An error occurred while getting the leads: ${
+            error instanceof Error ? error.message : "Unknown error"
+          }`,
         },
       ],
     };
@@ -616,6 +651,56 @@ export async function handleDeleteLead(request: CallToolRequest) {
         {
           type: "text",
           text: `Failed to execute delete-lead tool: ${errorMessage}`,
+        },
+      ],
+    };
+  }
+}
+
+export async function handleGetLeadByName(request: CallToolRequest) {
+  try {
+    const { name } = request.params.arguments as { name: string };
+    const url = `${process.env.BASE_URL}${
+      API_ENDPOINTS.LEAD.GET_LEADS
+    }/search/?name=${encodeURIComponent(name)}`;
+
+    const response = await fetch(url, {
+      method: "GET",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${process.env.API_TOKEN}`,
+      },
+    });
+
+    if (!response.ok) {
+      return {
+        content: [
+          {
+            type: "text",
+            text: `Failed to get lead by name: ${response.statusText}`,
+          },
+        ],
+      };
+    }
+
+    const data = await response.json();
+
+    return {
+      content: [
+        {
+          type: "text",
+          text: `Lead details: ${JSON.stringify(data)}`,
+        },
+      ],
+    };
+  } catch (error: unknown) {
+    const errorMessage =
+      error instanceof Error ? error.message : "Unknown error occurred";
+    return {
+      content: [
+        {
+          type: "text",
+          text: `Failed to execute get-lead-by-name tool: ${errorMessage}`,
         },
       ],
     };

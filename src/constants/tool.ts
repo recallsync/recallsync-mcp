@@ -21,10 +21,12 @@ export const API_ENDPOINTS = {
     UPDATE_OVERDUE_NO_SHOW: "/meeting/overdue-no-show",
   },
   NOTE: {
-    CREATE_NOTE: "/leads/note",
-    GET_NOTES: "/leads/note",
-    UPDATE_NOTE: "/leads/note",
-    DELETE_NOTE: "/leads/note",
+    CREATE_NOTE: (leadId: string) => `${leadId}/note`,
+    GET_NOTES: (leadId: string) => `${leadId}/note`,
+    UPDATE_NOTE: (leadId: string, noteId: string) => `${leadId}/note/${noteId}`,
+    DELETE_NOTE: (leadId: string, noteId: string) => `${leadId}/note/${noteId}`,
+    GET_NOTE_BY_ID: (leadid: string, noteId: string) =>
+      `${leadid}/note/${noteId}`,
   },
   FOLLOW_UP: {
     CREATE_FOLLOW_UP: "/follow-up",

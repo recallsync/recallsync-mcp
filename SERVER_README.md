@@ -5,7 +5,7 @@ NGROK Nitin: npx ngrok http --domain=quietly-evolved-polecat.ngrok-free.app 3008
 
 SSE URL: https://mcp.recallsync.com/sse
 MESSAGE POST URL: https://mcp.recallsync.com/messages
-ADDITIONAL HEADERS: <not-required>
+ADDITIONAL HEADERS: api_key=1234
 
 ## AGENT PROMPT
 

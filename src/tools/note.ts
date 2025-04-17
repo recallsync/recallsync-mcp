@@ -3,10 +3,14 @@ import { API_ENDPOINTS } from "../constants/tool.js";
 import {
   CreateNoteSchema,
   CreateNoteRequest,
+  GetNoteSchema,
+  GetNoteRequest,
+  GetAllNotesSchema,
+  GetAllNotesRequest,
   UpdateNoteSchema,
   UpdateNoteRequest,
-  GetNotesSchema,
-  GetNotesRequest,
+  DeleteNoteSchema,
+  DeleteNoteRequest,
 } from "../schema/tool.js";
 
 export const noteTools = [
@@ -21,18 +25,38 @@ export const noteTools = [
           type: "string",
           description: "ID of the lead to create a note for",
         },
-        content: {
+        note: {
           type: "string",
           description: "Content of the note",
         },
       },
-      required: ["leadId", "content"],
+      required: ["leadId", "note"],
       additionalProperties: false,
     },
   },
   {
-    name: "get-notes",
-    description: "Get all notes for a lead",
+    name: "get-note",
+    description: "Get a specific note by ID for a lead",
+    arguments: [],
+    inputSchema: {
+      type: "object",
+      properties: {
+        leadId: {
+          type: "string",
+          description: "ID of the lead",
+        },
+        noteId: {
+          type: "string",
+          description: "ID of the note to retrieve",
+        },
+      },
+      required: ["leadId", "noteId"],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: "get-lead-notes",
+    description: "Get all notes for a lead using its lead Id",
     arguments: [],
     inputSchema: {
       type: "object",
@@ -41,6 +65,11 @@ export const noteTools = [
           type: "string",
           description: "ID of the lead to get notes for",
         },
+        all: {
+          type: "boolean",
+          description: "Optional parameter to get all notes",
+          default: true,
+        },
       },
       required: ["leadId"],
       additionalProperties: false,
@@ -48,37 +77,65 @@ export const noteTools = [
   },
   {
     name: "update-note",
-    description: "Update an existing note",
+    description: "Update an existing note for a lead",
     arguments: [],
     inputSchema: {
       type: "object",
       properties: {
-        id: {
+        leadId: {
+          type: "string",
+          description: "ID of the lead",
+        },
+        noteId: {
           type: "string",
           description: "ID of the note to update",
         },
-        content: {
+        note: {
           type: "string",
           description: "New content for the note",
         },
       },
-      required: ["id", "content"],
+      required: ["leadId", "noteId", "note"],
       additionalProperties: false,
     },
   },
   {
     name: "delete-note",
-    description: "Delete a note",
+    description: "Delete a note for a lead",
     arguments: [],
     inputSchema: {
       type: "object",
       properties: {
-        id: {
+        leadId: {
+          type: "string",
+          description: "ID of the lead",
+        },
+        noteId: {
           type: "string",
           description: "ID of the note to delete",
         },
       },
-      required: ["id"],
+      required: ["leadId", "noteId"],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: "get-note-by-id",
+    description: "Get a specific note by its ID",
+    arguments: [],
+    inputSchema: {
+      type: "object",
+      properties: {
+        leadId: {
+          type: "string",
+          description: "ID of the lead that owns the note",
+        },
+        noteId: {
+          type: "string",
+          description: "ID of the note to retrieve",
+        },
+      },
+      required: ["leadId", "noteId"],
       additionalProperties: false,
     },
   },
@@ -106,9 +163,8 @@ export async function handleCreateNote(request: CallToolRequest) {
       };
     }
 
-    const { leadId, content } = result.data;
-    const url = `${process.env.BASE_URL}${API_ENDPOINTS.NOTE.CREATE_NOTE}`;
-    const body = { leadId, content };
+    const { leadId, note } = result.data;
+    const url = `${process.env.BASE_URL}/${leadId}/note`;
 
     const response = await fetch(url, {
       method: "POST",
@@ -116,49 +172,67 @@ export async function handleCreateNote(request: CallToolRequest) {
         "Content-Type": "application/json",
         Authorization: `Bearer ${process.env.API_TOKEN}`,
       },
-      body: JSON.stringify(body),
+      body: JSON.stringify({ note }),
     });
 
     if (!response.ok) {
+      let errorMessage = response.statusText;
+      try {
+        const errorData = await response.text();
+        // Try to parse as JSON if it looks like JSON
+        if (
+          errorData.trim().startsWith("{") ||
+          errorData.trim().startsWith("[")
+        ) {
+          const jsonError = JSON.parse(errorData);
+          errorMessage = jsonError.message || errorData;
+        } else {
+          errorMessage = errorData;
+        }
+      } catch (e) {
+        console.error("Failed to parse error response:", e);
+      }
       return {
         content: [
           {
             type: "text",
-            text: `Failed to create note: ${response.statusText}`,
+            text: `Failed to create note: ${errorMessage}`,
           },
         ],
       };
     }
 
     const data = await response.json();
+
     return {
       content: [
         {
           type: "text",
-          text: `Successfully created note: ${JSON.stringify(data)}`,
+          text: `Successfully created note for lead ${leadId}:\nNote ID: ${data.id}\nContent: ${note}`,
         },
       ],
     };
   } catch (error: unknown) {
-    const errorMessage =
-      error instanceof Error ? error.message : "Unknown error occurred";
+    console.error("Create Note Exception:", error);
     return {
       content: [
         {
           type: "text",
-          text: `Failed to execute create-note tool: ${errorMessage}`,
+          text: `An error occurred while creating the note: ${
+            error instanceof Error ? error.message : "Unknown error"
+          }`,
         },
       ],
     };
   }
 }
 
-export async function handleGetNotes(request: CallToolRequest) {
+export async function handleGetNote(request: CallToolRequest) {
   try {
-    const args = request.params.arguments as unknown as GetNotesRequest;
+    const args = request.params.arguments as unknown as GetNoteRequest;
 
     // Validate the input using Zod
-    const result = GetNotesSchema.safeParse(args);
+    const result = GetNoteSchema.safeParse(args);
 
     if (!result.success) {
       // Format Zod errors into a readable message
@@ -169,31 +243,31 @@ export async function handleGetNotes(request: CallToolRequest) {
         content: [
           {
             type: "text",
-            text: `Failed to get notes: ${errorMessages}. Please provide the lead ID.`,
+            text: `Failed to get note: ${errorMessages}. Please provide the missing or incorrect information.`,
           },
         ],
       };
     }
 
-    const { leadId } = result.data;
-    const url = `${process.env.BASE_URL}${API_ENDPOINTS.NOTE.GET_NOTES}`;
-    const queryParams = new URLSearchParams();
-    queryParams.append("leadId", leadId);
+    const { leadId, noteId } = result.data;
+    const url = `${process.env.BASE_URL}/${API_ENDPOINTS.NOTE.GET_NOTES(
+      leadId
+    )}/${noteId}`;
 
-    const response = await fetch(`${url}?${queryParams.toString()}`, {
+    const response = await fetch(url, {
       method: "GET",
       headers: {
-        "Content-Type": "application/json",
         Authorization: `Bearer ${process.env.API_TOKEN}`,
       },
     });
 
     if (!response.ok) {
+      const errorData = await response.json();
       return {
         content: [
           {
             type: "text",
-            text: `Failed to get notes: ${response.statusText}`,
+            text: errorData.message || "Failed to get note",
           },
         ],
       };
@@ -204,18 +278,126 @@ export async function handleGetNotes(request: CallToolRequest) {
       content: [
         {
           type: "text",
-          text: `Retrieved notes: ${JSON.stringify(data)}`,
+          text: `Successfully retrieved note for lead ${leadId}`,
+        },
+        {
+          type: "data",
+          data,
         },
       ],
     };
   } catch (error: unknown) {
-    const errorMessage =
-      error instanceof Error ? error.message : "Unknown error occurred";
     return {
       content: [
         {
           type: "text",
-          text: `Failed to execute get-notes tool: ${errorMessage}`,
+          text: `An error occurred while getting the note: ${
+            error instanceof Error ? error.message : "Unknown error"
+          }`,
+        },
+      ],
+    };
+  }
+}
+
+export async function handleGetAllNotes(request: CallToolRequest) {
+  try {
+    const args = request.params.arguments as unknown as GetAllNotesRequest;
+
+    // Validate the input using Zod
+    const result = GetAllNotesSchema.safeParse(args);
+
+    if (!result.success) {
+      // Format Zod errors into a readable message
+      const errorMessages = result.error.errors
+        .map((err) => `${err.path.join(".")}: ${err.message}`)
+        .join(", ");
+      return {
+        content: [
+          {
+            type: "text",
+            text: `Failed to get notes: ${errorMessages}. Please provide the missing or incorrect information.`,
+          },
+        ],
+      };
+    }
+
+    const { leadId } = result.data;
+    const url = `${process.env.BASE_URL}/${leadId}/note`;
+    const response = await fetch(url, {
+      method: "GET",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${process.env.API_TOKEN}`,
+      },
+    });
+
+    if (!response.ok) {
+      let errorMessage = response.statusText;
+      try {
+        const errorData = await response.text();
+        errorMessage = errorData;
+      } catch (e) {
+        console.error("Failed to parse error response:", e);
+      }
+      return {
+        content: [
+          {
+            type: "text",
+            text: `Failed to get notes: ${errorMessage}`,
+          },
+        ],
+      };
+    }
+
+    const data = await response.json();
+
+    // format the response in a more readable way
+    if (Array.isArray(data) && data.length > 0) {
+      const formattedNotes = data
+        .map((note: any) => {
+          return `- Note ID: ${note.id}\n  Content: ${
+            note.note
+          }\n  Created: ${new Date(note.createdAt).toLocaleString()}`;
+        })
+        .join("\n\n");
+
+      return {
+        content: [
+          {
+            type: "text",
+            text: `Found ${data.length} notes for lead ${leadId}:\n\n${formattedNotes}`,
+          },
+        ],
+      };
+    } else if (Array.isArray(data) && data.length === 0) {
+      return {
+        content: [
+          {
+            type: "text",
+            text: `No notes found for lead ${leadId}.`,
+          },
+        ],
+      };
+    } else {
+      return {
+        content: [
+          {
+            type: "text",
+            text: "Unexpected response format from the server.",
+          },
+        ],
+      };
+    }
+  } catch (error: unknown) {
+    console.error("Get All Notes Exception:", error);
+    return {
+      content: [
+        {
+          type: "text",
+          text: `An error occurred while getting the notes: ${
+            error instanceof Error ? error.message : "Unknown error"
+          }`,
         },
       ],
     };
@@ -238,15 +420,17 @@ export async function handleUpdateNote(request: CallToolRequest) {
         content: [
           {
             type: "text",
-            text: `Failed to update note: ${errorMessages}. Please provide the note ID and new content.`,
+            text: `Failed to update note: ${errorMessages}. Please provide the missing or incorrect information.`,
           },
         ],
       };
     }
 
-    const { id, content } = result.data;
-    const url = `${process.env.BASE_URL}${API_ENDPOINTS.NOTE.UPDATE_NOTE}`;
-    const body = { id, content };
+    const { leadId, noteId, note } = result.data;
+
+    const url = `${process.env.BASE_URL}/${API_ENDPOINTS.NOTE.GET_NOTES(
+      leadId
+    )}/${noteId}`;
 
     const response = await fetch(url, {
       method: "PUT",
@@ -254,37 +438,41 @@ export async function handleUpdateNote(request: CallToolRequest) {
         "Content-Type": "application/json",
         Authorization: `Bearer ${process.env.API_TOKEN}`,
       },
-      body: JSON.stringify(body),
+      body: JSON.stringify({ note }),
     });
 
     if (!response.ok) {
+      const errorData = await response.json();
       return {
         content: [
           {
             type: "text",
-            text: `Failed to update note: ${response.statusText}`,
+            text: `Failed to update note: ${
+              errorData.message || response.statusText
+            }`,
           },
         ],
       };
     }
 
     const data = await response.json();
+
     return {
       content: [
         {
           type: "text",
-          text: `Successfully updated note: ${JSON.stringify(data)}`,
+          text: `Successfully updated note for lead ${leadId}:\nNote ID: ${noteId}\nContent: ${note}`,
         },
       ],
     };
   } catch (error: unknown) {
-    const errorMessage =
-      error instanceof Error ? error.message : "Unknown error occurred";
     return {
       content: [
         {
           type: "text",
-          text: `Failed to execute update-note tool: ${errorMessage}`,
+          text: `An error occurred while updating the note: ${
+            error instanceof Error ? error.message : "Unknown error"
+          }`,
         },
       ],
     };
@@ -293,23 +481,108 @@ export async function handleUpdateNote(request: CallToolRequest) {
 
 export async function handleDeleteNote(request: CallToolRequest) {
   try {
-    const args = request.params.arguments as { id: string };
+    const args = request.params.arguments as unknown as DeleteNoteRequest;
 
-    if (!args.id) {
+    // Validate the input using Zod
+    const result = DeleteNoteSchema.safeParse(args);
+
+    if (!result.success) {
+      // Format Zod errors into a readable message
+      const errorMessages = result.error.errors
+        .map((err) => `${err.path.join(".")}: ${err.message}`)
+        .join(", ");
       return {
         content: [
           {
             type: "text",
-            text: "Failed to delete note: Note ID is required",
+            text: `Failed to delete note: ${errorMessages}. Please provide the missing or incorrect information.`,
           },
         ],
       };
     }
 
-    const url = `${process.env.BASE_URL}${API_ENDPOINTS.NOTE.DELETE_NOTE}/${args.id}`;
+    const { leadId, noteId } = result.data;
+    const url = `${process.env.BASE_URL}/${leadId}/note/${noteId}`;
 
     const response = await fetch(url, {
       method: "DELETE",
+      headers: {
+        Authorization: `Bearer ${process.env.API_TOKEN}`,
+      },
+    });
+
+    if (!response.ok) {
+      let errorMessage = response.statusText;
+      try {
+        const errorData = await response.text();
+        console.error("Delete Note Error Response:", errorData);
+        // Try to parse as JSON if it looks like JSON
+        if (
+          errorData.trim().startsWith("{") ||
+          errorData.trim().startsWith("[")
+        ) {
+          const jsonError = JSON.parse(errorData);
+          errorMessage = jsonError.message || errorData;
+        } else {
+          errorMessage = errorData;
+        }
+      } catch (e) {
+        console.error("Failed to parse error response:", e);
+      }
+      return {
+        content: [
+          {
+            type: "text",
+            text: `Failed to delete note: ${errorMessage}`,
+          },
+        ],
+      };
+    }
+
+    return {
+      content: [
+        {
+          type: "text",
+          text: `Successfully deleted note for lead ${leadId}`,
+        },
+      ],
+    };
+  } catch (error: unknown) {
+    return {
+      content: [
+        {
+          type: "text",
+          text: `An error occurred while deleting the note: ${
+            error instanceof Error ? error.message : "Unknown error"
+          }`,
+        },
+      ],
+    };
+  }
+}
+
+export async function handleGetNoteById(request: CallToolRequest) {
+  try {
+    const { leadId, noteId } = request.params.arguments as {
+      leadId: string;
+      noteId: string;
+    };
+
+    if (!leadId || !noteId) {
+      return {
+        content: [
+          {
+            type: "text",
+            text: "Both Lead ID and Note ID are required",
+          },
+        ],
+      };
+    }
+
+    const url = `${process.env.BASE_URL}/${leadId}/note/${noteId}`;
+
+    const response = await fetch(url, {
+      method: "GET",
       headers: {
         "Content-Type": "application/json",
         Authorization: `Bearer ${process.env.API_TOKEN}`,
@@ -317,32 +590,47 @@ export async function handleDeleteNote(request: CallToolRequest) {
     });
 
     if (!response.ok) {
+      let errorMessage = response.statusText;
+      try {
+        const errorData = await response.text();
+        console.error("Get Note By ID Error Response:", errorData);
+        errorMessage = errorData;
+      } catch (e) {
+        console.error("Failed to parse error response:", e);
+      }
       return {
         content: [
           {
             type: "text",
-            text: `Failed to delete note: ${response.statusText}`,
+            text: `Failed to get note: ${errorMessage}`,
           },
         ],
       };
     }
 
+    const data = await response.json();
+
     return {
       content: [
         {
           type: "text",
-          text: "Successfully deleted note",
+          text: `Note Details:\nID: ${data.id}\nContent: ${
+            data.note
+          }\nCreated: ${new Date(data.createdAt).toLocaleString()}\nLead ID: ${
+            data.leadId
+          }`,
         },
       ],
     };
   } catch (error: unknown) {
-    const errorMessage =
-      error instanceof Error ? error.message : "Unknown error occurred";
+    console.error("Get Note By ID Exception:", error);
     return {
       content: [
         {
           type: "text",
-          text: `Failed to execute delete-note tool: ${errorMessage}`,
+          text: `An error occurred while getting the note: ${
+            error instanceof Error ? error.message : "Unknown error"
+          }`,
         },
       ],
     };
