@@ -16,6 +16,7 @@ import {
   handleGetLead,
   handleUpdateLead,
   handleDeleteLead,
+  handleGetLeadByName,
 } from "./src/tools/lead.js";
 import {
   tagTools,
@@ -25,6 +26,42 @@ import {
   handleUpdateTag,
   handleDeleteTag,
 } from "./src/tools/tag.js";
+import {
+  meetingTools,
+  handleCreateMeeting,
+  handleGetMeetings,
+  handleGetMeetingsByLead,
+  handleUpdateMeeting,
+  handleUpdateMeetingByLead,
+  handleUpdateMeetingStatus,
+  handleUpdateOverdueNoShow,
+} from "./src/tools/meeting.js";
+import {
+  noteTools,
+  handleCreateNote,
+  handleGetNote,
+  handleGetAllNotes,
+  handleUpdateNote,
+  handleDeleteNote,
+  handleGetNoteById,
+} from "./src/tools/note.js";
+import {
+  followUpTools,
+  handleCreateFollowUp,
+  handleGetFollowUp,
+  handleGetAllFollowUps,
+  handleUpdateFollowUp,
+  handleDeleteFollowUp,
+} from "./src/tools/followUp.js";
+import {
+  voiceCampaignTools,
+  handleFindVoiceLead,
+  handleAddLeadToCampaign,
+  handleGetVoiceLead,
+  handleUpdateCampaignStatus,
+  handleFindLeadToCall,
+  handleGetAllVoiceCampaigns,
+} from "./src/tools/voiceCampaign.js";
 import dotenv from "dotenv";
 
 dotenv.config();
@@ -55,7 +92,14 @@ const server = new Server(
 // Register the tools
 server.setRequestHandler(ListToolsRequestSchema, async () => {
   return {
-    tools: [...leadTools, ...tagTools],
+    tools: [
+      ...leadTools,
+      ...tagTools,
+      ...meetingTools,
+      ...noteTools,
+      ...followUpTools,
+      ...voiceCampaignTools,
+    ],
   };
 });
 
@@ -70,6 +114,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       return handleGetLeads(request);
     case "get-lead":
       return handleGetLead(request);
+    case "get-lead-by-name":
+      return handleGetLeadByName(request);
     case "update-lead":
       return handleUpdateLead(request);
     case "delete-lead":
@@ -84,6 +130,54 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       return handleUpdateTag(request);
     case "delete-tag":
       return handleDeleteTag(request);
+    case "create-meeting":
+      return handleCreateMeeting(request);
+    case "get-meetings":
+      return handleGetMeetings(request);
+    case "get-meetings-by-lead":
+      return handleGetMeetingsByLead(request);
+    case "update-meeting":
+      return handleUpdateMeeting(request);
+    case "update-meeting-by-lead":
+      return handleUpdateMeetingByLead(request);
+    case "update-meeting-status":
+      return handleUpdateMeetingStatus(request);
+    case "update-overdue-no-show":
+      return handleUpdateOverdueNoShow(request);
+    case "create-follow-up":
+      return handleCreateFollowUp(request);
+    case "get-follow-up":
+      return handleGetFollowUp(request);
+    case "get-all-follow-ups":
+      return handleGetAllFollowUps(request);
+    case "update-follow-up":
+      return handleUpdateFollowUp(request);
+    case "delete-follow-up":
+      return handleDeleteFollowUp(request);
+    case "find-voice-lead":
+      return handleFindVoiceLead(request);
+    case "add-lead-to-campaign":
+      return handleAddLeadToCampaign(request);
+    case "get-voice-lead":
+      return handleGetVoiceLead(request);
+    case "update-campaign-status":
+      return handleUpdateCampaignStatus(request);
+    case "find-lead-to-call":
+      return handleFindLeadToCall(request);
+    case "get-all-voice-campaigns":
+      return handleGetAllVoiceCampaigns(request);
+    case "create-note":
+      return handleCreateNote(request);
+    case "get-note":
+      return handleGetNote(request);
+    case "get-lead-notes":
+      return handleGetAllNotes(request);
+    case "get-note-by-id":
+      return handleGetNoteById(request);
+    case "update-note":
+      return handleUpdateNote(request);
+    case "delete-note":
+      return handleDeleteNote(request);
     default:
       throw new Error("Unknown tool");
   }
@@ -126,10 +220,10 @@ app.post("/messages", async (req: Request, res: Response) => {
   const sessionId = req.query.sessionId as string;
   const transport = transports[sessionId];
   const api_token = req.headers["api_token"] as string;
-  if (!api_token) {
-    res.status(401).send("Unauthorized");
-    return;
-  }
+  // if (!api_token) {
+  //   res.status(401).send("Unauthorized");
+  //   return;
+  // }
 
   if (transport) {
     try {

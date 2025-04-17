@@ -32,7 +32,15 @@ export const tagTools = [
     arguments: [],
     inputSchema: {
       type: "object",
-      properties: {},
+      properties: {
+        all: {
+          type: "boolean",
+          description: "Optional parameter to get all tags",
+          default: true,
+        },
+      },
+      required: [],
+      additionalProperties: false,
     },
   },
   {
