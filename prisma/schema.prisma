@@ -1,0 +1,1279 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider     = "mysql"
+  url          = env("DATABASE_URL")
+  relationMode = "prisma"
+}
+
+model User {
+  id            String    @id @default(uuid())
+  email         String    @unique
+  emailVerified DateTime? @map("email_verified")
+  phone         String    @default("")
+  website       String    @default("")
+
+  name     String?
+  image    String?
+  password String?
+  role     ROLE    @default(MANAGER)
+  access   ACCESS  @default(USER)
+
+  twoFactorSecret     String?
+  tempTwoFactorSecret String?
+  twoFactorEnabled    Boolean @default(false)
+
+  createdByAdmin Boolean   @default(false)
+  isActive       Boolean   @default(true)
+  deactivatedAt  DateTime?
+
+  // Stripe
+  stripeCustomerId           String?
+  stripeSubscriptionId       String?
+  stripePaymentMethodId      String?
+  stripePriceId              String?
+  plan                       PLAN?
+  stripeSubscriptionStatus   String?
+  stripeSubscriptionCancelAt DateTime?
+  stripeCurrentPeriodEnd     DateTime?
+  stripeSubscriptionTerm     PLAN_TERM?
+  planIsActive               Boolean    @default(false)
+
+  // Metadata
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+
+  agencyId      String?
+  Agency        User?   @relation("AgencyToMembers", fields: [agencyId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  AgencyMembers User[]  @relation("AgencyToMembers")
+
+  // sales agent (business relation)
+  businessId String?
+  Business   Business? @relation("BusinessSalesAgents", fields: [businessId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  Config Config?
+
+  Account         Account[]
+  Session         Session[]
+  AgencyLeads     Lead[]    @relation("AgencyToLead")
+  SalesAgentLeads Lead[]    @relation("SalesAgentToLead")
+
+  SalesAgentMeetings Meeting[]  @relation("SalesAgentToMeeting")
+  AgencyMeetings     Meeting[]  @relation("AgencyToMeeting")
+  AgencyCalls        LeadCall[] @relation("AgencyToLeadCall")
+  AgentCalls         LeadCall[] @relation("SalesAgentToLeadCall")
+
+  agencyApiKeys  ApiKey[] @relation("AgencyToApiKey")
+  managerApiKeys ApiKey[] @relation("ManagerToApiKey")
+
+  VoiceCampaigns       VoiceCampaign[]
+  VoiceCampaignLeads   VoiceCampaignLead[]
+  Assistant            Assistant[]
+  Pipelines            Pipeline[]
+  Opportunities        Opportunity[]
+  Stages               Stage[]
+  Automations          Automation[]
+  AgentFollowUps       FollowUp[]            @relation("SalesAgentToFollowUp")
+  AgencyFollowUps      FollowUp[]            @relation("AgencyToFollowUp")
+  ConversationMessages ConversationMessage[]
+  Conversations        Conversation[]
+  AgencyBusinesses     Business[]            @relation("BusinessAgency")
+  ManagerBusinesses    BusinessManager[]
+  preferenceId         String?
+  Agents               Agent[]
+
+  @@index([agencyId])
+  @@index([businessId])
+}
+
+model ApiKey {
+  id        String    @id @default(uuid())
+  isActive  Boolean   @default(true)
+  createdAt DateTime  @default(now())
+  lastUsed  DateTime?
+
+  businessId String
+  Business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  agencyId String
+  Agency   User   @relation("AgencyToApiKey", fields: [agencyId], references: [id], onDelete: Cascade)
+
+  managerId String?
+  Manager   User?   @relation("ManagerToApiKey", fields: [managerId], references: [id], onDelete: Cascade)
+
+  @@index([agencyId])
+  @@index([businessId])
+  @@index([managerId])
+}
+
+model Assistant {
+  id String @id @default(uuid())
+
+  name        String
+  description String @db.Text
+  config      Json?
+
+  // Relations
+  agencyId String
+  Agency   User   @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+
+  businessId String
+  Business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  voiceCampaigns VoiceCampaign[]
+
+  // Metadata
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([agencyId])
+  @@index([businessId])
+}
+
+model Config {
+  id String @id @default(uuid())
+
+  // White Label Configuration
+  whiteLabel               Boolean @default(false)
+  showCRM                  Boolean @default(true)
+  showCampaign             Boolean @default(true)
+  customDomain             String?
+  customRootDomain         String?
+  customRootDomainVerified Boolean @default(false)
+  companyName              String  @default("")
+  onlyLogo                 Boolean @default(false)
+  companyLogo              String  @default("")
+  primaryColor             String  @default("#000000")
+  secondaryColor           String  @default("#ffffff")
+  faviconUrl               String  @default("")
+  title                    String  @default("")
+  description              String? @db.Text
+
+  // Nameserver-based wildcard domain support
+  isWildcard            Boolean @default(false)
+  wildcardSetupMethod   String? // 'nameservers' or 'dns'
+  nameserversConfigured Boolean @default(false)
+
+  // Database Configuration
+  databaseUrl     String?
+  migrationStatus MIGRATION_STATUS @default(PENDING)
+  migratedAt      DateTime?
+
+  // Relations 
+  agencyId String @unique
+  Agency   User   @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+
+  // Metadata
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model BusinessConfig {
+  id String @id @default(uuid())
+
+  // White Label Configuration
+  whiteLabel               Boolean @default(false)
+  subdomain                String? // For agency subdomain (e.g., business.agency.com)
+  customDomain             String?
+  customRootDomain         String?
+  customRootDomainVerified Boolean @default(false)
+  companyName              String  @default("")
+  onlyLogo                 Boolean @default(false)
+  companyLogo              String  @default("")
+  primaryColor             String  @default("#000000")
+  secondaryColor           String  @default("#ffffff")
+  faviconUrl               String  @default("")
+  title                    String  @default("")
+  description              String? @db.Text
+
+  // Limitations
+  maxLeads Int @default(100)
+
+  // Relations 
+  businessId String   @unique
+  Business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  // Metadata
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([subdomain])
+}
+
+model Account {
+  id                String  @id @default(uuid())
+  type              String
+  provider          String
+  providerAccountId String  @map("provider_account_id")
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  userId String @map("user_id")
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+  @@map("accounts")
+}
+
+model Session {
+  id           String   @id @default(uuid())
+  sessionToken String   @unique @map("session_token")
+  userId       String   @map("user_id")
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("sessions")
+}
+
+model VerificationToken {
+  identifier String
+  token      String
+  expires    DateTime
+
+  @@unique([identifier, token])
+  @@map("verification_tokens")
+}
+
+model Lead {
+  id String @id @default(uuid())
+
+  // personal information
+  name        String
+  firstName   String    @default("")
+  lastName    String    @default("")
+  email       String?
+  bestEmail   String    @default("")
+  phone       String?
+  bestPhone   String    @default("")
+  dateOfBirth DateTime?
+
+  // general info
+  ianaTimezone String  @default("") // Asia/Kolkata
+  country      String  @default("") // country of the lead
+  city         String  @default("") // city of the lead
+  state        String  @default("") // state of the lead
+  zipCode      String  @default("") // zip code of the lead
+  address      String? @db.Text // address of the lead
+
+  // additional info 
+  company        String  @default("")
+  companyAddress String? @db.Text
+  industry       String  @default("") // ex: Real Estate, Marketing etc.
+  website        String  @default("")
+  message        String? @db.Text // message sent by the lead
+  source         String  @default("") // lead source (website, social media, referral, etc.)
+  note           String? @db.Text // note about the lead by agency/agent
+  fields         Json? // custom fields
+
+  // DND
+  emailDND    Boolean @default(false)
+  smsDND      Boolean @default(false)
+  callDND     Boolean @default(false)
+  whatsappDND Boolean @default(false)
+
+  // Metadata 
+  status     LEAD_STATUS      @default(NEW)
+  statusType LEAD_STATUS_TYPE @default(COLD)
+  quality    LEAD_QUALITY     @default(UNQUALIFIED)
+
+  // Relations
+  agencyId String
+  Agency   User   @relation("AgencyToLead", fields: [agencyId], references: [id], onDelete: Cascade)
+
+  businessId String
+  Business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  salesAgentId String?
+  SalesAgent   User?   @relation("SalesAgentToLead", fields: [salesAgentId], references: [id], onDelete: SetNull)
+
+  // Metadata Fields
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  Meeting              Meeting[]
+  LeadCalls            LeadCall[]
+  VoiceCampaignLead    VoiceCampaignLead[]
+  LeadTags             LeadTag[]
+  LeadNotes            LeadNote[]
+  Opportunity          Opportunity[]
+  FollowUp             FollowUp[]
+  Conversation         Conversation?
+  ConversationMessages ConversationMessage[]
+
+  @@index([agencyId])
+  @@index([salesAgentId])
+  @@index([businessId])
+  @@index([status])
+  @@index([phone])
+  @@index([email])
+}
+
+model LeadTag {
+  id String @id @default(uuid())
+
+  name  String
+  color String
+
+  // Relations
+  Leads Lead[]
+
+  businessId String
+  Business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  // Metadata
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([businessId])
+}
+
+model LeadNote {
+  id String @id @default(uuid())
+
+  note String         @db.Text
+  type LEAD_NOTE_TYPE @default(NOTE)
+
+  // Relations
+  leadId String
+  Lead   Lead   @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  // Metadata
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([leadId])
+}
+
+model Conversation {
+  id String @id @default(uuid())
+
+  starred Boolean @default(false)
+  killed  Boolean @default(false)
+
+  replyMode REPLY_MODE @default(AUTO)
+
+  // Relations
+  leadId String @unique
+  Lead   Lead   @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  businessId String
+  Business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  agencyId String
+  Agency   User   @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+
+  activeAgentId String?
+  ActiveAgent   Agent?  @relation(fields: [activeAgentId], references: [id], onDelete: SetNull)
+
+  // Metadata
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relationships
+  ConversationMessages ConversationMessage[]
+
+  @@index([leadId])
+  @@index([agencyId])
+  @@index([businessId])
+  @@index([activeAgentId])
+}
+
+model ConversationMessage {
+  id String @id @default(uuid())
+
+  content String                      @db.Text
+  sender  MESSAGE_SENDER              @default(AI_AGENT)
+  status  CONVERSATION_MESSAGE_STATUS @default(SENT)
+  snippet String                      @default("")
+
+  channel  MESSAGE_CHANNEL   @default(EMAIL)
+  itemType MESSAGE_ITEM_TYPE @default(MESSAGE)
+
+  // Call Message Items
+  callId String?
+  Call   LeadCall? @relation(fields: [callId], references: [id], onDelete: Cascade)
+
+  // Relations
+  leadId String
+  Lead   Lead   @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  agencyId String
+  Agency   User   @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+
+  businessId String
+  Business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  conversationId String
+  Conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  // Metadata
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([leadId])
+  @@index([conversationId])
+  @@index([callId])
+  @@index([agencyId])
+  @@index([businessId])
+}
+
+model Agent {
+  id String @id @default(uuid())
+
+  name        String
+  description String? @db.Text
+
+  // n8n config 
+  n8nUrl   String @default("")
+  n8nToken String @default("")
+
+  // agent settings
+  settings Json
+  isActive Boolean @default(false)
+
+  // Relations
+  businessId String
+  Business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  agencyId String
+  Agency   User   @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+
+  Conversations Conversation[]
+
+  // Metadata
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([businessId])
+  @@index([agencyId])
+}
+
+model Meeting {
+  id            String         @id @default(uuid())
+  calMeetingID  Int
+  calMeetingUID String
+  startTime     String
+  messageOfLead String         @db.Text
+  meetingUrl    String?
+  status        MEETING_STATUS @default(UPCOMING)
+
+  // Relations
+  salesAgentId String?
+  SalesAgent   User?   @relation("SalesAgentToMeeting", fields: [salesAgentId], references: [id], onDelete: SetNull)
+
+  businessId String
+  Business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  agencyId String
+  Agency   User   @relation("AgencyToMeeting", fields: [agencyId], references: [id], onDelete: Cascade)
+
+  leadId String
+  Lead   Lead   @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  // Metadata
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([agencyId])
+  @@index([salesAgentId])
+  @@index([businessId])
+  @@index([leadId])
+}
+
+model LeadCall {
+  id          String          @id @default(uuid())
+  callId      String          @default("")
+  type        CALL_TYPE       @default(OUTBOUND)
+  endedReason CALL_END_REASON @default(unknown_error)
+  result      CALL_RESULT     @default(SUCCESS)
+  notes       String?         @db.Text
+  summary     String?         @db.Text
+  transcript  Json?
+  audioUrl    String          @default("")
+
+  callType LEAD_CALL_TYPE @default(GLOBAL)
+
+  callDuration Float @default(0)
+  costVAPI     Float @default(0) // total voiceAi cost
+  costTwilio   Float @default(0) // total twilio cost
+  totalCost    Float @default(0) // total call cost
+
+  // Relations
+  leadId String?
+  Lead   Lead?   @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  agencyId String
+  Agency   User   @relation("AgencyToLeadCall", fields: [agencyId], references: [id], onDelete: Cascade)
+
+  businessId String
+  Business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  salesAgentId String?
+  SalesAgent   User?   @relation("SalesAgentToLeadCall", fields: [salesAgentId], references: [id], onDelete: SetNull)
+
+  voiceCampaignId String?
+  VoiceCampaign   VoiceCampaign? @relation(fields: [voiceCampaignId], references: [id], onDelete: Cascade)
+
+  // Metadata
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  ConversationMessages ConversationMessage[]
+
+  @@index([agencyId])
+  @@index([salesAgentId])
+  @@index([leadId])
+  @@index([voiceCampaignId])
+  @@index([businessId])
+}
+
+model VoiceCampaign {
+  id String @id @default(uuid())
+
+  name        String
+  description String                @db.Text
+  status      VOICE_CAMPAIGN_STATUS @default(DRAFT)
+
+  // Settings
+  withRetries       Boolean   @default(false)
+  withFollowUp      Boolean   @default(false)
+  retries           Int       @default(3)
+  maxRetryAttempts  Int       @default(3)
+  callBackDelay     Int       @default(60)
+  concurrentCalls   Int       @default(1)
+  startDate         DateTime?
+  startTime         String    @default("05:30")
+  workingHoursStart String    @default("09:00")
+  workingHoursEnd   String    @default("17:00")
+  timeZone          String    @default("IST")
+  settingsUpdated   Boolean   @default(false)
+
+  // Relations
+  agencyId String
+  Agency   User   @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+
+  businessId String
+  Business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  assistants      Assistant[]
+  vapiAssistants  Json        @default("[]")
+  isVapiAssistant Boolean     @default(false)
+
+  // Metadata
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  VoiceCampaignLeads VoiceCampaignLead[]
+  LeadCalls          LeadCall[]
+
+  @@index([agencyId])
+  @@index([businessId])
+}
+
+model VoiceCampaignLead {
+  id String @id @default(uuid())
+
+  voiceCampaignId String
+  VoiceCampaign   VoiceCampaign @relation(fields: [voiceCampaignId], references: [id])
+
+  leadId String
+  Lead   Lead   @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  agencyId String
+  Agency   User   @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+
+  businessId String
+  Business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  status     VOICE_CAMPAIGN_LEAD_STATUS  @default(PENDING)
+  quality    VOICE_CAMPAIGN_LEAD_QUALITY @default(LOW)
+  result     VOICE_CAMPAIGN_LEAD_RESULT  @default(SUCCESS)
+  notes      String?                     @db.Text
+  followUpAt DateTime?
+
+  calledAt    DateTime?
+  retriesLeft Int       @default(3)
+  nextRetryAt DateTime?
+
+  @@index([agencyId])
+  @@index([businessId])
+  @@index([voiceCampaignId])
+  @@index([leadId])
+}
+
+model Pipeline {
+  id   String @id @default(uuid())
+  name String
+
+  // Relations
+  agencyId String
+  Agency   User   @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+
+  businessId String
+  Business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  stages        Stage[]
+  Opportunities Opportunity[]
+
+  @@index([agencyId])
+  @@index([businessId])
+}
+
+model Stage {
+  id    String @id @default(uuid())
+  name  String
+  order Int    @default(0)
+
+  Pipeline   Pipeline @relation(fields: [pipelineId], references: [id], onDelete: Cascade)
+  pipelineId String
+
+  agencyId String
+  Agency   User   @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+
+  businessId String
+  Business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+  Opportunities Opportunity[]
+
+  @@index([pipelineId])
+  @@index([agencyId])
+  @@index([businessId])
+}
+
+model Opportunity {
+  id           String             @id @default(uuid())
+  name         String
+  description  String?            @db.Text
+  status       OPPORTUNITY_STATUS @default(OPEN)
+  source       String             @default("")
+  value        Float?
+  businessName String?
+
+  order Int @default(0)
+
+  // Relations
+  stageId String
+  Stage   Stage  @relation(fields: [stageId], references: [id], onDelete: Cascade)
+
+  pipelineId String
+  Pipeline   Pipeline @relation(fields: [pipelineId], references: [id], onDelete: Cascade)
+
+  leadId String
+  Lead   Lead   @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  agencyId String
+  Agency   User   @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+
+  businessId String
+  Business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  addedToStageAt DateTime @default(now())
+
+  // Metadata
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([stageId])
+  @@index([leadId])
+  @@index([agencyId])
+  @@index([pipelineId])
+  @@index([businessId])
+}
+
+model Preference {
+  id String @id @default(uuid())
+
+  businessId String   @unique
+  Business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  leadPreference Json?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([businessId])
+}
+
+// Automation
+model Automation {
+  id String @id @default(uuid())
+
+  name        String
+  description String  @db.Text
+  url         String  @db.Text
+  token       String
+  isActive    Boolean @default(false)
+
+  event AUTOMATION_EVENT @default(OPPORTUNITY_EVENT)
+
+  // Relations
+  agencyId String
+  Agency   User   @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+
+  businessId String
+  Business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([agencyId, event])
+  @@index([agencyId])
+  @@index([businessId])
+}
+
+// Follow up
+model FollowUp {
+  id String @id @default(uuid())
+
+  reason     String           @db.Text // why follow up
+  notes      String           @db.Text // notes
+  status     FOLLOW_UP_STATUS @default(PENDING)
+  summary    String           @db.Text // conversation summary
+  followUpAt DateTime // when to follow up
+  priority   PRIORITY         @default(LOW) // priority of the follow up
+  attempts   Int              @default(0) // number of attempts
+  type       FOLLOW_UP_TYPE   @default(AI_AGENT) // type of follow up
+  source     FOLLOW_UP_SOURCE @default(MANUAL_SCHEDULED) // source of the follow up
+  channel    Json             @default("[]") // multiple channel of the follow up
+
+  leadId String
+  Lead   Lead   @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  salesAgentId String?
+  SalesAgent   User?   @relation("SalesAgentToFollowUp", fields: [salesAgentId], references: [id], onDelete: SetNull)
+
+  agencyId String
+  Agency   User   @relation("AgencyToFollowUp", fields: [agencyId], references: [id], onDelete: Cascade)
+
+  businessId String
+  Business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([agencyId])
+  @@index([salesAgentId])
+  @@index([leadId])
+  @@index([createdAt])
+  @@index([businessId])
+}
+
+model Business {
+  id      String @id @default(uuid())
+  name    String
+  image   String
+  email   String @unique
+  phone   String
+  address String? @db.Text
+
+  // Twilio
+  twilioAccountSid String @default("")
+
+  // VAPI
+  vapiPrivateKey String @default("")
+
+  // Trieve
+  trieveApiKey         String @default("")
+  trieveOrganizationId String @default("")
+
+  // n8n
+  n8nWebhookSecret String @unique @default(uuid())
+  n8nWebhookUrl    String @default("")
+
+  setupCompleted Boolean @default(false)
+
+  // Relations
+  agencyId String
+  Agency   User   @relation("BusinessAgency", fields: [agencyId], references: [id], onDelete: Cascade)
+
+  // New relation for managers
+  SalesAgents User[] @relation("BusinessSalesAgents")
+
+  // Metadata Fields
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  BusinessManagers    BusinessManager[]
+  ApiKeys             ApiKey[]
+  Assistants          Assistant[]
+  Leads               Lead[]
+  LeadTag             LeadTag[]
+  Conversation        Conversation[]
+  ConversationMessage ConversationMessage[]
+  Meetings            Meeting[]
+  VoiceCampaigns      VoiceCampaign[]
+  VoiceCampaignLeads  VoiceCampaignLead[]
+  Pipelines           Pipeline[]
+  Stages              Stage[]
+  Opportunities       Opportunity[]
+  Preference          Preference?
+  Automations         Automation[]
+  FollowUps           FollowUp[]
+  LeadCalls           LeadCall[]
+  BusinessConfig      BusinessConfig?
+  Agents              Agent[]
+
+  @@index([agencyId])
+}
+
+model BusinessManager {
+  id String @id @default(uuid())
+
+  businessId String
+  Business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  managerId String
+  Manager   User   @relation(fields: [managerId], references: [id], onDelete: Cascade)
+
+  @@index([businessId])
+  @@index([managerId])
+}
+
+enum ROLE {
+  ADMIN
+  AGENCY // agency 
+  MANAGER // agency manager (Multiple business managers for an agency can be assigned to multiple businesses)
+  SALES_AGENT // business sales agent
+}
+
+enum ACCESS {
+  USER
+  ADMIN // manager have admin access to the agency (all businesses)
+}
+
+enum PLAN {
+  AGENCY
+}
+
+enum PLAN_TERM {
+  MONTHLY
+  YEARLY
+}
+
+// Lead Enums 
+enum LEAD_STATUS {
+  NEW
+  CONTACTED
+  RETRYING
+  JUNK
+  BOOKED
+}
+
+enum LEAD_STATUS_TYPE {
+  HOT
+  WARM
+  COLD
+}
+
+enum LEAD_QUALITY {
+  UNQUALIFIED
+  LOW
+  MEDIUM
+  HIGH
+  PERFECT
+}
+
+// Meeting Enums
+
+enum MEETING_STATUS {
+  UPCOMING
+  SUCCESS
+  NO_SHOW
+  CANCELLED
+}
+
+enum CALL_TYPE {
+  INBOUND
+  OUTBOUND
+  WEB
+}
+
+enum CALL_END_REASON {
+  assistant_not_valid
+  assistant_not_provided
+  call_start_error_neither_assistant_nor_server_set
+  assistant_request_failed
+  assistant_request_returned_error
+  assistant_request_returned_unspeakable_error
+  assistant_request_returned_invalid_assistant
+  assistant_request_returned_no_assistant
+  assistant_request_returned_forwarding_phone_number
+  assistant_ended_call
+  assistant_said_end_call_phrase
+  assistant_ended_call_with_hangup_task
+  assistant_forwarded_call
+  assistant_join_timed_out
+  customer_busy
+  customer_ended_call
+  customer_did_not_answer
+  customer_did_not_give_microphone_permission
+  assistant_said_message_with_end_call_enabled
+  exceeded_max_duration
+  manually_canceled
+  phone_call_provider_closed_websocket
+  db_error
+  assistant_not_found
+  license_check_failed
+  pipeline_error_openai_voice_failed
+  pipeline_error_cartesia_voice_failed
+  pipeline_error_deepgram_voice_failed
+  pipeline_error_eleven_labs_voice_failed
+  pipeline_error_playht_voice_failed
+  pipeline_error_lmnt_voice_failed
+  pipeline_error_azure_voice_failed
+  pipeline_error_rime_ai_voice_failed
+  pipeline_error_neets_voice_failed
+  pipeline_error_smallest_ai_voice_failed
+  pipeline_error_neuphonic_voice_failed
+  pipeline_error_deepgram_transcriber_failed
+  pipeline_error_gladia_transcriber_failed
+  pipeline_error_speechmatics_transcriber_failed
+  pipeline_error_assembly_ai_transcriber_failed
+  pipeline_error_talkscriber_transcriber_failed
+  pipeline_error_azure_speech_transcriber_failed
+  pipeline_error_vapi_llm_failed
+  pipeline_error_vapi_400_bad_request_validation_failed
+  pipeline_error_vapi_401_unauthorized
+  pipeline_error_vapi_403_model_access_denied
+  pipeline_error_vapi_429_exceeded_quota
+  pipeline_error_vapi_500_server_error
+  pipeline_no_available_model
+  worker_shutdown
+  unknown_error
+  vonage_disconnected
+  vonage_failed_to_connect_call
+  phone_call_provider_bypass_enabled_but_no_call_received
+  vapifault_phone_call_worker_setup_socket_error
+  vapifault_phone_call_worker_worker_setup_socket_timeout
+  vapifault_phone_call_worker_could_not_find_call
+  vapifault_transport_never_connected
+  vapifault_web_call_worker_setup_failed
+  vapifault_transport_connected_but_call_not_active
+  vapifault_call_started_but_connection_to_transport_missing
+  pipeline_error_openai_llm_failed
+  pipeline_error_azure_openai_llm_failed
+  pipeline_error_groq_llm_failed
+  pipeline_error_google_llm_failed
+  pipeline_error_xai_llm_failed
+  pipeline_error_mistral_llm_failed
+  pipeline_error_inflection_ai_llm_failed
+  pipeline_error_cerebras_llm_failed
+  pipeline_error_deep_seek_llm_failed
+  pipeline_error_openai_400_bad_request_validation_failed
+  pipeline_error_openai_401_unauthorized
+  pipeline_error_openai_403_model_access_denied
+  pipeline_error_openai_429_exceeded_quota
+  pipeline_error_openai_500_server_error
+  pipeline_error_google_400_bad_request_validation_failed
+  pipeline_error_google_401_unauthorized
+  pipeline_error_google_403_model_access_denied
+  pipeline_error_google_429_exceeded_quota
+  pipeline_error_google_500_server_error
+  pipeline_error_xai_400_bad_request_validation_failed
+  pipeline_error_xai_401_unauthorized
+  pipeline_error_xai_403_model_access_denied
+  pipeline_error_xai_429_exceeded_quota
+  pipeline_error_xai_500_server_error
+  pipeline_error_mistral_400_bad_request_validation_failed
+  pipeline_error_mistral_401_unauthorized
+  pipeline_error_mistral_403_model_access_denied
+  pipeline_error_mistral_429_exceeded_quota
+  pipeline_error_mistral_500_server_error
+  pipeline_error_inflection_ai_400_bad_request_validation_failed
+  pipeline_error_inflection_ai_401_unauthorized
+  pipeline_error_inflection_ai_403_model_access_denied
+  pipeline_error_inflection_ai_429_exceeded_quota
+  pipeline_error_inflection_ai_500_server_error
+  pipeline_error_deep_seek_400_bad_request_validation_failed
+  pipeline_error_deep_seek_401_unauthorized
+  pipeline_error_deep_seek_403_model_access_denied
+  pipeline_error_deep_seek_429_exceeded_quota
+  pipeline_error_deep_seek_500_server_error
+  pipeline_error_azure_openai_400_bad_request_validation_failed
+  pipeline_error_azure_openai_401_unauthorized
+  pipeline_error_azure_openai_403_model_access_denied
+  pipeline_error_azure_openai_429_exceeded_quota
+  pipeline_error_azure_openai_500_server_error
+  pipeline_error_groq_400_bad_request_validation_failed
+  pipeline_error_groq_401_unauthorized
+  pipeline_error_groq_403_model_access_denied
+  pipeline_error_groq_429_exceeded_quota
+  pipeline_error_groq_500_server_error
+  pipeline_error_cerebras_400_bad_request_validation_failed
+  pipeline_error_cerebras_401_unauthorized
+  pipeline_error_cerebras_403_model_access_denied
+  pipeline_error_cerebras_429_exceeded_quota
+  pipeline_error_cerebras_500_server_error
+  pipeline_error_anthropic_400_bad_request_validation_failed
+  pipeline_error_anthropic_401_unauthorized
+  pipeline_error_anthropic_403_model_access_denied
+  pipeline_error_anthropic_429_exceeded_quota
+  pipeline_error_anthropic_500_server_error
+  pipeline_error_anthropic_llm_failed
+  pipeline_error_together_ai_400_bad_request_validation_failed
+  pipeline_error_together_ai_401_unauthorized
+  pipeline_error_together_ai_403_model_access_denied
+  pipeline_error_together_ai_429_exceeded_quota
+  pipeline_error_together_ai_500_server_error
+  pipeline_error_together_ai_llm_failed
+  pipeline_error_anyscale_400_bad_request_validation_failed
+  pipeline_error_anyscale_401_unauthorized
+  pipeline_error_anyscale_403_model_access_denied
+  pipeline_error_anyscale_429_exceeded_quota
+  pipeline_error_anyscale_500_server_error
+  pipeline_error_anyscale_llm_failed
+  pipeline_error_openrouter_400_bad_request_validation_failed
+  pipeline_error_openrouter_401_unauthorized
+  pipeline_error_openrouter_403_model_access_denied
+  pipeline_error_openrouter_429_exceeded_quota
+  pipeline_error_openrouter_500_server_error
+  pipeline_error_openrouter_llm_failed
+  pipeline_error_perplexity_ai_400_bad_request_validation_failed
+  pipeline_error_perplexity_ai_401_unauthorized
+  pipeline_error_perplexity_ai_403_model_access_denied
+  pipeline_error_perplexity_ai_429_exceeded_quota
+  pipeline_error_perplexity_ai_500_server_error
+  pipeline_error_perplexity_ai_llm_failed
+  pipeline_error_deepinfra_400_bad_request_validation_failed
+  pipeline_error_deepinfra_401_unauthorized
+  pipeline_error_deepinfra_403_model_access_denied
+  pipeline_error_deepinfra_429_exceeded_quota
+  pipeline_error_deepinfra_500_server_error
+  pipeline_error_deepinfra_llm_failed
+  pipeline_error_runpod_400_bad_request_validation_failed
+  pipeline_error_runpod_401_unauthorized
+  pipeline_error_runpod_403_model_access_denied
+  pipeline_error_runpod_429_exceeded_quota
+  pipeline_error_runpod_500_server_error
+  pipeline_error_runpod_llm_failed
+  pipeline_error_custom_llm_400_bad_request_validation_failed
+  pipeline_error_custom_llm_401_unauthorized
+  pipeline_error_custom_llm_403_model_access_denied
+  pipeline_error_custom_llm_429_exceeded_quota
+  pipeline_error_custom_llm_500_server_error
+  pipeline_error_custom_llm_llm_failed
+  pipeline_error_custom_voice_failed
+  pipeline_error_twilio_failed_to_connect_call
+  pipeline_error_twilio_reported_customer_misdialed
+  voicemail
+}
+
+enum CALL_RESULT {
+  SUCCESS
+  FAILURE
+}
+
+enum VOICE_CAMPAIGN_STATUS {
+  DRAFT
+  TESTING
+  ACTIVE
+  PAUSED
+  COMPLETED
+  FAILED
+}
+
+enum VOICE_CAMPAIGN_LEAD_STATUS {
+  PENDING
+  RETRYING
+  IN_PROGRESS
+  COMPLETED
+  FAILED
+}
+
+enum VOICE_CAMPAIGN_LEAD_QUALITY {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+enum VOICE_CAMPAIGN_LEAD_RESULT {
+  SUCCESS
+  FAILURE
+}
+
+enum LEAD_CALL_TYPE {
+  GLOBAL
+  VOICE_CAMPAIGN
+}
+
+// Pipeline Enums
+enum OPPORTUNITY_STATUS {
+  OPEN
+  LOST
+  WON
+  ABANDONED
+}
+
+// Automation Enums
+enum AUTOMATION_EVENT {
+  // PIPELINE EVENTS 
+  OPPORTUNITY_EVENT
+  STAGE_EVENT
+  PIPELINE_EVENT
+
+  // Opportunity events 
+  OPPORTUNITY_CREATED
+  OPPORTUNITY_UPDATED
+  OPPORTUNITY_DELETED
+  OPPORTUNITY_STATUS_CHANGED
+  OPPORTUNITY_STAGE_CHANGED
+
+  // Stage events
+  STAGE_CREATED
+  STAGE_UPDATED
+  STAGE_DELETED
+
+  // Pipeline events
+  PIPELINE_CREATED
+  PIPELINE_UPDATED
+  PIPELINE_DELETED
+
+  // Lead events
+  LEAD_EVENTS
+  LEAD_CREATED
+  LEAD_UPDATED
+  LEAD_DELETED
+  LEAD_STATUS_CHANGED
+  LEAD_QUALITY_CHANGED
+
+  // Lead call events 
+  LEAD_CALL_CREATED
+  LEAD_CALL_UPDATED
+  LEAD_CALL_DELETED
+
+  // Meeting events 
+  MEETING_EVENTS
+  MEETING_CREATED
+  MEETING_UPDATED
+  MEETING_DELETED
+  MEETING_STATUS_CHANGED
+
+  //  VOICE CAMPAIGN EVENTS
+
+  // Voice campaign lead events 
+  VOICE_CAMPAIGN_LEAD_CREATED
+  VOICE_CAMPAIGN_LEAD_UPDATED
+  VOICE_CAMPAIGN_LEAD_DELETED
+
+  // Voice campaign events 
+  VOICE_CAMPAIGN_EVENTS
+  VOICE_CAMPAIGN_CREATED
+  VOICE_CAMPAIGN_UPDATED
+  VOICE_CAMPAIGN_DELETED
+  VOICE_CAMPAIGN_STATUS_CHANGED
+
+  // Voice campaign call events 
+  VOICE_CAMPAIGN_CALL_CREATED
+  VOICE_CAMPAIGN_CALL_UPDATED
+  VOICE_CAMPAIGN_CALL_DELETED
+  VOICE_CAMPAIGN_CALL_STATUS_CHANGED
+
+  // FOLLOWUP EVENTS
+  FOLLOWUP_EVENTS
+  FOLLOWUP_CREATED
+  FOLLOWUP_UPDATED
+  FOLLOWUP_DELETED
+  FOLLOWUP_STATUS_CHANGED
+  FOLLOWUP_PRIORITY_CHANGED
+
+  // CONVERSATION AUTOMATIONS
+  SEND_EMAIL
+  SEND_WHATSAPP_MESSAGE
+  SEND_SMS
+}
+
+enum PRIORITY {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+enum FOLLOW_UP_STATUS {
+  PENDING
+  COMPLETED
+  RETRYING
+  DROPPED
+}
+
+enum FOLLOW_UP_TYPE {
+  AI_AGENT
+  HUMAN_AGENT
+}
+
+enum FOLLOW_UP_SOURCE {
+  MANUAL_SCHEDULED // created by lead
+  AUTO_SCHEDULED // created by agent/us
+
+  // Appointment follow ups
+  UPCOMING_APPOINTMENT
+  NO_SHOW_APPOINTMENT
+  CANCELLED_APPOINTMENT
+
+  ENGAGEMENT
+}
+
+enum MESSAGE_CHANNEL {
+  EMAIL
+  VOICE_AI
+  PHONE
+  WHATSAPP
+  TELEGRAM
+  SMS
+  LINKEDIN
+  FACEBOOK
+  INSTAGRAM
+  TWITTER
+  OTHER
+}
+
+enum MESSAGE_ITEM_TYPE {
+  MESSAGE
+  CALL
+}
+
+enum MESSAGE_SENDER {
+  AI_AGENT
+  HUMAN_AGENT
+  LEAD
+}
+
+enum CONVERSATION_MESSAGE_STATUS {
+  SENT
+  DRAFT
+  SCHEDULED
+  FAILED
+}
+
+enum REPLY_MODE {
+  AUTO
+  MANUAL
+}
+
+enum LEAD_NOTE_TYPE {
+  NOTE // for notes
+  NOTIFICATION // for notifications
+  CONVERSATION // for conversations
+}
+
+enum MIGRATION_STATUS {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+  FAILED
+}
