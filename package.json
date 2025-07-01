@@ -6,7 +6,8 @@
   "scripts": {
     "start": "node dist/server.js",
     "dev": "nodemon --watch \"*.ts\" --exec \"node --loader ts-node/esm\" server.ts",
-    "build": "tsc",
+    "build": "prisma generate && tsc",
+    "generate": "prisma generate",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
@@ -14,13 +15,15 @@
   "license": "ISC",
   "description": "",
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.8.0",
+    "@modelcontextprotocol/sdk": "^1.13.2",
     "@prisma/client": "^6.10.1",
-    "@prisma/extension-accelerate": "^2.0.1",
     "@types/cors": "^2.8.17",
+    "axios": "^1.10.0",
     "cors": "^2.8.5",
+    "date-fns": "^4.1.0",
     "dotenv": "^16.4.7",
-    "node-fetch": "^3.3.2"
+    "node-fetch": "^3.3.2",
+    "prisma": "^6.10.1"
   },
   "devDependencies": {
     "@types/express": "^5.0.1",
