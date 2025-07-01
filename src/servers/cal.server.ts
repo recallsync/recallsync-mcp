@@ -7,7 +7,9 @@ import {
 } from "@modelcontextprotocol/sdk/types.js";
 import {
   appointmentTools,
+  handleBookAppointment,
   handleCheckAvailability,
+  handleRescheduleAppointment,
 } from "../tools/CAL/appointment.tools.js";
 
 export const calServer = new Server(
@@ -45,6 +47,10 @@ calServer.setRequestHandler(CallToolRequestSchema, async (request) => {
   switch (request.params.name) {
     case "check_availability":
       return handleCheckAvailability(request);
+    case "book_appointment":
+      return handleBookAppointment(request);
+    case "reschedule_appointment":
+      return handleRescheduleAppointment(request);
     default:
       throw new Error("Unknown tool");
   }

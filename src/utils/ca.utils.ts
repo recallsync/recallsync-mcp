@@ -6,7 +6,7 @@ interface CompactSlot {
   duration: string; // e.g., "3 hours", "30 minutes"
 }
 
-interface CompactAvailability {
+export interface CompactAvailability {
   [date: string]: CompactSlot[];
 }
 
