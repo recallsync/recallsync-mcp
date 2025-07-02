@@ -1,6 +1,9 @@
-import { parse } from "date-fns";
+import { format, parse } from "date-fns";
 import { CheckAvailabilityRequest } from "../../schema/GHL/appointment.schema.js";
-import { GetGHLAppointmentsResponse } from "../../types/ghl.types.js";
+import {
+  GetGHLAppointmentsResponse,
+  GHLAppointment,
+} from "../../types/ghl.types.js";
 import { chunkConsecutiveSlots } from "../../utils/ghl.js";
 import { formatInTimeZone, fromZonedTime } from "date-fns-tz";
 import { CALENDAR_TYPE, MEETING_SOURCE } from "@prisma/client";
@@ -62,7 +65,7 @@ export const getAppointments = async ({
     const appointmentsData =
       (await response.json()) as GetGHLAppointmentsResponse;
     const appointments = appointmentsData.events;
-    console.log("appointmentsData", { appointmentsData });
+    console.log("appointmentsData", { appointments });
     // convert the appointment date to ISO string - parse from location timezone
     const updatedAppointments = appointments?.map((appointment) => {
       // Parse the time and specify it's in the location timezone
@@ -81,7 +84,7 @@ export const getAppointments = async ({
         startTime: utcDate.toISOString(),
       };
     });
-
+    console.log({ updatedAppointments }, "updatedAppointments");
     // filter out the upcoming appointments - "startTime": "2025-06-13 09:00:00"
     const upcomingAppointments = updatedAppointments?.filter((appointment) => {
       const appointmentDate = new Date(appointment.startTime);
@@ -92,7 +95,7 @@ export const getAppointments = async ({
         : new Date();
       return appointmentDate > currentDate;
     });
-
+    console.log(upcomingAppointments, "upcomingAppointments");
     // // convert the appointment date to the userTimezone
     const upcomingAppointmentsInUserTimezone = upcomingAppointments?.map(
       (appointment) => {
@@ -108,16 +111,42 @@ export const getAppointments = async ({
         };
       }
     );
-
+    console.log("upcomingAppointmentsInUserTimezone", {
+      upcomingAppointmentsInUserTimezone,
+    });
     // // agent only needs startTime and id
     const agentData = upcomingAppointmentsInUserTimezone?.map((item) => ({
       startTime: item.startTime,
       id: item.id,
+      title: item.title,
+      start: item.startTime,
+      end: item.endTime,
     }));
-
+    console.log("agentData", { agentData });
+    if (agentData.length === 0) {
+      return {
+        success: false,
+        data: "No appointments found",
+      };
+    }
+    let formattedResponse = "";
+    let index = 1;
+    for (const booking of agentData) {
+      if (index === 0) {
+        formattedResponse += `Here are your upcoming meetings: \n\n`;
+      }
+      formattedResponse += `Bookings :\n 
+      **appointmentId: ${booking.id}**,
+      Title: ${booking.title},
+      Start: ${booking.startTime || booking.start},
+      End: ${booking.end},
+      \n\n --------------------------------- \n\n`;
+      index++;
+    }
+    console.log("formattedResponse", { formattedResponse });
     return {
       success: true,
-      data: agentData,
+      data: formattedResponse,
     };
   } catch (err) {
     console.log("error getting appointments");
@@ -244,6 +273,7 @@ export const bookAppointment = async ({
 }: BookGHLAppointment) => {
   try {
     let path = `/calendars/events/appointments`;
+    console.log("book appointment", startTime);
     const request = ghlRequestContructor({
       apiKey: ghlAccessToken || "",
       method: "POST",
@@ -252,21 +282,24 @@ export const bookAppointment = async ({
         calendarId,
         locationId: ghlLocationId,
         contactId: ghlContactId,
-        startTime,
+        startTime: new Date(startTime).toISOString(),
       },
     });
     const response = await request;
-    const appointmentData = await response.json();
+    const appointmentData = (await response.json()) as GHLAppointment;
+    console.log("appointmentData", response);
     if (response.ok) {
+      console.log("appointmentData", appointmentData);
       await bookMeeting({
         businessId,
-        startTime: appointmentData.startTime,
+        startTime: new Date(startTime).toISOString(),
         contactId,
         agencyId,
         meetingId: appointmentData.id,
         caledarType: CALENDAR_TYPE.GHL,
         meetingSource: MEETING_SOURCE.DASHBOARD,
         status: "UPCOMING",
+        meetingUrl: appointmentData.address,
       });
     }
     return {
@@ -305,7 +338,6 @@ type UpdateGHLAppointment =
 export const updateAppointment = async (props: UpdateGHLAppointment) => {
   try {
     const path = `/calendars/events/appointments/${props.appointmentId}`;
-
     // Build update body based on what's provided
     const updateBody: Record<string, any> = {};
     if (props.type === "reschedule") {
@@ -343,7 +375,6 @@ export const updateAppointment = async (props: UpdateGHLAppointment) => {
 
     const response = await request;
     const appointmentData = await response.json();
-
     if (response.ok) {
       let localStatus: "UPCOMING" | "RESCHEDULED" | "CANCELLED" | "NO_SHOW" =
         "UPCOMING";
@@ -359,7 +390,6 @@ export const updateAppointment = async (props: UpdateGHLAppointment) => {
       });
       if (appointment) {
         console.log({ appointment }, "update");
-
         await updateMeeting({
           meetingId: appointmentData.id,
           newStartTime: new Date(
@@ -367,7 +397,6 @@ export const updateAppointment = async (props: UpdateGHLAppointment) => {
               ? props.newStartTime
               : appointment.startTime
           ),
-
           status: localStatus,
         });
       } else {

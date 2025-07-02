@@ -158,3 +158,10 @@ export const chunkConsecutiveSlots = (
 
   return chunks;
 };
+export function combineDateAndTime(date: string, time: string): string {
+  // Returns ISO string if possible, else fallback
+  if (!date || !time) return "";
+  // If time is missing seconds, add ":00"
+  if (/^\d{2}:\d{2}$/.test(time)) time += ":00";
+  return new Date(`${date}T${time}`).toISOString();
+}

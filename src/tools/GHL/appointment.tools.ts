@@ -5,7 +5,8 @@ import {
   getAppointments,
   updateAppointment,
 } from "../../controller/GHL/ghl.appointment.js";
-import { getPrimaryAgent } from "../../utils/ghl.js";
+import { combineDateAndTime, getPrimaryAgent } from "../../utils/ghl.js";
+import { prisma } from "../../lib/prisma.js";
 
 export const appointmentTools = [
   {
@@ -38,45 +39,20 @@ export const appointmentTools = [
   {
     name: "book_appointment",
     description:
-      "Book an appointment. Always convert the user's input (e.g., 'July 4 at 12:30 pm', 'today at 10 am') to a valid ISO 8601 string with timezone offset (e.g., '2025-07-04T12:30:00+05:30'). Do not pass natural language or ambiguous times.",
+      "Use this tool to book an appointment once the user provided the dateTime to book. If date and time are provided separately, combine them into a single ISO 8601 dateTime string. Prefer dateTime if available.",
     arguments: [],
     inputSchema: {
       type: "object",
       properties: {
-        startTime: {
+        dateTime: {
           type: "string",
           description:
-            "The appointment start time in ISO 8601 format with offset (e.g., '2025-07-04T12:30:00+05:30'). Always convert user input to this format.",
+            "date time of the appointment, if user said tomorrow or next day - always reference the Today's date. If today is 24th november 2025, it means tomorrow is 25th november 2025. Format: ISO 8601",
         },
-        primaryAgentId: {
+        timezone: {
           type: "string",
           description:
-            "primaryAgentId from available details. Always include this from 'Available Details'",
-        },
-        ghlContactId: {
-          type: "string",
-          description:
-            "ghlContactId from available details. Always include this from 'Available Details'",
-        },
-      },
-      required: ["startTime", "primaryAgentId", "ghlContactId"],
-      additionalProperties: false,
-    },
-  },
-  {
-    name: "reschedule_appointment",
-    description: `Reschedule an existing appointment to a new date and time.
-  Rescheduling Guidelines:
-  - if the user did not specify a date-time, use the get_appointments tool to get the list and ask them to select the appointment they wish to reschedule.
-  - if the user provide a date-time, make sure you have the appointmentId from the get_appointments tool response.`,
-    arguments: [],
-    inputSchema: {
-      type: "object",
-      properties: {
-        appointmentId: {
-          type: "string",
-          description:
-            "The appointmentId from available details. Always include this from 'Available Details",
+            "'timezone' of the appointment in iana format, example: Asia/Kolkata",
         },
         primaryAgentId: {
           type: "string",
@@ -84,21 +60,49 @@ export const appointmentTools = [
             "primaryAgentId from available details. Always include this from 'Available Details'",
           required: true,
         },
-        startTime: {
+        contactId: {
+          type: "string",
+          description:
+            "contactId from available details. Always include this from 'Available Details'",
+          required: true,
+        },
+      },
+      required: ["dateTime", "primaryAgentId", "contactId"],
+      additionalProperties: false,
+    },
+  },
+
+  {
+    name: "reschedule_appointment",
+    description: `Reschedule an existing appointment to a new date and time.
+  Rescheduling Guidelines:
+  - Firslty, use the get_appointments tool to get the list and ask them to select the appointment they wish to reschedule.
+  - if the user provide a new date-time, make sure you have the appointmentId from the get_appointments tool response.`,
+    arguments: [],
+    inputSchema: {
+      type: "object",
+      properties: {
+        appointmentId: {
+          type: "string",
+          description:
+            "Copy the exact value after 'appointmentId: ' from get_appointments response. Example: if you see 'appointmentId: abc123xyz', use 'abc123xyz'. MUST be called 'appointmentId' in the arguments.",
+        },
+        primaryAgentId: {
+          type: "string",
+          description:
+            "primaryAgentId from available details. Always include this from 'Available Details'",
+          required: true,
+        },
+        newTime: {
           type: "string",
           description: `The new start time in ISO 8601 format with timezone offset. (e.g., '2025-07-04T12:30:00+05:30'). Always convert user input to this format.`,
         },
-        ghlContactId: {
+        contactId: {
           type: "string",
           description:
-            "ghlContactId from available details. Always include this from 'Available Details'",
+            "contactId from available details. Always include this from 'Available Details'",
         },
-        required: [
-          "appointmentId",
-          "primaryAgentId",
-          "startTime",
-          "ghlContactId",
-        ],
+        required: ["appointmentId", "primaryAgentId", "startTime", "contactId"],
       },
     },
   },
@@ -113,7 +117,7 @@ export const appointmentTools = [
         appointmentId: {
           type: "string",
           description:
-            "The appointmentId from available details. Always include this from 'Available Details",
+            "Copy the exact value after 'appointmentId: ' from get_appointments response. Example: if you see 'appointmentId: abc123xyz', use 'abc123xyz'. MUST be called 'appointmentId' in the arguments.",
         },
         primaryAgentId: {
           type: "string",
@@ -121,12 +125,12 @@ export const appointmentTools = [
             "primaryAgentId from available details. Always include this from 'Available Details'",
           required: true,
         },
-        ghlContactId: {
+        contactId: {
           type: "string",
           description:
-            "ghlContactId from available details. Always include this from 'Available Details'",
+            "contactId from available details. Always include this from 'Available Details'",
         },
-        required: ["appointmentId", "primaryAgentId", "ghlContactId"],
+        required: ["appointmentId", "primaryAgentId", "contactId"],
       },
     },
   },
@@ -137,13 +141,12 @@ export const appointmentTools = [
     inputSchema: {
       type: "object",
       properties: {
-        ghlContactId: {
+        contactId: {
           type: "string",
           description:
-            "ghlContactId from available details. Always include this from 'Available Details'",
+            "contactId from available details. Always include this from 'Available Details'",
         },
-
-        required: ["ghlContactId"],
+        required: ["contactId"],
       },
     },
   },
@@ -205,23 +208,49 @@ export async function handleCheckAvailability(request: CallToolRequest) {
 export async function handleBookAppointment(request: CallToolRequest) {
   try {
     const args = request.params.arguments as {
-      startTime: string;
+      dateTime?: string;
+      date?: string;
+      time?: string;
+      timezone?: string;
       primaryAgentId: string;
-      ghlContactId: string;
+      contactId: string;
     };
+    console.log("book appointment args", args);
     const primaryAgentId = (args.primaryAgentId as string) || "";
     const primaryAgent = await getPrimaryAgent(primaryAgentId);
-    console.log("primaryAgent", primaryAgentId);
+    //TODO: leter we can get the lead from workflow , and fing ghlcontactId from it
+    const lead = await prisma.lead.findUnique({
+      where: {
+        id: args.contactId,
+      },
+    });
+
+    // Combine date and time if dateTime is not provided
+    let startTime = args.dateTime;
+    if (!startTime && args.date && args.time) {
+      startTime = combineDateAndTime(args.date, args.time);
+    }
+    if (!startTime) {
+      return {
+        content: [
+          {
+            type: "text",
+            text: `Missing valid dateTime or (date + time) for booking. Please provide a valid date and time.`,
+          },
+        ],
+      };
+    }
+
     const result = await bookAppointment({
       calendarId: primaryAgent?.ghlCalendarId || "",
-      contactId: args.ghlContactId,
-      startTime: args.startTime,
+      contactId: args.contactId,
+      startTime,
       ghlAccessToken: String(request.params?.arguments?._ghlAccessToken || ""),
       ghlLocationId:
         primaryAgent?.Business?.BusinessIntegration?.ghlLocationId || "",
       agencyId: primaryAgent?.agencyId || "",
       businessId: primaryAgent?.Business?.id || "",
-      ghlContactId: args.ghlContactId,
+      ghlContactId: lead?.ghlContactId || "",
     });
 
     if (result.success) {
@@ -264,19 +293,21 @@ export async function handleRescheduleAppointment(request: CallToolRequest) {
     console.log("reschedule appointment args", request.params.arguments);
     const args = request.params.arguments as {
       appointmentId: string;
-      startTime: string;
+      newTime: string;
       primaryAgentId: string;
-      ghlContactId: string;
+      contactId: string;
+      newStartTime?: string;
     };
     const primaryAgent = await getPrimaryAgent(args.primaryAgentId);
+
     const response = await updateAppointment({
       appointmentId: args.appointmentId,
       type: "reschedule",
-      newStartTime: args.startTime,
+      newStartTime: args.newTime || args.newStartTime || "",
       ghlAccessToken: String(request.params?.arguments?._ghlAccessToken || ""),
       agencyId: primaryAgent?.agencyId || "",
       businessId: primaryAgent?.Business?.id || "",
-      contactId: args.ghlContactId,
+      contactId: args.contactId,
     });
     if (response.success) {
       return {
@@ -320,7 +351,7 @@ export async function handleCancelAppointment(request: CallToolRequest) {
       appointmentId: string;
       startTime: string;
       primaryAgentId: string;
-      ghlContactId: string;
+      contactId: string;
     };
     const primaryAgent = await getPrimaryAgent(args.primaryAgentId);
     const response = await updateAppointment({
@@ -329,7 +360,7 @@ export async function handleCancelAppointment(request: CallToolRequest) {
       ghlAccessToken: String(request.params?.arguments?._ghlAccessToken || ""),
       agencyId: primaryAgent?.agencyId || "",
       businessId: primaryAgent?.Business?.id || "",
-      contactId: args.ghlContactId,
+      contactId: args.contactId,
     });
     if (response.success) {
       return {
@@ -369,22 +400,27 @@ export async function handleCancelAppointment(request: CallToolRequest) {
 export async function handleGetAppointments(request: CallToolRequest) {
   try {
     const args = request.params.arguments as {
-      ghlContactId: string;
+      contactId: string;
     };
     console.log("get appointments args", args);
     // Validate the input
-    if (!args.ghlContactId) {
+    const lead = await prisma.lead.findUnique({
+      where: {
+        id: args.contactId,
+      },
+    });
+    if (!args.contactId) {
       return {
         content: [
           {
             type: "text",
-            text: "Please provide a ghlContactId to get appointments.",
+            text: "Please provide a contactId to get appointments.",
           },
         ],
       };
     }
     const appointments = await getAppointments({
-      ghlContactId: args.ghlContactId,
+      ghlContactId: lead?.ghlContactId || "",
       // timezone: undefined,
       // userTimezone: undefined,
       ghlAccessToken: String(request.params?.arguments?._ghlAccessToken || ""),

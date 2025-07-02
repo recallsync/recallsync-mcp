@@ -22,6 +22,7 @@ import {
   getIntegration,
   getPrimaryAgent,
 } from "../../utils/integration.util.js";
+import { prisma } from "../../lib/prisma.js";
 
 export const appointmentTools = [
   {
@@ -83,8 +84,21 @@ export const appointmentTools = [
             "primaryAgentId from available details. Always include this from 'Available Details'",
           required: true,
         },
+        contactId: {
+          type: "string",
+          description:
+            "contactId from available details. Always include this from 'Available Details'",
+          required: true,
+        },
       },
-      required: ["startTime", "timezone", "name", "email", "primaryAgentId"],
+      required: [
+        "startTime",
+        "timezone",
+        "name",
+        "email",
+        "primaryAgentId",
+        "contactId",
+      ],
       additionalProperties: false,
     },
   },
@@ -320,11 +334,20 @@ export async function handleBookAppointment(request: CallToolRequest) {
       };
     }
     console.log("booking appointment");
+    //TODO: leter we can get the lead from workflow , and fing ghlcontactId from it
+    const lead = await prisma.lead.findFirst({
+      where: {
+        ghlContactId: args.contactId,
+      },
+    });
     // compact ai formatted response
     const response = await bookAppointment({
       args: result.data,
       calendar: agent.CalenderIntegration,
       businessName: integration.Business.name,
+      businessId: agent.businessId,
+      agencyId: agent.agencyId,
+      contactId: lead?.id || "",
     });
     console.log("booking appointment", response);
     return {

@@ -4,16 +4,17 @@ import { prisma } from "../lib/prisma.js";
 interface BookMeetingInput {
   businessId?: string;
   meetingId: string;
-  startTime: Date;
+  startTime: Date | string;
   contactId: string;
   agencyId: string;
   caledarType: CALENDAR_TYPE;
   meetingSource: MEETING_SOURCE;
   status: MEETING_STATUS;
+  meetingUrl?: string;
 }
 interface UpdateMeetingInput {
   meetingId: string;
-  newStartTime: Date;
+  newStartTime?: Date;
   status: MEETING_STATUS;
 }
 export const bookMeeting = async ({
@@ -25,8 +26,10 @@ export const bookMeeting = async ({
   caledarType,
   meetingSource,
   status,
+  meetingUrl,
 }: BookMeetingInput) => {
   try {
+    console.log("book meeting", startTime);
     const response = await prisma?.meeting.create({
       data: {
         id: meetingId,
@@ -34,11 +37,12 @@ export const bookMeeting = async ({
         agencyId: agencyId,
         leadId: contactId,
         status: status,
-        startTime: new Date(startTime).toDateString(),
+        startTime: new Date(startTime).toISOString(),
         updatedAt: new Date(),
         messageOfLead: "",
         calendarType: caledarType,
         meetingSource: meetingSource,
+        meetingUrl,
       },
     });
     return {
@@ -57,18 +61,27 @@ export const bookMeeting = async ({
 export const updateMeeting = async ({
   meetingId,
   newStartTime,
-
   status,
 }: UpdateMeetingInput) => {
   try {
+    const payload = newStartTime
+      ? {
+          status: status,
+          startTime: new Date(newStartTime).toISOString(),
+          updatedAt: new Date(),
+        }
+      : {
+          status: status,
+          updatedAt: new Date(),
+        };
+
     const response = await prisma?.meeting.update({
       where: {
         id: meetingId,
       },
+
       data: {
-        status: status,
-        startTime: new Date(newStartTime).toDateString(),
-        updatedAt: new Date(),
+        ...payload,
       },
     });
     return {
