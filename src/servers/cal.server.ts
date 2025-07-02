@@ -8,7 +8,9 @@ import {
 import {
   appointmentTools,
   handleBookAppointment,
+  handleCancelAppointment,
   handleCheckAvailability,
+  handleGetAppointments,
   handleRescheduleAppointment,
 } from "../tools/CAL/appointment.tools.js";
 
@@ -51,6 +53,10 @@ calServer.setRequestHandler(CallToolRequestSchema, async (request) => {
       return handleBookAppointment(request);
     case "reschedule_appointment":
       return handleRescheduleAppointment(request);
+    case "cancel_appointment":
+      return handleCancelAppointment(request);
+    case "get_appointments":
+      return handleGetAppointments(request);
     default:
       throw new Error("Unknown tool");
   }

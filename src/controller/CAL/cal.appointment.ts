@@ -1,7 +1,9 @@
 import { CalenderIntegration } from "@prisma/client";
 import {
   BookAppointmentRequest,
+  CancelAppointmentRequest,
   CheckAvailabilityRequest,
+  GetCalBookingsRequest,
   RescheduleAppointmentRequest,
 } from "../../schema/CAL/appointment.schema.js";
 import { format, addDays } from "date-fns";
@@ -10,6 +12,7 @@ import {
   AvailabilityData,
   BookAppointmentInput,
   BookAppointmentResponse,
+  GetCalBookingsResponse,
 } from "../../types/cal.types.js";
 import {
   CompactAvailability,
@@ -154,7 +157,7 @@ export const bookAppointment = async ({
     );
     const data = res.data; // for @db
     console.log("Appointment booked successfully", data);
-    return `Appointment booked successfully. Booking URL: ${data.data.meetingUrl}, Booking uid: ${data.data.uid}`;
+    return `Appointment booked successfully. Booking URL: ${data.data.meetingUrl}, Booking rescheduleOrCancelUid: ${data.data.uid}`;
   } catch (err) {
     console.log({ err });
     if (err instanceof AxiosError) {
@@ -173,11 +176,11 @@ export const rescheduleAppointment = async ({
   calendar,
 }: RescheduleAppointmentProps) => {
   try {
-    const { startTime, uid } = args;
-    const start = new Date(startTime).toISOString();
+    const { updatedStartTime, rescheduleOrCancelUid } = args;
+    const start = new Date(updatedStartTime).toISOString();
     const { calApiKey } = calendar;
     const res = await axios.post<BookAppointmentResponse>(
-      `https://api.cal.com/v2/bookings/${uid}/reschedule`,
+      `https://api.cal.com/v2/bookings/${rescheduleOrCancelUid}/reschedule`,
       {
         start: new Date(start).toISOString(),
         rescheduledBy: "MCP",
@@ -199,4 +202,79 @@ export const rescheduleAppointment = async ({
     }
     return "Appointment rescheduling failed, ask for another time or date-time";
   }
+};
+
+type CancelAppointmentProps = {
+  args: CancelAppointmentRequest;
+  calendar: CalenderIntegration;
+};
+export const cancelAppointment = async ({
+  args,
+  calendar,
+}: CancelAppointmentProps) => {
+  try {
+    const { rescheduleOrCancelUid } = args;
+    const { calApiKey } = calendar;
+    const res = await axios.post<BookAppointmentResponse>(
+      `https://api.cal.com/v2/bookings/${rescheduleOrCancelUid}/cancel`,
+      {
+        cancellationReason: "User requested cancellation",
+      },
+      {
+        headers: {
+          "cal-api-version": "2024-08-13",
+          Authorization: `Bearer ${calApiKey}`,
+        },
+      }
+    );
+    const data = res.data; // for @db
+    console.log("Appointment cancelled successfully", data);
+    return `Appointment cancelled successfully. Booking ID: ${data.data.id}, Booking URL: ${data.data.meetingUrl}, rescheduleOrCancelUid: ${data.data.uid}`;
+  } catch (err) {
+    if (err instanceof AxiosError) {
+      console.log({ err: JSON.stringify(err.response?.data) });
+    }
+    return "Appointment cancellation failed, ask for another time or date-time";
+  }
+};
+
+type GetCalBookingsInput = {
+  args: GetCalBookingsRequest;
+  calendar: CalenderIntegration;
+};
+export const getCalBookings = async ({
+  args,
+  calendar,
+}: GetCalBookingsInput) => {
+  const { email } = args;
+  const { calApiKey } = calendar;
+  const res = await axios.get<GetCalBookingsResponse>(
+    `https://api.cal.com/v2/bookings?attendeeEmail=${email}&status=upcoming&take=100`,
+    {
+      headers: {
+        "cal-api-version": "2024-08-13",
+        Authorization: `Bearer ${calApiKey}`,
+      },
+    }
+  );
+  const data = res.data; // for @db
+  // format the string response for AI - also include the booking 'uid'
+  let formattedResponse = "";
+  let index = 1;
+  for (const booking of data.data) {
+    if (index === 0) {
+      formattedResponse += `Here are your upcoming meetings: \n\n`;
+    }
+    formattedResponse += `Booking ${index + 1}:\n 
+    **rescheduleOrCancelUid: ${booking.uid}**,
+    Title: ${booking.title},
+    Start: ${format(new Date(booking.start), "dd MMM yyyy, hh:mm a")},
+    End: ${format(new Date(booking.end), "dd MMM yyyy, hh:mm a")},
+    Status: ${booking.status} 
+    \n\n --------------------------------- \n\n`;
+    index++;
+  }
+
+  console.log("Cal bookings fetched successfully", data);
+  return formattedResponse;
 };

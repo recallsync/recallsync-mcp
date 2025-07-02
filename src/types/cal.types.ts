@@ -73,3 +73,66 @@ export type BookAppointmentResponse = {
     };
   };
 };
+
+export type CalBooking = {
+  id: number;
+  uid: string;
+  title: string;
+  description: string;
+  hosts: [
+    {
+      id: number;
+      name: string;
+      email: string;
+      username: string;
+      timeZone: string;
+    }
+  ];
+  status: "accepted" | "pending" | "cancelled" | "no_show";
+  start: string;
+  end: string;
+  duration: number;
+  eventTypeId: number;
+  eventType: {
+    id: number;
+    slug: string;
+  };
+  meetingUrl: string;
+  location: string;
+  absentHost: boolean;
+  createdAt: string;
+  updatedAt: string;
+  metadata: {
+    source: string;
+  };
+  rating: number | null;
+  icsUid: string;
+  attendees: [
+    {
+      name: string;
+      email: string;
+      timeZone: string;
+      language: string;
+      absent: boolean;
+    }
+  ];
+  bookingFieldsResponses: {
+    email: string;
+    name: string;
+    title: string;
+  };
+};
+export type GetCalBookingsResponse = {
+  status: "success" | "error";
+  data: CalBooking[];
+  pagination: {
+    returnedItems: number;
+    totalItems: number;
+    itemsPerPage: number;
+    remainingItems: number;
+    currentPage: number;
+    totalPages: number;
+    hasNextPage: boolean;
+    hasPreviousPage: boolean;
+  };
+};
