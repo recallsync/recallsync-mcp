@@ -7,7 +7,11 @@ import {
 } from "@modelcontextprotocol/sdk/types.js";
 import {
   appointmentTools,
+  handleBookAppointment,
+  handleCancelAppointment,
   handleCheckAvailability,
+  handleGetAppointments,
+  handleRescheduleAppointment,
 } from "../tools/GHL/appointment.tools.js";
 
 export const ghlServer = new Server(
@@ -45,6 +49,14 @@ ghlServer.setRequestHandler(CallToolRequestSchema, async (request) => {
   switch (request.params.name) {
     case "check_availability":
       return handleCheckAvailability(request);
+    case "book_appointment":
+      return handleBookAppointment(request);
+    case "cancel_appointment":
+      return handleCancelAppointment(request);
+    case "reschedule_appointment":
+      return handleRescheduleAppointment(request);
+    case "get_appointments":
+      return handleGetAppointments(request);
     default:
       throw new Error("Unknown tool");
   }

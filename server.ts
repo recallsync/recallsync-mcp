@@ -5,7 +5,6 @@ import cors from "cors";
 import dotenv from "dotenv";
 import { primaryServer } from "./src/servers/primary.server.js";
 import { ghlServer } from "./src/servers/ghl.server.js";
-import { getAPIKeyBusiness } from "./src/utils/ghl.js";
 import { PrismaClient } from "@prisma/client";
 import { calServer } from "./src/servers/cal.server.js";
 import {
@@ -95,7 +94,6 @@ app.post(
             ...req.body.params.arguments,
             _apiKey: api_token, // Add API key to arguments
             _ghlAccessToken: req.ghlAccessToken,
-            _ghlCalendarId: req.ghlCalendarId,
           },
         },
       };

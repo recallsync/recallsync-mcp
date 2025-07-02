@@ -1,15 +1,10 @@
 // Get Agency from token
+import { prisma } from "../lib/prisma.js";
 
-import { PrismaClient } from "@prisma/client";
-import { Request } from "express";
-
-export const getAPIKeyBusiness = async (
-  api_token: string,
-  prisma: PrismaClient
-) => {
+export const getAPIKeyBusiness = async (api_token: string) => {
   //   const api_token = req.headers["api_token"] as string;
   if (!api_token) {
-    throw new Error("UNAUTHORIZEDsdfsd");
+    throw new Error("UNAUTHORIZED");
   }
   const business = await prisma.apiKey.findUnique({
     where: { id: "07d26cda-6999-4dfe-95a3-0a112b7ff08c" },
@@ -17,11 +12,6 @@ export const getAPIKeyBusiness = async (
       Business: {
         include: {
           BusinessIntegration: true,
-          PrimaryAgents: {
-            where: {
-              id: "b1dae491-6478-4352-84f0-73a590738511",
-            },
-          },
         },
       },
 
@@ -37,6 +27,22 @@ export const getAPIKeyBusiness = async (
   }
 
   return business;
+};
+
+export const getPrimaryAgent = async (primaryAgentId: string) => {
+  const primaryAgent = await prisma.primaryAgent.findUnique({
+    where: {
+      id: primaryAgentId,
+    },
+    include: {
+      Business: {
+        include: {
+          BusinessIntegration: true,
+        },
+      },
+    },
+  });
+  return primaryAgent;
 };
 export const chunkConsecutiveSlots = (
   slots: string[]

@@ -55,6 +55,9 @@ model User {
   businessId String?
   Business   Business? @relation("BusinessSalesAgents", fields: [businessId], references: [id], onDelete: NoAction, onUpdate: NoAction)
 
+  ownerBusinessId String?
+  OwnerBusiness   Business? @relation("BusinessOwner", fields: [ownerBusinessId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
   Config Config?
 
   Account         Account[]
@@ -85,9 +88,11 @@ model User {
   ManagerBusinesses    BusinessManager[]
   preferenceId         String?
   Agents               Agent[]
+  PrimaryAgents        PrimaryAgent[]
 
   @@index([agencyId])
   @@index([businessId])
+  @@index([ownerBusinessId])
 }
 
 model ApiKey {
@@ -249,14 +254,18 @@ model Lead {
   id String @id @default(uuid())
 
   // personal information
-  name        String
-  firstName   String    @default("")
-  lastName    String    @default("")
-  email       String?
-  bestEmail   String    @default("")
-  phone       String?
-  bestPhone   String    @default("")
-  dateOfBirth DateTime?
+  name           String
+  firstName      String    @default("")
+  lastName       String    @default("")
+  email          String?
+  bestEmail      String    @default("")
+  emailVerified  Boolean   @default(false)
+  phone          String?
+  bestPhone      String    @default("")
+  phoneVerified  Boolean   @default(false)
+  dateOfBirth    DateTime?
+  leadIsVerified Boolean   @default(false) // if either email or phone is verified
+  profileImage   String?
 
   // general info
   ianaTimezone String  @default("") // Asia/Kolkata
@@ -272,20 +281,36 @@ model Lead {
   industry       String  @default("") // ex: Real Estate, Marketing etc.
   website        String  @default("")
   message        String? @db.Text // message sent by the lead
-  source         String  @default("") // lead source (website, social media, referral, etc.)
+  channel        CHANNEL @default(EMAIL) // lead source channel
   note           String? @db.Text // note about the lead by agency/agent
   fields         Json? // custom fields
 
-  // DND
+  // DND (Do Not Disturb)
   emailDND    Boolean @default(false)
   smsDND      Boolean @default(false)
   callDND     Boolean @default(false)
   whatsappDND Boolean @default(false)
 
+  // Channel Availability - which channels are active/available for this contact
+  emailActive     Boolean @default(false)
+  smsActive       Boolean @default(false)
+  whatsappActive  Boolean @default(false)
+  facebookActive  Boolean @default(false)
+  instagramActive Boolean @default(false)
+  liveChatActive  Boolean @default(false)
+  voiceCallActive Boolean @default(false)
+
+  // Channel Specific Metadata Fields
+  instagramSID  String?
+  instaUsername String?
+
   // Metadata 
   status     LEAD_STATUS      @default(NEW)
   statusType LEAD_STATUS_TYPE @default(COLD)
   quality    LEAD_QUALITY     @default(UNQUALIFIED)
+
+  // other fields
+  ghlContactId String?
 
   // Relations
   agencyId String
@@ -296,6 +321,10 @@ model Lead {
 
   salesAgentId String?
   SalesAgent   User?   @relation("SalesAgentToLead", fields: [salesAgentId], references: [id], onDelete: SetNull)
+
+  linkedLeadId   String? // soft-link to "main" profile if this is a secondary lead
+  linkedLead     Lead?   @relation("LinkedLeads", fields: [linkedLeadId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  duplicateLeads Lead[]  @relation("LinkedLeads")
 
   // Metadata Fields
   createdAt DateTime @default(now())
@@ -317,6 +346,8 @@ model Lead {
   @@index([status])
   @@index([phone])
   @@index([email])
+  @@index([ghlContactId])
+  @@index([linkedLeadId])
 }
 
 model LeadTag {
@@ -374,7 +405,7 @@ model Conversation {
   Agency   User   @relation(fields: [agencyId], references: [id], onDelete: Cascade)
 
   activeAgentId String?
-  ActiveAgent   Agent?  @relation(fields: [activeAgentId], references: [id], onDelete: SetNull)
+  ActiveAgent   PrimaryAgent? @relation(fields: [activeAgentId], references: [id], onDelete: SetNull)
 
   // Metadata
   createdAt DateTime @default(now())
@@ -428,6 +459,68 @@ model ConversationMessage {
   @@index([businessId])
 }
 
+model PrimaryAgent {
+  id String @id @default(uuid())
+
+  name         String
+  internalName String     @default("")
+  description  String?    @db.Text
+  type         AGENT_TYPE @default(N8N)
+
+  // agent training 
+  // {url}/train -> agent traning url 
+  // {url}/create -> create vector indexes 
+  // {url}/update -> update vector indexes
+  // {url}/delete -> delete vector indexes
+  n8nTrainingUrl   String @default("")
+  n8nTrainingToken String @default("")
+
+  // Relations
+  businessId String
+  Business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  agencyId String
+  Agency   User   @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+
+  ghlCalendarId String?
+  calenderIntegrationId String?
+  CalenderIntegration   CalenderIntegration? @relation(fields: [calenderIntegrationId], references: [id], onDelete: SetNull)
+
+  // Metadata
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+  Agents             Agent[]
+  Conversations      Conversation[]
+  PrimaryAgentAssets PrimaryAgentAsset[]
+
+  @@index([businessId])
+  @@index([agencyId])
+  @@index([calenderIntegrationId])
+}
+
+model PrimaryAgentAsset {
+  id String @id @default(uuid())
+
+  name        String  @default("")
+  description String? @db.Text
+
+  // UPLOADTHING
+  fileUrl  String
+  fileKey  String
+  fileType String
+  fileSize Int    @default(0) // in KB
+
+  // Relations
+  primaryAgentId String
+  PrimaryAgent   PrimaryAgent @relation(fields: [primaryAgentId], references: [id], onDelete: Cascade)
+
+  // Metadata
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([primaryAgentId])
+}
+
 model Agent {
   id String @id @default(uuid())
 
@@ -442,6 +535,9 @@ model Agent {
   settings Json
   isActive Boolean @default(false)
 
+  source  SOURCE  @default(DEFAULT)
+  channel CHANNEL @default(EMAIL)
+
   // Relations
   businessId String
   Business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
@@ -449,7 +545,8 @@ model Agent {
   agencyId String
   Agency   User   @relation(fields: [agencyId], references: [id], onDelete: Cascade)
 
-  Conversations Conversation[]
+  primaryAgentId String
+  PrimaryAgent   PrimaryAgent @relation(fields: [primaryAgentId], references: [id], onDelete: Cascade)
 
   // Metadata
   createdAt DateTime @default(now())
@@ -457,12 +554,12 @@ model Agent {
 
   @@index([businessId])
   @@index([agencyId])
+  @@index([primaryAgentId])
 }
 
 model Meeting {
   id            String         @id @default(uuid())
-  calMeetingID  Int
-  calMeetingUID String
+
   startTime     String
   messageOfLead String         @db.Text
   meetingUrl    String?
@@ -481,6 +578,9 @@ model Meeting {
   leadId String
   Lead   Lead   @relation(fields: [leadId], references: [id], onDelete: Cascade)
 
+  calendarType CALENDAR_TYPE @default(CAL)
+  meetingSource MEETING_SOURCE @default(DASHBOARD)
+  
   // Metadata
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -501,7 +601,7 @@ model LeadCall {
   summary     String?         @db.Text
   transcript  Json?
   audioUrl    String          @default("")
-
+  
   callType LEAD_CALL_TYPE @default(GLOBAL)
 
   callDuration Float @default(0)
@@ -774,10 +874,10 @@ model FollowUp {
 }
 
 model Business {
-  id      String @id @default(uuid())
+  id      String  @id @default(uuid())
   name    String
-  image   String
-  email   String @unique
+  image   String  @default("")
+  email   String  @unique
   phone   String
   address String? @db.Text
 
@@ -804,30 +904,36 @@ model Business {
   // New relation for managers
   SalesAgents User[] @relation("BusinessSalesAgents")
 
+  // Business Owners 
+  BusinessOwners User[] @relation("BusinessOwner")
+
   // Metadata Fields
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   // Relations
-  BusinessManagers    BusinessManager[]
-  ApiKeys             ApiKey[]
-  Assistants          Assistant[]
-  Leads               Lead[]
-  LeadTag             LeadTag[]
-  Conversation        Conversation[]
-  ConversationMessage ConversationMessage[]
-  Meetings            Meeting[]
-  VoiceCampaigns      VoiceCampaign[]
-  VoiceCampaignLeads  VoiceCampaignLead[]
-  Pipelines           Pipeline[]
-  Stages              Stage[]
-  Opportunities       Opportunity[]
-  Preference          Preference?
-  Automations         Automation[]
-  FollowUps           FollowUp[]
-  LeadCalls           LeadCall[]
-  BusinessConfig      BusinessConfig?
-  Agents              Agent[]
+  BusinessIntegration  BusinessIntegration?
+  BusinessManagers     BusinessManager[]
+  ApiKeys              ApiKey[]
+  Assistants           Assistant[]
+  Leads                Lead[]
+  LeadTag              LeadTag[]
+  Conversation         Conversation[]
+  ConversationMessage  ConversationMessage[]
+  Meetings             Meeting[]
+  VoiceCampaigns       VoiceCampaign[]
+  VoiceCampaignLeads   VoiceCampaignLead[]
+  Pipelines            Pipeline[]
+  Stages               Stage[]
+  Opportunities        Opportunity[]
+  Preference           Preference?
+  Automations          Automation[]
+  FollowUps            FollowUp[]
+  LeadCalls            LeadCall[]
+  BusinessConfig       BusinessConfig?
+  Agents               Agent[]
+  PrimaryAgents        PrimaryAgent[]
+  calenderIntegrations CalenderIntegration[]
 
   @@index([agencyId])
 }
@@ -845,11 +951,66 @@ model BusinessManager {
   @@index([managerId])
 }
 
+model BusinessIntegration {
+  id String @id @default(uuid())
+
+  businessId String   @unique
+  Business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  // GHL
+  ghlAccessToken  String?   @db.Text
+  ghlRefreshToken String?   @db.Text
+  ghlTokenExpiry  DateTime?
+  ghlLocationId   String?
+  ghlCompanyId    String?
+  ghlLocationName String?
+  ghlUserId       String?
+  ghlUserType     String?
+  ghlConfigured   Boolean   @default(false)
+
+  // OpenAI 
+  openAiApiKey String? @db.Text
+
+  calenderIntegrations CalenderIntegration[]
+
+  @@index([businessId])
+}
+
+model CalenderIntegration {
+  id String @id @default(uuid())
+
+  type CALENDER_TYPE @default(CAL)
+
+  calEventId  String
+  calUsername String
+  calApiKey   String
+
+  // Relations
+  businessId String
+  Business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  businessIntegrationId String
+  BusinessIntegration   BusinessIntegration @relation(fields: [businessIntegrationId], references: [id], onDelete: Cascade)
+
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  PrimaryAgents PrimaryAgent[]
+
+  @@index([businessId])
+  @@index([businessIntegrationId])
+}
+
+enum CALENDER_TYPE {
+  CAL
+  CALENDLY
+}
+
 enum ROLE {
   ADMIN
   AGENCY // agency 
   MANAGER // agency manager (Multiple business managers for an agency can be assigned to multiple businesses)
   SALES_AGENT // business sales agent
+  BUSINESS_OWNER // business owner
 }
 
 enum ACCESS {
@@ -896,6 +1057,7 @@ enum MEETING_STATUS {
   SUCCESS
   NO_SHOW
   CANCELLED
+ RESCHEDULED
 }
 
 enum CALL_TYPE {
@@ -1276,4 +1438,38 @@ enum MIGRATION_STATUS {
   IN_PROGRESS
   COMPLETED
   FAILED
+}
+
+enum AGENT_TYPE {
+  N8N
+}
+
+// WhatsApp (DEFAULT) -> Standalone Channel (Every agent will have a SOURCE->DEFAULT->CHANNEL->WHATSAPP)
+// GRM (GHL) -> Multiple Channels (Every Agent will have a SOURCE->GOHIGHLEVEL->CHANNEL->WHATSAPP)
+enum SOURCE {
+  DEFAULT // default source mean no source and only channel
+  GOHIGHLEVEL // GHL is a source and will have multiple channels
+  HUBSPOT
+  ZOHO
+  SALESFORCE
+}
+
+enum CHANNEL {
+  EMAIL
+  SMS
+  WHATSAPP
+  FACEBOOK
+  INSTAGRAM
+  LIVE_CHAT
+
+  VOICE_CALL
+}
+ enum CALENDAR_TYPE {
+  CAL
+  CALENDLY
+  GHL
+}
+enum MEETING_SOURCE {
+  DASHBOARD
+  OUTSIDE
 }
