@@ -2,14 +2,20 @@ import { CallToolRequest } from "@modelcontextprotocol/sdk/types.js";
 import {
   BookAppointmentRequest,
   bookAppointmentSchema,
+  CancelAppointmentRequest,
+  cancelAppointmentSchema,
   CheckAvailabilityRequest,
   checkAvailabilitySchema,
+  GetCalBookingsRequest,
+  getCalBookingsSchema,
   RescheduleAppointmentRequest,
   rescheduleAppointmentSchema,
 } from "../../schema/CAL/appointment.schema.js";
 import {
   bookAppointment,
+  cancelAppointment,
   checkAvailability,
+  getCalBookings,
   rescheduleAppointment,
 } from "../../controller/CAL/cal.appointment.js";
 import {
@@ -85,20 +91,20 @@ export const appointmentTools = [
   {
     name: "reschedule_appointment",
     description:
-      "Use this tool to reschedule an appointment once the user provided the date-time to reschedule.",
+      "Use this tool to reschedule an appointment once the user provided the date-time to reschedule. Always call the get_appointments tool to get the list of meetings. if the user have not said which meeting to reschedule, ask the user to provide the meeting to reschedule. Alaways use the rescheduleOrCancelUid from the get_appointments response selected meeting.",
     arguments: [],
     inputSchema: {
       type: "object",
       properties: {
-        startTime: {
+        updatedStartTime: {
           type: "string",
           description:
-            "start time of the rescheduled appointment - the updated time of the appointment, if user said tomorrow or next day - always reference the Today's date. If today is 24th november 2025, it means tomorrow is 25th november 2025. Format: ISO 8601. MUST be called 'startTime' in the arguments.",
+            "start time of the rescheduled appointment - the updated time of the appointment, if user said tomorrow or next day - always reference the Today's date. If today is 24th november 2025, it means tomorrow is 25th november 2025. Format: ISO 8601. MUST be called 'updatedStartTime' in the arguments.",
         },
-        uid: {
+        rescheduleOrCancelUid: {
           type: "string",
           description:
-            "'uid' of the appointment to reschedule, MUST be called 'uid' in the arguments.",
+            "Copy the exact value after 'rescheduleOrCancelUid: ' from get_appointments response. Example: if you see 'rescheduleOrCancelUid: abc123xyz', use 'abc123xyz'. MUST be called 'rescheduleOrCancelUid' in the arguments.",
         },
         primaryAgentId: {
           type: "string",
@@ -107,7 +113,54 @@ export const appointmentTools = [
           required: true,
         },
       },
-      required: ["startTime", "uid", "primaryAgentId"],
+      required: ["updatedStartTime", "rescheduleOrCancelUid", "primaryAgentId"],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: "cancel_appointment",
+    description:
+      "Use this tool to cancel an appointment once the user provided the date-time to cancel. Always call the get_appointments tool to get the list of meetings. if the user have not said which meeting to cancel, ask the user to provide the meeting to cancel. Alaways use the rescheduleOrCancelUid from the get_appointments response selected meeting.",
+    arguments: [],
+    inputSchema: {
+      type: "object",
+      properties: {
+        rescheduleOrCancelUid: {
+          type: "string",
+          description:
+            "Copy the exact value after 'rescheduleOrCancelUid: ' from get_appointments response. Example: if you see 'rescheduleOrCancelUid: abc123xyz', use 'abc123xyz'. MUST be called 'rescheduleOrCancelUid' in the arguments.",
+        },
+        primaryAgentId: {
+          type: "string",
+          description:
+            "primaryAgentId from available details. Always include this from 'Available Details'",
+          required: true,
+        },
+      },
+      required: ["rescheduleOrCancelUid", "primaryAgentId"],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: "get_appointments",
+    description: "Use this tool to get all the appointments for the user.",
+    arguments: [],
+    inputSchema: {
+      type: "object",
+      properties: {
+        email: {
+          type: "string",
+          description:
+            "Email of the user, MUST be called 'email' in the arguments.",
+        },
+        primaryAgentId: {
+          type: "string",
+          description:
+            "primaryAgentId from available details. Always include this from 'Available Details'",
+          required: true,
+        },
+      },
+      required: ["email", "primaryAgentId"],
       additionalProperties: false,
     },
   },
@@ -380,6 +433,188 @@ export async function handleRescheduleAppointment(request: CallToolRequest) {
         {
           type: "text",
           text: `An error occurred while rescheduling appointment: ${
+            error instanceof Error ? error.message : "Unknown error"
+          }`,
+        },
+      ],
+    };
+  }
+}
+
+export async function handleCancelAppointment(request: CallToolRequest) {
+  try {
+    const rawArgs = request.params.arguments as any;
+
+    // Extract API key from injected arguments
+    const apiKey = rawArgs._apiKey;
+    if (!apiKey) {
+      return {
+        content: [
+          {
+            type: "text",
+            text: "Authentication failed: No API key provided",
+          },
+        ],
+      };
+    }
+
+    // Remove _apiKey from args before validation
+    const { _apiKey, ...cleanArgs } = rawArgs;
+    const args = cleanArgs as CancelAppointmentRequest;
+    console.log("cancel appointment args", args);
+    // Validate the input using Zod
+    const result = cancelAppointmentSchema.safeParse(args);
+    console.log("cancel appointment parsing result", result);
+    const integration = await getIntegration(apiKey);
+    if (!integration) {
+      return {
+        content: [
+          {
+            type: "text",
+            text: "Integration not found",
+          },
+        ],
+      };
+    }
+    const agent = await getPrimaryAgent(args.primaryAgentId);
+    if (!agent?.CalenderIntegration) {
+      return {
+        content: [
+          {
+            type: "text",
+            text: "Primary agent not found",
+          },
+        ],
+      };
+    }
+
+    if (!result.success) {
+      // Format Zod errors into a readable message
+      const errorMessages = result.error.errors
+        .map((err) => `${err.path.join(".")}: ${err.message}`)
+        .join(", ");
+      return {
+        content: [
+          {
+            type: "text",
+            text: `Failed to cancel appointment: ${errorMessages}. Please provide the missing or incorrect information.`,
+          },
+        ],
+      };
+    }
+    console.log("cancel appointment");
+    // compact ai formatted response
+    const response = await cancelAppointment({
+      args: result.data,
+      calendar: agent.CalenderIntegration,
+    });
+    console.log("cancel appointment", response);
+    return {
+      content: [
+        {
+          type: "text",
+          text: `Appointment cancelled successfully: \n ${response}`,
+        },
+      ],
+    };
+  } catch (error) {
+    console.error("Error cancel appointment:", error);
+    return {
+      content: [
+        {
+          type: "text",
+          text: `An error occurred while cancelling appointment: ${
+            error instanceof Error ? error.message : "Unknown error"
+          }`,
+        },
+      ],
+    };
+  }
+}
+
+export async function handleGetAppointments(request: CallToolRequest) {
+  try {
+    const rawArgs = request.params.arguments as any;
+
+    // Extract API key from injected arguments
+    const apiKey = rawArgs._apiKey;
+    if (!apiKey) {
+      return {
+        content: [
+          {
+            type: "text",
+            text: "Authentication failed: No API key provided",
+          },
+        ],
+      };
+    }
+
+    // Remove _apiKey from args before validation
+    const { _apiKey, ...cleanArgs } = rawArgs;
+    const args = cleanArgs as GetCalBookingsRequest;
+    console.log("get appointments args", args);
+    // Validate the input using Zod
+    const result = getCalBookingsSchema.safeParse(args);
+    console.log("get appointments parsing result", result);
+    const integration = await getIntegration(apiKey);
+    if (!integration) {
+      return {
+        content: [
+          {
+            type: "text",
+            text: "Integration not found",
+          },
+        ],
+      };
+    }
+    const agent = await getPrimaryAgent(args.primaryAgentId);
+    if (!agent?.CalenderIntegration) {
+      return {
+        content: [
+          {
+            type: "text",
+            text: "Primary agent not found",
+          },
+        ],
+      };
+    }
+
+    if (!result.success) {
+      // Format Zod errors into a readable message
+      const errorMessages = result.error.errors
+        .map((err) => `${err.path.join(".")}: ${err.message}`)
+        .join(", ");
+      return {
+        content: [
+          {
+            type: "text",
+            text: `Failed to get appointments: ${errorMessages}. Please provide the missing or incorrect information.`,
+          },
+        ],
+      };
+    }
+    console.log("get appointments");
+    // compact ai formatted response
+    const response = await getCalBookings({
+      args: result.data,
+      calendar: agent.CalenderIntegration,
+    });
+    console.log("get appointments", response);
+    return {
+      content: [
+        {
+          type: "text",
+          text: `Appointments fetched successfully: \n ${response}`,
+        },
+      ],
+    };
+  } catch (error) {
+    console.error("Error get appointments:", error);
+    return {
+      content: [
+        {
+          type: "text",
+          text: `An error occurred while getting appointments: ${
             error instanceof Error ? error.message : "Unknown error"
           }`,
         },

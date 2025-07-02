@@ -19,12 +19,28 @@ export const bookAppointmentSchema = z.object({
 export type BookAppointmentRequest = z.infer<typeof bookAppointmentSchema>;
 
 export const rescheduleAppointmentSchema = z.object({
-  startTime: z
+  updatedStartTime: z
     .string()
-    .min(1, "updated startTime in ISO 8601 format is required"),
-  uid: z.string().min(1, "appointment 'uid' is required"),
+    .min(1, "updatedStartTime in ISO 8601 format is required"),
+  rescheduleOrCancelUid: z
+    .string()
+    .min(1, "appointment 'rescheduleOrCancelUid' is required"),
   primaryAgentId: z.string().min(1, "primaryAgentId is required"),
 });
 export type RescheduleAppointmentRequest = z.infer<
   typeof rescheduleAppointmentSchema
 >;
+
+export const cancelAppointmentSchema = z.object({
+  rescheduleOrCancelUid: z
+    .string()
+    .min(1, "appointment 'rescheduleOrCancelUid' is required"),
+  primaryAgentId: z.string().min(1, "primaryAgentId is required"),
+});
+export type CancelAppointmentRequest = z.infer<typeof cancelAppointmentSchema>;
+
+export const getCalBookingsSchema = z.object({
+  email: z.string().min(1, "Email is required"),
+  primaryAgentId: z.string().min(1, "primaryAgentId is required"),
+});
+export type GetCalBookingsRequest = z.infer<typeof getCalBookingsSchema>;
