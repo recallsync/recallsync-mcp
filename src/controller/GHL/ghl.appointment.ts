@@ -1,14 +1,433 @@
+import { format, parse } from "date-fns";
 import { CheckAvailabilityRequest } from "../../schema/GHL/appointment.schema.js";
+import {
+  GetGHLAppointmentsResponse,
+  GHLAppointment,
+} from "../../types/ghl.types.js";
+import { chunkConsecutiveSlots } from "../../utils/ghl.js";
+import { formatInTimeZone, fromZonedTime } from "date-fns-tz";
+import { CALENDAR_TYPE, MEETING_SOURCE } from "@prisma/client";
+import { bookMeeting, updateMeeting } from "../../utils/meeting-book.js";
+import { prisma } from "../../lib/prisma.js";
 
-export const checkAvailability = async (input: CheckAvailabilityRequest) => {
-  const { startTime, timezone } = input;
+type GHLRequestConstructor = {
+  apiKey: string;
+  method: "GET" | "POST" | "PUT" | "DELETE";
+  body?: unknown;
+  path: string;
+};
+export const ghlRequestContructor = ({
+  apiKey,
+  method,
+  path,
+  body,
+}: GHLRequestConstructor) => {
+  const ghlUrl = "https://services.leadconnectorhq.com";
+  const url = `${ghlUrl}${path}`;
 
-  return {
-    slots: [
-      {
-        startTime: "2025-01-01T09:00:00Z",
-        endTime: "2025-01-01T10:00:00Z",
-      },
-    ],
+  const request = fetch(url, {
+    method,
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+      Version: "2021-04-15",
+    },
+    body: JSON.stringify(body),
+  });
+
+  return request;
+};
+
+type GetGHLAppointments = {
+  businessId?: string;
+  ghlContactId: string;
+  timezone?: string | undefined;
+  userTimezone?: string | undefined;
+  ghlAccessToken: string;
+};
+
+export const getAppointments = async ({
+  businessId,
+  ghlContactId,
+  timezone = "Asia/Kolkata",
+  userTimezone = "Asia/Kolkata",
+  ghlAccessToken,
+}: GetGHLAppointments) => {
+  try {
+    let path = `/contacts/${ghlContactId}/appointments`;
+    const request = ghlRequestContructor({
+      apiKey: ghlAccessToken,
+      method: "GET",
+      path,
+    });
+
+    const response = await request;
+    const appointmentsData =
+      (await response.json()) as GetGHLAppointmentsResponse;
+    const appointments = appointmentsData.events;
+    console.log("appointmentsData", { appointments });
+    // convert the appointment date to ISO string - parse from location timezone
+    const updatedAppointments = appointments?.map((appointment) => {
+      // Parse the time and specify it's in the location timezone
+      const parsedDate = parse(
+        appointment.startTime,
+        "yyyy-MM-dd HH:mm:ss",
+        new Date()
+      );
+
+      // Convert from location timezone to UTC
+      const utcDate = timezone
+        ? fromZonedTime(parsedDate, timezone)
+        : parsedDate;
+      return {
+        ...appointment,
+        startTime: utcDate.toISOString(),
+      };
+    });
+    console.log({ updatedAppointments }, "updatedAppointments");
+    // filter out the upcoming appointments - "startTime": "2025-06-13 09:00:00"
+    const upcomingAppointments = updatedAppointments?.filter((appointment) => {
+      const appointmentDate = new Date(appointment.startTime);
+
+      // Convert current date to appointment timezone if provided
+      const currentDate = timezone
+        ? new Date(new Date().toLocaleString("en-US", { timeZone: timezone }))
+        : new Date();
+      return appointmentDate > currentDate;
+    });
+    console.log(upcomingAppointments, "upcomingAppointments");
+    // // convert the appointment date to the userTimezone
+    const upcomingAppointmentsInUserTimezone = upcomingAppointments?.map(
+      (appointment) => {
+        return {
+          ...appointment,
+          startTime: userTimezone
+            ? formatInTimeZone(
+                new Date(appointment.startTime),
+                userTimezone,
+                "MMM dd 'at' h:mm a"
+              )
+            : appointment.startTime,
+        };
+      }
+    );
+    console.log("upcomingAppointmentsInUserTimezone", {
+      upcomingAppointmentsInUserTimezone,
+    });
+    // // agent only needs startTime and id
+    const agentData = upcomingAppointmentsInUserTimezone?.map((item) => ({
+      startTime: item.startTime,
+      id: item.id,
+      title: item.title,
+      start: item.startTime,
+      end: item.endTime,
+    }));
+    console.log("agentData", { agentData });
+    if (agentData.length === 0) {
+      return {
+        success: false,
+        data: "No appointments found",
+      };
+    }
+    let formattedResponse = "";
+    let index = 1;
+    for (const booking of agentData) {
+      if (index === 0) {
+        formattedResponse += `Here are your upcoming meetings: \n\n`;
+      }
+      formattedResponse += `Bookings :\n 
+      **appointmentId: ${booking.id}**,
+      Title: ${booking.title},
+      Start: ${booking.startTime || booking.start},
+      End: ${booking.end},
+      \n\n --------------------------------- \n\n`;
+      index++;
+    }
+    console.log("formattedResponse", { formattedResponse });
+    return {
+      success: true,
+      data: formattedResponse,
+    };
+  } catch (err) {
+    console.log("error getting appointments");
+    console.log({ err });
+    return {
+      success: false,
+      data: null,
+    };
+  }
+};
+
+interface CheckAvailabilityInput {
+  input: { date: number; timezone: string };
+  ghlAccessToken?: string;
+  ghlCalendarId?: string;
+}
+
+export const checkAvailability = async ({
+  input,
+  ghlAccessToken,
+  ghlCalendarId,
+}: CheckAvailabilityInput) => {
+  const { date, timezone } = input;
+  console.log({ input });
+  // Convert date string to timestamp (start of day)
+  const startDate = date;
+  let currentStartTime = startDate;
+  const twoDaysInMs = 2 * 24 * 60 * 60 * 1000;
+  let currentEndTime = currentStartTime + twoDaysInMs;
+  let iterations = 0;
+  const maxIterations = 3;
+  // Function to normalize timestamp to start of day (00:00:00)
+  const getStartOfDay = (timestamp: number) => {
+    const date = new Date(timestamp);
+    date.setHours(0, 0, 0, 0);
+    return date.getTime();
   };
+
+  // Function to normalize timestamp to end of day (23:59:59.999)
+  const getEndOfDay = (timestamp: number) => {
+    const date = new Date(timestamp);
+    date.setHours(23, 59, 59, 999);
+    return date.getTime();
+  };
+
+  console.log({ currentStartTime, currentEndTime });
+  while (iterations < maxIterations) {
+    iterations++;
+
+    const normalizedStartDate = getStartOfDay(currentStartTime);
+    const normalizedEndDate = getEndOfDay(currentEndTime);
+
+    let path = `/calendars/${ghlCalendarId}/free-slots`;
+    const queryParams = new URLSearchParams();
+    queryParams.append("startDate", normalizedStartDate.toString());
+    queryParams.append("endDate", normalizedEndDate.toString());
+    if (timezone) queryParams.append("timezone", "Asia/Calcutta");
+    path = `${path}?${queryParams.toString()}`;
+
+    console.log({ path, timezone, normalizedStartDate, normalizedEndDate });
+    const request = ghlRequestContructor({
+      apiKey: ghlAccessToken || "",
+      method: "GET",
+      path,
+    });
+
+    const response = await request;
+    const slotsData = await response.json();
+    console.log({ slotsData });
+    // Extract slots from the response format where dates are keys and slots are arrays
+    // Format: { "2025-05-12": { "slots": ["2025-05-12T13:00:00-04:00", "2025-05-12T13:15:00-04:00"] } }
+    const slots: string[] = [];
+    if (slotsData && typeof slotsData === "object") {
+      // Iterate through all date keys
+      Object.keys(slotsData).forEach((dateKey) => {
+        if (
+          slotsData[dateKey] &&
+          slotsData[dateKey].slots &&
+          Array.isArray(slotsData[dateKey].slots)
+        ) {
+          // Add each slot from this date to our array
+          slots.push(...slotsData[dateKey].slots);
+        }
+      });
+    }
+    // If we found slots, return them
+    if (slots.length > 0) {
+      return slots;
+    }
+    if (iterations < maxIterations) {
+      currentStartTime += twoDaysInMs;
+      currentEndTime += twoDaysInMs;
+    }
+  }
+  return [];
+};
+
+export const getAvailableChunkedSlots = async (
+  props: CheckAvailabilityInput
+) => {
+  const slots = await checkAvailability(props);
+  const chunkedSlots = chunkConsecutiveSlots(slots);
+  return chunkedSlots;
+};
+type BookGHLAppointment = {
+  businessId: string;
+  ghlContactId: string;
+  calendarId: string;
+  contactId: string;
+  startTime: string;
+  agencyId: string;
+  ghlAccessToken: string;
+  ghlLocationId: string;
+};
+export const bookAppointment = async ({
+  businessId,
+  ghlContactId,
+  calendarId,
+  startTime,
+  contactId,
+  agencyId,
+  ghlAccessToken,
+  ghlLocationId,
+}: BookGHLAppointment) => {
+  try {
+    let path = `/calendars/events/appointments`;
+    console.log("book appointment", startTime);
+    const request = ghlRequestContructor({
+      apiKey: ghlAccessToken || "",
+      method: "POST",
+      path,
+      body: {
+        calendarId,
+        locationId: ghlLocationId,
+        contactId: ghlContactId,
+        startTime: new Date(startTime).toISOString(),
+      },
+    });
+    const response = await request;
+    const appointmentData = (await response.json()) as GHLAppointment;
+    console.log("appointmentData", response);
+    if (response.ok) {
+      console.log("appointmentData", appointmentData);
+      await bookMeeting({
+        businessId,
+        startTime: new Date(startTime).toISOString(),
+        contactId,
+        agencyId,
+        meetingId: appointmentData.id,
+        caledarType: CALENDAR_TYPE.GHL,
+        meetingSource: MEETING_SOURCE.DASHBOARD,
+        status: "UPCOMING",
+        meetingUrl: appointmentData.address,
+      });
+    }
+    return {
+      success: true,
+      data: appointmentData,
+    };
+  } catch (err) {
+    console.log("error booking appointment");
+    console.log({ err });
+    return {
+      success: false,
+      data: null,
+    };
+  }
+};
+type UpdateGHLAppointment =
+  | {
+      appointmentId: string;
+      businessId: string;
+      type: "cancel";
+      contactId: string;
+      agencyId: string;
+      ghlAccessToken: string;
+    }
+  | {
+      appointmentId: string;
+      businessId: string;
+      type: "reschedule";
+      locationTimezone?: string;
+      newStartTime: string;
+      contactId: string;
+      ghlAccessToken: string;
+      agencyId: string;
+    };
+
+export const updateAppointment = async (props: UpdateGHLAppointment) => {
+  try {
+    const path = `/calendars/events/appointments/${props.appointmentId}`;
+    // Build update body based on what's provided
+    const updateBody: Record<string, any> = {};
+    if (props.type === "reschedule") {
+      const startTime = props.newStartTime; // iso string
+      if (props.locationTimezone) {
+        // ex: "America/New_York"
+        // Convert the startTime to the location timezone, handling date changes
+        const locationTimezone = props.locationTimezone;
+        // Parse the ISO string into a Date object
+        const startTimeDate = new Date(startTime);
+
+        // Format in location timezone, preserving the exact moment in time
+        // This will automatically handle date changes when crossing timezone boundaries
+        // const locationTime = formatInTimeZone(
+        //   startTimeDate,
+        //   locationTimezone,
+        //   "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'"
+        // );
+
+        updateBody.startTime = startTimeDate;
+      } else {
+        updateBody.startTime = startTime;
+      }
+    }
+    if (props.type === "cancel") {
+      updateBody.appointmentStatus = "cancelled";
+    }
+
+    const request = ghlRequestContructor({
+      apiKey: props.ghlAccessToken,
+      method: "PUT",
+      path,
+      body: updateBody,
+    });
+
+    const response = await request;
+    const appointmentData = await response.json();
+    if (response.ok) {
+      let localStatus: "UPCOMING" | "RESCHEDULED" | "CANCELLED" | "NO_SHOW" =
+        "UPCOMING";
+      if (appointmentData.appoinmentStatus === "cancelled") {
+        localStatus = "CANCELLED";
+      } else if (props.type === "reschedule") {
+        localStatus = "RESCHEDULED";
+      }
+      const appointment = await prisma.meeting.findUnique({
+        where: {
+          id: props.appointmentId,
+        },
+      });
+      if (appointment) {
+        console.log({ appointment }, "update");
+        await updateMeeting({
+          meetingId: appointmentData.id,
+          newStartTime: new Date(
+            props.type === "reschedule"
+              ? props.newStartTime
+              : appointment.startTime
+          ),
+          status: localStatus,
+        });
+      } else {
+        console.log("create");
+        const scheduledAt = new Date(
+          props.type === "reschedule"
+            ? props.newStartTime
+            : appointmentData.startTime
+        );
+        await bookMeeting({
+          businessId: props.businessId,
+          startTime: scheduledAt,
+          contactId: props.contactId || "",
+          agencyId: props.agencyId,
+          meetingId: appointmentData.id,
+          caledarType: CALENDAR_TYPE.GHL,
+          meetingSource: MEETING_SOURCE.OUTSIDE,
+          status: localStatus,
+        });
+      }
+    }
+    return {
+      success: true,
+      data: appointmentData,
+    };
+  } catch (err) {
+    console.log("error updating appointment");
+    console.log({ err });
+    return {
+      success: false,
+      data: null,
+    };
+  }
 };

@@ -15,6 +15,7 @@ export const bookAppointmentSchema = z.object({
   name: z.string().min(1, "Name is required"),
   timezone: z.string().min(1, "Timezone is required"),
   primaryAgentId: z.string().min(1, "primaryAgentId is required"),
+  contactId: z.string().min(1, "contactId is required"),
 });
 export type BookAppointmentRequest = z.infer<typeof bookAppointmentSchema>;
 

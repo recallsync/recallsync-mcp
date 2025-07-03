@@ -1,4 +1,8 @@
-import { CalenderIntegration } from "@prisma/client";
+import {
+  CALENDAR_TYPE,
+  CalenderIntegration,
+  MEETING_SOURCE,
+} from "@prisma/client";
 import {
   BookAppointmentRequest,
   CancelAppointmentRequest,
@@ -19,6 +23,7 @@ import {
   compactTimeSlots,
   slotsToAIString,
 } from "../../utils/ca.utils.js";
+import { bookMeeting, updateMeeting } from "../../utils/meeting-book.js";
 
 type CheckAvailabilityInput = {
   args: CheckAvailabilityRequest;
@@ -119,14 +124,20 @@ type BookAppointmentProps = {
   args: BookAppointmentRequest;
   calendar: CalenderIntegration;
   businessName: string;
+  businessId: string;
+  agencyId: string;
+  contactId: string;
 };
 export const bookAppointment = async ({
   args,
   calendar,
   businessName,
+  businessId,
+  agencyId,
+  contactId,
 }: BookAppointmentProps) => {
   try {
-    const { startTime, timezone, name, email } = args;
+    const { startTime, timezone, name, email, primaryAgentId } = args;
     const { calEventId, calApiKey } = calendar;
 
     const payload: BookAppointmentInput = {
@@ -155,9 +166,23 @@ export const bookAppointment = async ({
         },
       }
     );
+
     const data = res.data; // for @db
-    console.log("Appointment booked successfully", data);
-    return `Appointment booked successfully. Booking URL: ${data.data.meetingUrl}, Booking rescheduleOrCancelUid: ${data.data.uid}`;
+    if (data) {
+      const response = await bookMeeting({
+        businessId: businessId,
+        startTime: new Date(startTime).toISOString(),
+        contactId: contactId,
+        agencyId: agencyId,
+        meetingId: data.data.uid,
+        caledarType: CALENDAR_TYPE.CAL,
+        meetingSource: MEETING_SOURCE.DASHBOARD,
+        status: "UPCOMING",
+        meetingUrl: data.data.meetingUrl,
+      });
+      console.log("Appointment booked successfully", response.data);
+      return `Appointment booked successfully. Booking URL: ${data.data.meetingUrl}, Booking rescheduleOrCancelUid: ${data.data.uid}`;
+    }
   } catch (err) {
     console.log({ err });
     if (err instanceof AxiosError) {
@@ -194,6 +219,13 @@ export const rescheduleAppointment = async ({
       }
     );
     const data = res.data; // for @db
+    if (data.data) {
+      await updateMeeting({
+        meetingId: data.data.uid,
+        newStartTime: new Date(updatedStartTime),
+        status: "RESCHEDULED",
+      });
+    }
     console.log("Appointment rescheduled successfully", data);
     return `Appointment rescheduled successfully. Booking ID: ${data.data.id}, Booking URL: ${data.data.meetingUrl}, Booking UID: ${data.data.uid}`;
   } catch (err) {
@@ -228,6 +260,12 @@ export const cancelAppointment = async ({
       }
     );
     const data = res.data; // for @db
+    if (data.data) {
+      await updateMeeting({
+        meetingId: data.data.uid,
+        status: "CANCELLED",
+      });
+    }
     console.log("Appointment cancelled successfully", data);
     return `Appointment cancelled successfully. Booking ID: ${data.data.id}, Booking URL: ${data.data.meetingUrl}, rescheduleOrCancelUid: ${data.data.uid}`;
   } catch (err) {
