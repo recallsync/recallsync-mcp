@@ -7,6 +7,12 @@ import {
 } from "../../controller/GHL/ghl.appointment.js";
 import { combineDateAndTime, getPrimaryAgent } from "../../utils/ghl.js";
 import { prisma } from "../../lib/prisma.js";
+import {
+  bookAppointmentSchema,
+  rescheduleAppointmentSchema,
+  cancelAppointmentSchema,
+  getAppointmentsSchema,
+} from "../../schema/GHL/appointment.schema.js";
 
 export const appointmentTools = [
   {
@@ -19,16 +25,17 @@ export const appointmentTools = [
         date: {
           type: "string",
           description:
-            "The date to check availability for, in YYYY-MM-DD format. If the user says 'today' or 'tomorrow', use the actual date at the time of the request.",
+            "The date to check availability for, in YYYY-MM-DD format. If the user says 'today' or 'tomorrow', use the actual date at the time of the request. Must be called 'date' in the arguments.",
         },
         timezone: {
           type: "string",
-          description: "Timezone of the appointment",
+          description:
+            "Timezone of the appointment. Must be called 'timezone' in the arguments.",
         },
         primaryAgentId: {
           type: "string",
           description:
-            "primaryAgentId from available details. Always include this from 'Available Details'",
+            "primaryAgentId from available details. Always include this from 'Available Details'. Must be called 'primaryAgentId' in the arguments.",
           required: true,
         },
       },
@@ -47,23 +54,23 @@ export const appointmentTools = [
         dateTime: {
           type: "string",
           description:
-            "date time of the appointment, if user said tomorrow or next day - always reference the Today's date. If today is 24th november 2025, it means tomorrow is 25th november 2025. Format: ISO 8601",
+            "date time of the appointment, if user said tomorrow or next day - always reference the Today's date. If today is 24th november 2025, it means tomorrow is 25th november 2025. Format: ISO 8601. Must be called 'dateTime' in the arguments.",
         },
         timezone: {
           type: "string",
           description:
-            "'timezone' of the appointment in iana format, example: Asia/Kolkata",
+            "'timezone' of the appointment in iana format, example: Asia/Kolkata. Must be called 'timezone' in the arguments.",
         },
         primaryAgentId: {
           type: "string",
           description:
-            "primaryAgentId from available details. Always include this from 'Available Details'",
+            "primaryAgentId from available details. Always include this from 'Available Details'. Must be called 'primaryAgentId' in the arguments.",
           required: true,
         },
         contactId: {
           type: "string",
           description:
-            "contactId from available details. Always include this from 'Available Details'",
+            "contactId from available details. Always include this from 'Available Details'. Must be called 'contactId' in the arguments.",
           required: true,
         },
       },
@@ -85,18 +92,18 @@ export const appointmentTools = [
         appointmentId: {
           type: "string",
           description:
-            "Copy the exact value after 'appointmentId: ' from get_appointments response. Example: if you see 'appointmentId: abc123xyz', use 'abc123xyz'. MUST be called 'appointmentId' in the arguments.",
+            "Copy the exact value after 'appointmentId: ' from get_appointments response. Example: if you see 'appointmentId: abc123xyz', use 'abc123xyz'. MUST be called 'appointmentId' in the arguments. Must be called 'appointmentId' in the arguments.",
         },
-        newTime: {
+        newStartTime: {
           type: "string",
-          description: `The new start time in ISO 8601 format with timezone offset. (e.g., '2025-07-04T12:30:00+05:30'). Always convert user input to this format.`,
+          description: `The new start time in ISO 8601 format with timezone offset. (e.g., '2025-07-04T12:30:00+05:30'). Always convert user input to this format. Must be called 'newStartTime' in the arguments.`,
         },
         contactId: {
           type: "string",
           description:
-            "contactId from available details. Always include this from 'Available Details'",
+            "contactId from available details. Always include this from 'Available Details'. Must be called 'contactId' in the arguments.",
         },
-        required: ["appointmentId", "startTime", "contactId"],
+        required: ["appointmentId", "newStartTime", "contactId"],
       },
     },
   },
@@ -111,13 +118,13 @@ export const appointmentTools = [
         appointmentId: {
           type: "string",
           description:
-            "Copy the exact value after 'appointmentId: ' from get_appointments response. Example: if you see 'appointmentId: abc123xyz', use 'abc123xyz'. MUST be called 'appointmentId' in the arguments.",
+            "Copy the exact value after 'appointmentId: ' from get_appointments response. Example: if you see 'appointmentId: abc123xyz', use 'abc123xyz'. MUST be called 'appointmentId' in the arguments. Must be called 'appointmentId' in the arguments.",
         },
 
         contactId: {
           type: "string",
           description:
-            "contactId from available details. Always include this from 'Available Details'",
+            "contactId from available details. Always include this from 'Available Details'. Must be called 'contactId' in the arguments.",
         },
         required: ["appointmentId", "contactId"],
       },
@@ -195,21 +202,28 @@ export async function handleCheckAvailability(request: CallToolRequest) {
 
 export async function handleBookAppointment(request: CallToolRequest) {
   try {
-    const args = request.params.arguments as {
-      dateTime?: string;
-      date?: string;
-      time?: string;
-      timezone?: string;
-      primaryAgentId: string;
-      contactId: string;
-    };
-    console.log("book appointment args", args);
-    const primaryAgentId = (args.primaryAgentId as string) || "";
+    const args = request.params.arguments as any;
+    // Validate input using Zod schema
+    const result = bookAppointmentSchema.safeParse(args);
+    if (!result.success) {
+      const errorMessages = result.error.errors
+        .map((err) => `${err.path.join(".")}: ${err.message}`)
+        .join(", ");
+      return {
+        content: [
+          {
+            type: "text",
+            text: `Failed to book appointment: ${errorMessages}. Please provide the missing or incorrect information.`,
+          },
+        ],
+      };
+    }
+    const validArgs = result.data;
+    const primaryAgentId = validArgs.primaryAgentId || "";
     const primaryAgent = await getPrimaryAgent(primaryAgentId);
-
     const lead = await prisma.lead.findUnique({
       where: {
-        id: args.contactId,
+        id: validArgs.contactId,
       },
       include: {
         Business: {
@@ -219,11 +233,10 @@ export async function handleBookAppointment(request: CallToolRequest) {
         },
       },
     });
-
-    // Combine date and time if dateTime is not provided
-    let startTime = args.dateTime;
-    if (!startTime && args.date && args.time) {
-      startTime = combineDateAndTime(args.date, args.time);
+    // Combine date and time if dateTime is not provided (fallback logic)
+    let startTime = validArgs.dateTime;
+    if (!startTime && validArgs.date && validArgs.time) {
+      startTime = combineDateAndTime(validArgs.date, validArgs.time);
     }
     if (!startTime) {
       return {
@@ -235,10 +248,9 @@ export async function handleBookAppointment(request: CallToolRequest) {
         ],
       };
     }
-
-    const result = await bookAppointment({
+    const resultBook = await bookAppointment({
       calendarId: primaryAgent?.ghlCalendarId || "",
-      contactId: args.contactId,
+      contactId: validArgs.contactId,
       startTime,
       ghlAccessToken: lead?.Business?.BusinessIntegration?.ghlAccessToken || "",
       ghlLocationId:
@@ -247,14 +259,13 @@ export async function handleBookAppointment(request: CallToolRequest) {
       businessId: primaryAgent?.Business?.id || "",
       ghlContactId: lead?.ghlContactId || "",
     });
-
-    if (result.success) {
+    if (resultBook.success) {
       return {
         content: [
           {
             type: "text",
             text: `Appointment booked successfully! Details: ${JSON.stringify(
-              result.data
+              resultBook.data
             )}`,
           },
         ],
@@ -285,17 +296,26 @@ export async function handleBookAppointment(request: CallToolRequest) {
 
 export async function handleRescheduleAppointment(request: CallToolRequest) {
   try {
-    console.log("reschedule appointment args", request.params.arguments);
-    const args = request.params.arguments as {
-      appointmentId: string;
-      newTime: string;
-      contactId: string;
-      newStartTime?: string;
-    };
-
+    const args = request.params.arguments as any;
+    // Validate input using Zod schema
+    const result = rescheduleAppointmentSchema.safeParse(args);
+    if (!result.success) {
+      const errorMessages = result.error.errors
+        .map((err) => `${err.path.join(".")}: ${err.message}`)
+        .join(", ");
+      return {
+        content: [
+          {
+            type: "text",
+            text: `Failed to reschedule appointment: ${errorMessages}. Please provide the missing or incorrect information.`,
+          },
+        ],
+      };
+    }
+    const validArgs = result.data;
     const lead = await prisma.lead.findUnique({
       where: {
-        id: args.contactId,
+        id: validArgs.contactId,
       },
       include: {
         Business: {
@@ -307,15 +327,14 @@ export async function handleRescheduleAppointment(request: CallToolRequest) {
     });
     const ghlAccessToken =
       lead?.Business?.BusinessIntegration?.ghlAccessToken || "";
-
     const response = await updateAppointment({
-      appointmentId: args.appointmentId,
+      appointmentId: validArgs.appointementId,
       type: "reschedule",
-      newStartTime: args.newTime || args.newStartTime || "",
+      newStartTime: validArgs.newStartTime,
       ghlAccessToken,
       agencyId: lead?.agencyId || "",
       businessId: lead?.businessId || "",
-      contactId: args.contactId,
+      contactId: validArgs.contactId,
     });
     if (response.success) {
       return {
@@ -339,7 +358,6 @@ export async function handleRescheduleAppointment(request: CallToolRequest) {
       };
     }
   } catch (error) {
-    console.error("Error rescheduling appointment:", error);
     return {
       content: [
         {
@@ -354,16 +372,26 @@ export async function handleRescheduleAppointment(request: CallToolRequest) {
 }
 export async function handleCancelAppointment(request: CallToolRequest) {
   try {
-    console.log("cancel appointment args", request.params.arguments);
-    const args = request.params.arguments as {
-      appointmentId: string;
-      startTime: string;
-      primaryAgentId: string;
-      contactId: string;
-    };
+    const args = request.params.arguments as any;
+    // Validate input using Zod schema
+    const result = cancelAppointmentSchema.safeParse(args);
+    if (!result.success) {
+      const errorMessages = result.error.errors
+        .map((err) => `${err.path.join(".")}: ${err.message}`)
+        .join(", ");
+      return {
+        content: [
+          {
+            type: "text",
+            text: `Failed to cancel appointment: ${errorMessages}. Please provide the missing or incorrect information.`,
+          },
+        ],
+      };
+    }
+    const validArgs = result.data;
     const lead = await prisma.lead.findUnique({
       where: {
-        id: args.contactId,
+        id: validArgs.contactId,
       },
       include: {
         Business: {
@@ -374,12 +402,12 @@ export async function handleCancelAppointment(request: CallToolRequest) {
       },
     });
     const response = await updateAppointment({
-      appointmentId: args.appointmentId,
+      appointmentId: validArgs.appointmentId,
       type: "cancel",
       ghlAccessToken: lead?.Business?.BusinessIntegration?.ghlAccessToken || "",
       agencyId: lead?.agencyId || "",
       businessId: lead?.businessId || "",
-      contactId: args.contactId,
+      contactId: validArgs.contactId,
     });
     if (response.success) {
       return {
@@ -403,12 +431,11 @@ export async function handleCancelAppointment(request: CallToolRequest) {
       };
     }
   } catch (error) {
-    console.error("Error canceling appointment:", error);
     return {
       content: [
         {
           type: "text",
-          text: `An error occurred while canceling appointment: ${
+          text: `An error occurred while cancelling appointment: ${
             error instanceof Error ? error.message : "Unknown error"
           }`,
         },
@@ -418,14 +445,26 @@ export async function handleCancelAppointment(request: CallToolRequest) {
 }
 export async function handleGetAppointments(request: CallToolRequest) {
   try {
-    const args = request.params.arguments as {
-      contactId: string;
-    };
-    console.log("get appointments args", args);
-    // Validate the input
+    const args = request.params.arguments as any;
+    // Validate input using Zod schema
+    const result = getAppointmentsSchema.safeParse(args);
+    if (!result.success) {
+      const errorMessages = result.error.errors
+        .map((err) => `${err.path.join(".")}: ${err.message}`)
+        .join(", ");
+      return {
+        content: [
+          {
+            type: "text",
+            text: `Failed to get appointments: ${errorMessages}. Please provide the missing or incorrect information.`,
+          },
+        ],
+      };
+    }
+    const validArgs = result.data;
     const lead = await prisma.lead.findUnique({
       where: {
-        id: args.contactId,
+        id: validArgs.contactId,
       },
       include: {
         Business: {
@@ -435,20 +474,8 @@ export async function handleGetAppointments(request: CallToolRequest) {
         },
       },
     });
-    if (!args.contactId) {
-      return {
-        content: [
-          {
-            type: "text",
-            text: "Please provide a contactId to get appointments.",
-          },
-        ],
-      };
-    }
     const appointments = await getAppointments({
       ghlContactId: lead?.ghlContactId || "",
-      // timezone: undefined,
-      // userTimezone: undefined,
       ghlAccessToken: lead?.Business?.BusinessIntegration?.ghlAccessToken || "",
     });
     if (appointments.success) {
@@ -473,7 +500,6 @@ export async function handleGetAppointments(request: CallToolRequest) {
       };
     }
   } catch (error) {
-    console.error("Error getting appointments:", error);
     return {
       content: [
         {

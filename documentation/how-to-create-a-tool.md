@@ -356,3 +356,87 @@ After implementing your tool:
 - **Error handling:** Consistent error response format
 - **Integration lookup:** Most tools require integration and agent validation
 - **Response format:** All tools return `{ content: [{ type: "text", text: "..." }] }`
+
+## Reference: Information Needed to Create a Tool
+
+When requesting a new tool to be created, provide the following information:
+
+### **1. Tool Identity & Purpose**
+
+- **Tool name:** What should the tool be called? (use snake_case format)
+  - Examples: `send_email`, `create_task`, `update_status`
+- **Description:** What does this tool do and when should the AI use it?
+- **Usage context:** When should the AI trigger this tool?
+
+### **2. Input Schema Properties**
+
+- **Parameters needed:** List all required inputs
+  - Parameter names (use camelCase or snake_case consistently)
+  - Parameter types (string, number, boolean, array, object)
+  - Parameter descriptions (be specific and clear)
+- **Required vs Optional:** Which parameters are mandatory?
+- **Validation rules:** Any special requirements?
+  - Min/max length constraints
+  - Format requirements (email, date, etc.)
+  - Enum values for restricted choices
+
+### **3. Implementation Details**
+
+- **Demo vs Real:** Should this start with dummy data? (recommended: yes)
+- **Future integration:** What will the real implementation call?
+  - External API endpoints
+  - Database operations
+  - File system operations
+- **Response format:** What should success responses include?
+- **Error handling:** What error scenarios should be covered?
+
+### **4. System Integration**
+
+- **Server placement:** Which server should host this tool?
+  - CAL server (calendar-related)
+  - GHL server (GoHighLevel-related)
+  - New server (if creating new functionality)
+- **Dependencies:** What system components are needed?
+  - `primaryAgentId` validation (most tools need this)
+  - Integration/agent lookup (usually required)
+  - Special authentication requirements
+
+### **Example Tool Request Format**
+
+```
+Tool Request: Create a notification tool
+
+1. Name: send_notification
+2. Purpose: Send notifications to users via email or SMS
+3. When to use: When user requests to notify someone about an event
+4. Parameters:
+   - message (string, required): The notification message
+   - recipient (string, required): Email or phone number
+   - type (enum, required): "email" | "sms"
+   - priority (enum, optional): "high" | "normal" | "low"
+   - primaryAgentId (string, required): From available details
+5. Implementation: Start with dummy data, will integrate with SendGrid/Twilio later
+6. Server: Create new notifications server
+```
+
+### **What Gets Created Automatically**
+
+When you provide the above information, the following will be generated:
+
+✅ **Tool definition** in the tools array with proper inputSchema  
+✅ **Zod schema** with validation matching the inputSchema  
+✅ **Handler function** following the standard authentication and validation pattern  
+✅ **Controller function** with demo data (or real implementation if specified)  
+✅ **Server registration** in the appropriate switch statement  
+✅ **TypeScript types** and proper imports/exports
+
+### **Smart Defaults Applied**
+
+Unless specified otherwise:
+
+- `primaryAgentId` parameter is included
+- API key authentication is added
+- Integration and agent validation is included
+- Standard error handling pattern is used
+- Consistent response format is applied
+- Proper logging is included

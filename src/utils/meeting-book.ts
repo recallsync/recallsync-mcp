@@ -63,6 +63,7 @@ export const updateMeeting = async ({
   newStartTime,
   status,
 }: UpdateMeetingInput) => {
+  console.log("update meeting", { meetingId, newStartTime, status });
   try {
     const payload = newStartTime
       ? {

@@ -65,7 +65,6 @@ export const getAppointments = async ({
     const appointmentsData =
       (await response.json()) as GetGHLAppointmentsResponse;
     const appointments = appointmentsData.events;
-    console.log("appointmentsData", { appointments });
     // convert the appointment date to ISO string - parse from location timezone
     const updatedAppointments = appointments?.map((appointment) => {
       // Parse the time and specify it's in the location timezone
@@ -84,7 +83,6 @@ export const getAppointments = async ({
         startTime: utcDate.toISOString(),
       };
     });
-    console.log({ updatedAppointments }, "updatedAppointments");
     // filter out the upcoming appointments - "startTime": "2025-06-13 09:00:00"
     const upcomingAppointments = updatedAppointments?.filter((appointment) => {
       const appointmentDate = new Date(appointment.startTime);
@@ -95,7 +93,7 @@ export const getAppointments = async ({
         : new Date();
       return appointmentDate > currentDate;
     });
-    console.log(upcomingAppointments, "upcomingAppointments");
+
     // // convert the appointment date to the userTimezone
     const upcomingAppointmentsInUserTimezone = upcomingAppointments?.map(
       (appointment) => {
@@ -111,9 +109,6 @@ export const getAppointments = async ({
         };
       }
     );
-    console.log("upcomingAppointmentsInUserTimezone", {
-      upcomingAppointmentsInUserTimezone,
-    });
     // // agent only needs startTime and id
     const agentData = upcomingAppointmentsInUserTimezone?.map((item) => ({
       startTime: item.startTime,
@@ -343,20 +338,7 @@ export const updateAppointment = async (props: UpdateGHLAppointment) => {
     if (props.type === "reschedule") {
       const startTime = props.newStartTime; // iso string
       if (props.locationTimezone) {
-        // ex: "America/New_York"
-        // Convert the startTime to the location timezone, handling date changes
-        const locationTimezone = props.locationTimezone;
-        // Parse the ISO string into a Date object
         const startTimeDate = new Date(startTime);
-
-        // Format in location timezone, preserving the exact moment in time
-        // This will automatically handle date changes when crossing timezone boundaries
-        // const locationTime = formatInTimeZone(
-        //   startTimeDate,
-        //   locationTimezone,
-        //   "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'"
-        // );
-
         updateBody.startTime = startTimeDate;
       } else {
         updateBody.startTime = startTime;
@@ -376,13 +358,6 @@ export const updateAppointment = async (props: UpdateGHLAppointment) => {
     const response = await request;
     const appointmentData = await response.json();
     if (response.ok) {
-      let localStatus: "UPCOMING" | "RESCHEDULED" | "CANCELLED" | "NO_SHOW" =
-        "UPCOMING";
-      if (appointmentData.appoinmentStatus === "cancelled") {
-        localStatus = "CANCELLED";
-      } else if (props.type === "reschedule") {
-        localStatus = "RESCHEDULED";
-      }
       const appointment = await prisma.meeting.findUnique({
         where: {
           id: props.appointmentId,
@@ -392,12 +367,8 @@ export const updateAppointment = async (props: UpdateGHLAppointment) => {
         console.log({ appointment }, "update");
         await updateMeeting({
           meetingId: appointmentData.id,
-          newStartTime: new Date(
-            props.type === "reschedule"
-              ? props.newStartTime
-              : appointment.startTime
-          ),
-          status: localStatus,
+          newStartTime: new Date(appointment.startTime),
+          status: "UPCOMING",
         });
       } else {
         console.log("create");
@@ -414,7 +385,7 @@ export const updateAppointment = async (props: UpdateGHLAppointment) => {
           meetingId: appointmentData.id,
           caledarType: CALENDAR_TYPE.GHL,
           meetingSource: MEETING_SOURCE.OUTSIDE,
-          status: localStatus,
+          status: "UPCOMING",
         });
       }
     }

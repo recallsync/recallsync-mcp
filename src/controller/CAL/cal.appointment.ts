@@ -223,7 +223,7 @@ export const rescheduleAppointment = async ({
       await updateMeeting({
         meetingId: data.data.uid,
         newStartTime: new Date(updatedStartTime),
-        status: "RESCHEDULED",
+        status: "UPCOMING",
       });
     }
     console.log("Appointment rescheduled successfully", data);

@@ -466,6 +466,11 @@ model PrimaryAgent {
   internalName String     @default("")
   description  String?    @db.Text
   type         AGENT_TYPE @default(N8N)
+  source       SOURCE     @default(DEFAULT)
+
+  agentGoal               String? @db.Text
+  goalCompleteCriteria    String? @db.Text
+  stopScenarioDescription String? @db.Text
 
   // agent training 
   // {url}/train -> agent traning url 
@@ -482,9 +487,14 @@ model PrimaryAgent {
   agencyId String
   Agency   User   @relation(fields: [agencyId], references: [id], onDelete: Cascade)
 
-  ghlCalendarId String?
+  ghlCalendarId         String?
   calenderIntegrationId String?
   CalenderIntegration   CalenderIntegration? @relation(fields: [calenderIntegrationId], references: [id], onDelete: SetNull)
+
+  // nextPrimaryAgent
+  nextPrimaryAgentId String?
+  NextPrimaryAgent   PrimaryAgent?  @relation("NextPrimaryAgents", fields: [nextPrimaryAgentId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  NextPrimaryAgents  PrimaryAgent[] @relation("NextPrimaryAgents")
 
   // Metadata
   createdAt          DateTime            @default(now())
@@ -496,6 +506,7 @@ model PrimaryAgent {
   @@index([businessId])
   @@index([agencyId])
   @@index([calenderIntegrationId])
+  @@index([nextPrimaryAgentId])
 }
 
 model PrimaryAgentAsset {
@@ -535,8 +546,11 @@ model Agent {
   settings Json
   isActive Boolean @default(false)
 
-  source  SOURCE  @default(DEFAULT)
   channel CHANNEL @default(EMAIL)
+
+  // VAPI
+  vapiPhoneNumberId String?
+  vapiAssistantId   String?
 
   // Relations
   businessId String
@@ -558,7 +572,7 @@ model Agent {
 }
 
 model Meeting {
-  id            String         @id @default(uuid())
+  id String @id @default(uuid())
 
   startTime     String
   messageOfLead String         @db.Text
@@ -578,9 +592,9 @@ model Meeting {
   leadId String
   Lead   Lead   @relation(fields: [leadId], references: [id], onDelete: Cascade)
 
-  calendarType CALENDAR_TYPE @default(CAL)
+  calendarType  CALENDAR_TYPE  @default(CAL)
   meetingSource MEETING_SOURCE @default(DASHBOARD)
-  
+
   // Metadata
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -601,7 +615,7 @@ model LeadCall {
   summary     String?         @db.Text
   transcript  Json?
   audioUrl    String          @default("")
-  
+
   callType LEAD_CALL_TYPE @default(GLOBAL)
 
   callDuration Float @default(0)
@@ -971,6 +985,10 @@ model BusinessIntegration {
   // OpenAI 
   openAiApiKey String? @db.Text
 
+  // VAPI
+  vapiPrivateKey String? @db.Text
+  vapiPublicKey  String? @db.Text
+
   calenderIntegrations CalenderIntegration[]
 
   @@index([businessId])
@@ -1057,7 +1075,6 @@ enum MEETING_STATUS {
   SUCCESS
   NO_SHOW
   CANCELLED
- RESCHEDULED
 }
 
 enum CALL_TYPE {
@@ -1464,11 +1481,13 @@ enum CHANNEL {
 
   VOICE_CALL
 }
- enum CALENDAR_TYPE {
+
+enum CALENDAR_TYPE {
   CAL
   CALENDLY
   GHL
 }
+
 enum MEETING_SOURCE {
   DASHBOARD
   OUTSIDE
