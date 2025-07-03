@@ -67,7 +67,7 @@ export const appointmentTools = [
           required: true,
         },
       },
-      required: ["dateTime", "primaryAgentId", "contactId"],
+      required: ["dateTime", "timezone", "primaryAgentId", "contactId"],
       additionalProperties: false,
     },
   },
@@ -87,12 +87,6 @@ export const appointmentTools = [
           description:
             "Copy the exact value after 'appointmentId: ' from get_appointments response. Example: if you see 'appointmentId: abc123xyz', use 'abc123xyz'. MUST be called 'appointmentId' in the arguments.",
         },
-        primaryAgentId: {
-          type: "string",
-          description:
-            "primaryAgentId from available details. Always include this from 'Available Details'",
-          required: true,
-        },
         newTime: {
           type: "string",
           description: `The new start time in ISO 8601 format with timezone offset. (e.g., '2025-07-04T12:30:00+05:30'). Always convert user input to this format.`,
@@ -102,7 +96,7 @@ export const appointmentTools = [
           description:
             "contactId from available details. Always include this from 'Available Details'",
         },
-        required: ["appointmentId", "primaryAgentId", "startTime", "contactId"],
+        required: ["appointmentId", "startTime", "contactId"],
       },
     },
   },
@@ -119,18 +113,13 @@ export const appointmentTools = [
           description:
             "Copy the exact value after 'appointmentId: ' from get_appointments response. Example: if you see 'appointmentId: abc123xyz', use 'abc123xyz'. MUST be called 'appointmentId' in the arguments.",
         },
-        primaryAgentId: {
-          type: "string",
-          description:
-            "primaryAgentId from available details. Always include this from 'Available Details'",
-          required: true,
-        },
+
         contactId: {
           type: "string",
           description:
             "contactId from available details. Always include this from 'Available Details'",
         },
-        required: ["appointmentId", "primaryAgentId", "contactId"],
+        required: ["appointmentId", "contactId"],
       },
     },
   },
@@ -160,7 +149,6 @@ export async function handleCheckAvailability(request: CallToolRequest) {
       primaryAgentId: string;
     };
     console.log("check availability args", args);
-    // Validate the input
     if (!args.date || !args.timezone) {
       return {
         content: [
@@ -218,10 +206,17 @@ export async function handleBookAppointment(request: CallToolRequest) {
     console.log("book appointment args", args);
     const primaryAgentId = (args.primaryAgentId as string) || "";
     const primaryAgent = await getPrimaryAgent(primaryAgentId);
-    //TODO: leter we can get the lead from workflow , and fing ghlcontactId from it
+
     const lead = await prisma.lead.findUnique({
       where: {
         id: args.contactId,
+      },
+      include: {
+        Business: {
+          include: {
+            BusinessIntegration: true,
+          },
+        },
       },
     });
 
@@ -245,7 +240,7 @@ export async function handleBookAppointment(request: CallToolRequest) {
       calendarId: primaryAgent?.ghlCalendarId || "",
       contactId: args.contactId,
       startTime,
-      ghlAccessToken: String(request.params?.arguments?._ghlAccessToken || ""),
+      ghlAccessToken: lead?.Business?.BusinessIntegration?.ghlAccessToken || "",
       ghlLocationId:
         primaryAgent?.Business?.BusinessIntegration?.ghlLocationId || "",
       agencyId: primaryAgent?.agencyId || "",
@@ -294,19 +289,32 @@ export async function handleRescheduleAppointment(request: CallToolRequest) {
     const args = request.params.arguments as {
       appointmentId: string;
       newTime: string;
-      primaryAgentId: string;
       contactId: string;
       newStartTime?: string;
     };
-    const primaryAgent = await getPrimaryAgent(args.primaryAgentId);
+
+    const lead = await prisma.lead.findUnique({
+      where: {
+        id: args.contactId,
+      },
+      include: {
+        Business: {
+          include: {
+            BusinessIntegration: true,
+          },
+        },
+      },
+    });
+    const ghlAccessToken =
+      lead?.Business?.BusinessIntegration?.ghlAccessToken || "";
 
     const response = await updateAppointment({
       appointmentId: args.appointmentId,
       type: "reschedule",
       newStartTime: args.newTime || args.newStartTime || "",
-      ghlAccessToken: String(request.params?.arguments?._ghlAccessToken || ""),
-      agencyId: primaryAgent?.agencyId || "",
-      businessId: primaryAgent?.Business?.id || "",
+      ghlAccessToken,
+      agencyId: lead?.agencyId || "",
+      businessId: lead?.businessId || "",
       contactId: args.contactId,
     });
     if (response.success) {
@@ -353,13 +361,24 @@ export async function handleCancelAppointment(request: CallToolRequest) {
       primaryAgentId: string;
       contactId: string;
     };
-    const primaryAgent = await getPrimaryAgent(args.primaryAgentId);
+    const lead = await prisma.lead.findUnique({
+      where: {
+        id: args.contactId,
+      },
+      include: {
+        Business: {
+          include: {
+            BusinessIntegration: true,
+          },
+        },
+      },
+    });
     const response = await updateAppointment({
       appointmentId: args.appointmentId,
       type: "cancel",
-      ghlAccessToken: String(request.params?.arguments?._ghlAccessToken || ""),
-      agencyId: primaryAgent?.agencyId || "",
-      businessId: primaryAgent?.Business?.id || "",
+      ghlAccessToken: lead?.Business?.BusinessIntegration?.ghlAccessToken || "",
+      agencyId: lead?.agencyId || "",
+      businessId: lead?.businessId || "",
       contactId: args.contactId,
     });
     if (response.success) {
@@ -408,6 +427,13 @@ export async function handleGetAppointments(request: CallToolRequest) {
       where: {
         id: args.contactId,
       },
+      include: {
+        Business: {
+          include: {
+            BusinessIntegration: true,
+          },
+        },
+      },
     });
     if (!args.contactId) {
       return {
@@ -423,7 +449,7 @@ export async function handleGetAppointments(request: CallToolRequest) {
       ghlContactId: lead?.ghlContactId || "",
       // timezone: undefined,
       // userTimezone: undefined,
-      ghlAccessToken: String(request.params?.arguments?._ghlAccessToken || ""),
+      ghlAccessToken: lead?.Business?.BusinessIntegration?.ghlAccessToken || "",
     });
     if (appointments.success) {
       return {
