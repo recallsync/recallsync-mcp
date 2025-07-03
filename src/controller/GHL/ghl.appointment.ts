@@ -34,10 +34,8 @@ export const ghlRequestContructor = ({
     },
     body: JSON.stringify(body),
   });
-
   return request;
 };
-
 type GetGHLAppointments = {
   businessId?: string;
   ghlContactId: string;
@@ -47,10 +45,8 @@ type GetGHLAppointments = {
 };
 
 export const getAppointments = async ({
-  businessId,
   ghlContactId,
-  timezone = "Asia/Kolkata",
-  userTimezone = "Asia/Kolkata",
+  userTimezone,
   ghlAccessToken,
 }: GetGHLAppointments) => {
   try {
@@ -66,51 +62,20 @@ export const getAppointments = async ({
       (await response.json()) as GetGHLAppointmentsResponse;
     const appointments = appointmentsData.events;
     // convert the appointment date to ISO string - parse from location timezone
-    const updatedAppointments = appointments?.map((appointment) => {
-      // Parse the time and specify it's in the location timezone
-      const parsedDate = parse(
-        appointment.startTime,
-        "yyyy-MM-dd HH:mm:ss",
-        new Date()
-      );
 
-      // Convert from location timezone to UTC
-      const utcDate = timezone
-        ? fromZonedTime(parsedDate, timezone)
-        : parsedDate;
-      return {
-        ...appointment,
-        startTime: utcDate.toISOString(),
-      };
-    });
     // filter out the upcoming appointments - "startTime": "2025-06-13 09:00:00"
-    const upcomingAppointments = updatedAppointments?.filter((appointment) => {
-      const appointmentDate = new Date(appointment.startTime);
+    const upcomingAppointments = appointments?.filter((appointment) => {
+      const appointmentDate = new Date(
+        appointment.startTime
+      ).toLocaleDateString();
 
       // Convert current date to appointment timezone if provided
-      const currentDate = timezone
-        ? new Date(new Date().toLocaleString("en-US", { timeZone: timezone }))
-        : new Date();
+      const currentDate = new Date().toLocaleDateString();
       return appointmentDate > currentDate;
     });
 
-    // // convert the appointment date to the userTimezone
-    const upcomingAppointmentsInUserTimezone = upcomingAppointments?.map(
-      (appointment) => {
-        return {
-          ...appointment,
-          startTime: userTimezone
-            ? formatInTimeZone(
-                new Date(appointment.startTime),
-                userTimezone,
-                "MMM dd 'at' h:mm a"
-              )
-            : appointment.startTime,
-        };
-      }
-    );
     // // agent only needs startTime and id
-    const agentData = upcomingAppointmentsInUserTimezone?.map((item) => ({
+    const agentData = upcomingAppointments?.map((item) => ({
       startTime: item.startTime,
       id: item.id,
       title: item.title,
@@ -198,7 +163,7 @@ export const checkAvailability = async ({
     const queryParams = new URLSearchParams();
     queryParams.append("startDate", normalizedStartDate.toString());
     queryParams.append("endDate", normalizedEndDate.toString());
-    if (timezone) queryParams.append("timezone", "Asia/Calcutta");
+    if (timezone) queryParams.append("timezone", timezone);
     path = `${path}?${queryParams.toString()}`;
 
     console.log({ path, timezone, normalizedStartDate, normalizedEndDate });
@@ -282,7 +247,6 @@ export const bookAppointment = async ({
     });
     const response = await request;
     const appointmentData = (await response.json()) as GHLAppointment;
-    console.log("appointmentData", response);
     if (response.ok) {
       console.log("appointmentData", appointmentData);
       await bookMeeting({

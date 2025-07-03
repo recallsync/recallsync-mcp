@@ -12,12 +12,16 @@ import {
   rescheduleAppointmentSchema,
   cancelAppointmentSchema,
   getAppointmentsSchema,
+  checkAvailabilitySchema,
+  BookAppointmentRequest,
+  RescheduleAppointmentRequest,
+  GetAppointmentsRequest,
 } from "../../schema/GHL/appointment.schema.js";
 
 export const appointmentTools = [
   {
     name: "check_availability",
-    description: `Ask the user for a date (e.g., 'July 1, 2024'). If the user says 'today' or 'tomorrow', always resolve it to the actual date at the time of the request. Only require a date and timezone. The tool will check available slots for the given date and the next day (2 days total). Respond with available slots in a user-friendly format, e.g., 'Available on July 1, Monday: 10am-1pm, 4pm-6pm'.`,
+    description: `Ask the user for a date time and timezone. If the user says 'today' or 'tomorrow', always resolve it to the actual date at the time of the request. Only require a date and timezone. The tool will check available slots for the given date and the next day (2 days total). Respond with available slots in a user-friendly format, e.g., 'Available on July 1, Monday: 10am-1pm, 4pm-6pm'.`,
     arguments: [],
     inputSchema: {
       type: "object",
@@ -30,7 +34,7 @@ export const appointmentTools = [
         timezone: {
           type: "string",
           description:
-            "Timezone of the appointment. Must be called 'timezone' in the arguments.",
+            "Timezone to check availability in IANA format (e.g., Asia/Kolkata). Must be called 'timezone' in the arguments.",
         },
         primaryAgentId: {
           type: "string",
@@ -81,10 +85,10 @@ export const appointmentTools = [
 
   {
     name: "reschedule_appointment",
-    description: `Reschedule an existing appointment to a new date and time.
+    description: `Reschedule an existing appointment to a new date and time. Make sure you have the appointmentId.
   Rescheduling Guidelines:
-  - Firslty, use the get_appointments tool to get the list and ask them to select the appointment they wish to reschedule.
-  - if the user provide a new date-time, make sure you have the appointmentId from the get_appointments tool response.`,
+  - if you dont have the appointmentId then use the get_appointments tool to get the list and ask them to select the appointment they wish to reschedule.
+  - if the user provide a new date-time and you have the appointmentId, then directly call the reschedule_appointment tool, and if you face any issue with the rescheduling the appointment with new date time, then call the check_availability tool to show the available time slots near to new start tiem provided by user.`,
     arguments: [],
     inputSchema: {
       type: "object",
@@ -156,33 +160,37 @@ export async function handleCheckAvailability(request: CallToolRequest) {
       primaryAgentId: string;
     };
     console.log("check availability args", args);
-    if (!args.date || !args.timezone) {
+    const result = checkAvailabilitySchema.safeParse(args);
+    if (!result.success) {
+      const errorMessages = result.error.errors
+        .map((err) => `${err.path.join(".")}: ${err.message}`)
+        .join(", ");
       return {
         content: [
           {
             type: "text",
-            text: "Please provide a date (YYYY-MM-DD) and timezone to check availability.",
+            text: `Failed to check availability: ${errorMessages}. Please provide the missing or incorrect information.`,
           },
         ],
       };
     }
-
-    // Convert date to timestamp (start of day)
-    const startDate = new Date(args.date).getTime();
-    const date = startDate;
-    const primaryAgentId = (args.primaryAgentId as string) || "";
-    // Call the business logic with startTime and timezone
+    const validArgs = result.data;
+    const startDate = new Date(validArgs.date).getTime();
+    const primaryAgentId = (validArgs.primaryAgentId as string) || "";
     const primaryAgent = await getPrimaryAgent(primaryAgentId);
     const slots = await getAvailableChunkedSlots({
-      input: { date, timezone: args.timezone },
-      ghlAccessToken: String(request.params?.arguments?._ghlAccessToken || ""),
+      input: { date: startDate, timezone: validArgs.timezone },
+      ghlAccessToken:
+        primaryAgent?.Business?.BusinessIntegration?.ghlAccessToken || "",
       ghlCalendarId: primaryAgent?.ghlCalendarId || undefined,
     });
 
     return {
       content: slots.map((slot) => ({
         type: "text",
-        text: slot.formattedRange,
+        text: `Available slots retrieved successfully: \n ${JSON.stringify(
+          slot.formattedRange
+        )}`,
       })),
     };
   } catch (error) {
@@ -202,7 +210,7 @@ export async function handleCheckAvailability(request: CallToolRequest) {
 
 export async function handleBookAppointment(request: CallToolRequest) {
   try {
-    const args = request.params.arguments as any;
+    const args = request.params.arguments as BookAppointmentRequest;
     // Validate input using Zod schema
     const result = bookAppointmentSchema.safeParse(args);
     if (!result.success) {
@@ -221,6 +229,7 @@ export async function handleBookAppointment(request: CallToolRequest) {
     const validArgs = result.data;
     const primaryAgentId = validArgs.primaryAgentId || "";
     const primaryAgent = await getPrimaryAgent(primaryAgentId);
+
     const lead = await prisma.lead.findUnique({
       where: {
         id: validArgs.contactId,
@@ -233,6 +242,19 @@ export async function handleBookAppointment(request: CallToolRequest) {
         },
       },
     });
+    if (
+      !lead?.Business?.BusinessIntegration?.ghlAccessToken ||
+      !primaryAgent?.Business?.BusinessIntegration?.ghlAccessToken
+    ) {
+      return {
+        content: [
+          {
+            type: "text",
+            text: `Failed to book appointment. Please provide valid ghlAccessToken for the business.`,
+          },
+        ],
+      };
+    }
     // Combine date and time if dateTime is not provided (fallback logic)
     let startTime = validArgs.dateTime;
     if (!startTime && validArgs.date && validArgs.time) {
@@ -260,11 +282,12 @@ export async function handleBookAppointment(request: CallToolRequest) {
       ghlContactId: lead?.ghlContactId || "",
     });
     if (resultBook.success) {
+      const appointmentId = resultBook.data?.id;
       return {
         content: [
           {
             type: "text",
-            text: `Appointment booked successfully! Details: ${JSON.stringify(
+            text: `Appointment booked successfully!\n\nAppointment ID: ${appointmentId}\nDetails: ${JSON.stringify(
               resultBook.data
             )}`,
           },
@@ -296,7 +319,7 @@ export async function handleBookAppointment(request: CallToolRequest) {
 
 export async function handleRescheduleAppointment(request: CallToolRequest) {
   try {
-    const args = request.params.arguments as any;
+    const args = request.params.arguments as RescheduleAppointmentRequest;
     // Validate input using Zod schema
     const result = rescheduleAppointmentSchema.safeParse(args);
     if (!result.success) {
@@ -401,6 +424,16 @@ export async function handleCancelAppointment(request: CallToolRequest) {
         },
       },
     });
+    if (!lead?.Business?.BusinessIntegration?.ghlAccessToken) {
+      return {
+        content: [
+          {
+            type: "text",
+            text: `Failed to cancel appointment. Please provide valid ghlAccessToken for the business.`,
+          },
+        ],
+      };
+    }
     const response = await updateAppointment({
       appointmentId: validArgs.appointmentId,
       type: "cancel",
@@ -445,7 +478,7 @@ export async function handleCancelAppointment(request: CallToolRequest) {
 }
 export async function handleGetAppointments(request: CallToolRequest) {
   try {
-    const args = request.params.arguments as any;
+    const args = request.params.arguments as GetAppointmentsRequest;
     // Validate input using Zod schema
     const result = getAppointmentsSchema.safeParse(args);
     if (!result.success) {
