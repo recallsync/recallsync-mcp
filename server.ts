@@ -7,10 +7,6 @@ import { primaryServer } from "./src/servers/primary.server.js";
 import { ghlServer } from "./src/servers/ghl.server.js";
 import { PrismaClient } from "@prisma/client";
 import { calServer } from "./src/servers/cal.server.js";
-import {
-  ghlMiddleware,
-  GHLTokenRequest,
-} from "./src/middleware/ghl.middleware.js";
 
 dotenv.config();
 
@@ -77,44 +73,39 @@ app.get("/sse-ghl", async (_: Request, res: Response) => {
 });
 
 // Endpoint for handling messages
-app.post(
-  "/ghl-messages",
-  ghlMiddleware,
-  async (req: GHLTokenRequest, res: Response) => {
-    const sessionId = req.query.sessionId as string;
-    const transport = ghlTransports[sessionId];
-    const api_token = req.headers["api_key"] as string;
-    let modifiedBody = req.body;
-    if (req.body && req.body.method === "tools/call" && req.body.params) {
-      modifiedBody = {
-        ...req.body,
-        params: {
-          ...req.body.params,
-          arguments: {
-            ...req.body.params.arguments,
-            _apiKey: api_token, // Add API key to arguments
-            _ghlAccessToken: req.ghlAccessToken,
-          },
+app.post("/ghl-messages", async (req: Request, res: Response) => {
+  const sessionId = req.query.sessionId as string;
+  const transport = ghlTransports[sessionId];
+  const api_token = req.headers["api_key"] as string;
+  let modifiedBody = req.body;
+  if (req.body && req.body.method === "tools/call" && req.body.params) {
+    modifiedBody = {
+      ...req.body,
+      params: {
+        ...req.body.params,
+        arguments: {
+          ...req.body.params.arguments,
+          _apiKey: api_token,
         },
-      };
-      console.log("✅ Injected API key into tool call arguments");
-    }
-    if (!api_token) {
-      res.status(401).send("Unauthorized");
-      return;
-    }
-
-    if (transport) {
-      try {
-        await transport.handlePostMessage(req, res, modifiedBody);
-      } catch (error) {
-        res.status(500).send("Error handling message");
-      }
-    } else {
-      res.status(400).send("No transport found for sessionId");
-    }
+      },
+    };
+    console.log("✅ Injected API key into tool call arguments");
   }
-);
+  if (!api_token) {
+    res.status(401).send("Unauthorized");
+    return;
+  }
+
+  if (transport) {
+    try {
+      await transport.handlePostMessage(req, res, modifiedBody);
+    } catch (error) {
+      res.status(500).send("Error handling message");
+    }
+  } else {
+    res.status(400).send("No transport found for sessionId");
+  }
+});
 
 app.get("/sse-cal", async (_: Request, res: Response) => {
   const calTransport = new SSEServerTransport("/cal-messages", res);

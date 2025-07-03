@@ -4,9 +4,9 @@
   "main": "server.ts",
   "type": "module",
   "scripts": {
-    "start": "node dist/server.js",
-    "dev": "nodemon --watch \"*.ts\" --exec \"node --loader ts-node/esm\" server.ts",
-    "build": "prisma generate && tsc",
+    "start": "node init && node dist/server.js",
+    "dev": "node init && nodemon --watch \"*.ts\" --exec \"node --loader ts-node/esm\" server.ts",
+    "build": "node init && prisma generate && tsc",
     "generate": "prisma generate",
     "test": "echo \"Error: no test specified\" && exit 1"
   },

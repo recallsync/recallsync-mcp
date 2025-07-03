@@ -1,5 +1,8 @@
 node_modules
 .env
+temp_auto_push.bat
 dist
 
 /src/generated/prisma
+.gitignore
+branch_structure.json
