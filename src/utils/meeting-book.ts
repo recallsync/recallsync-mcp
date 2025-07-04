@@ -1,4 +1,8 @@
-import { CALENDAR_TYPE, MEETING_SOURCE, MEETING_STATUS } from "@prisma/client";
+import {
+  CALENDAR_TYPE,
+  MEETING_SOURCE,
+  MEETING_STATUS,
+} from "../generated/client/index.js";
 import { prisma } from "../lib/prisma.js";
 
 interface BookMeetingInput {

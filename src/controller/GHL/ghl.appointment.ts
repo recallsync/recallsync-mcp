@@ -10,7 +10,7 @@ import {
 } from "../../types/ghl.types.js";
 import { chunkConsecutiveSlots } from "../../utils/ghl.js";
 import { formatInTimeZone, fromZonedTime } from "date-fns-tz";
-import { CALENDAR_TYPE, MEETING_SOURCE } from "@prisma/client";
+import { CALENDAR_TYPE, MEETING_SOURCE } from "../../generated/client/index.js";
 import { bookMeeting, updateMeeting } from "../../utils/meeting-book.js";
 import { prisma } from "../../lib/prisma.js";
 
