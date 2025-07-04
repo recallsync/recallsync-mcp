@@ -9,7 +9,7 @@ import { randomUUID } from "node:crypto";
 import dotenv from "dotenv";
 import { primaryServer } from "./src/servers/primary.server.js";
 import { ghlServer } from "./src/servers/ghl.server.js";
-import { PrismaClient } from "@prisma/client";
+import { PrismaClient } from "./src/generated/client/index.js";
 import { calServer } from "./src/servers/cal.server.js";
 import { isInitializeRequest } from "@modelcontextprotocol/sdk/types.js";
 
@@ -530,7 +530,12 @@ app.post("/cal-messages", async (req: Request, res: Response) => {
 
 // Start the server
 const PORT = process.env.PORT || 3001;
+console.log("🚀 Starting server...");
+console.log("📊 Environment:", process.env.NODE_ENV);
+console.log("🔗 Database URL:", process.env.DATABASE_URL ? "Set" : "Not set");
+
 app.listen(PORT, () => {
+  console.log(`✅ Server running on port ${PORT}`);
   logger.info(`Server running on port ${PORT}`);
   logger.info(`=== MODERN ENDPOINTS (StreamableHTTP) ===`);
   logger.info(`Primary MCP endpoint: http://localhost:${PORT}/mcp`);

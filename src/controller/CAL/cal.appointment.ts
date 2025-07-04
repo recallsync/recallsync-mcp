@@ -2,7 +2,7 @@ import {
   CALENDAR_TYPE,
   CalenderIntegration,
   MEETING_SOURCE,
-} from "@prisma/client";
+} from "../../generated/client/index.js";
 import {
   BookAppointmentRequest,
   CancelAppointmentRequest,
