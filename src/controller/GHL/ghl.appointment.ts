@@ -65,9 +65,11 @@ export const getAppointments = async ({
     const appointments = appointmentsData.events;
     console.log({ appointmentsData, appointments });
     // convert the appointment date to ISO string - parse from location timezone
-
     // filter out the upcoming appointments - "startTime": "2025-06-13 09:00:00"
-    const upcomingAppointments = appointments?.filter((appointment) => {
+    const filteredAppointments = appointments?.filter(
+      (appointment) => appointment.appointmentStatus !== "cancelled"
+    );
+    const upcomingAppointments = filteredAppointments?.filter((appointment) => {
       const appointmentDate = new Date(appointment.startTime);
       // Convert current date to appointment timezone if provided
       const currentDate = new Date();
@@ -76,14 +78,13 @@ export const getAppointments = async ({
 
     // // agent only needs startTime and id
     const agentData = upcomingAppointments?.map((item) => ({
-      startTime: item.startTime,
-      id: item.id,
+      rescheduleOrCancelId: item.id,
       title: item.title,
       start: item.startTime,
       end: item.endTime,
     }));
     console.log("agentData", { agentData });
-    if (agentData.length === 0) {
+    if (!agentData || agentData.length === 0) {
       return {
         success: false,
         data: "No appointments found",
@@ -92,21 +93,28 @@ export const getAppointments = async ({
     let formattedResponse = "";
     let index = 1;
     for (const booking of agentData) {
-      if (index === 0) {
+      if (index === 1) {
         formattedResponse += `Here are your upcoming meetings: \n\n`;
       }
       formattedResponse += `Bookings :\n 
-      **rescheduleOrCancelId: ${booking.id}**,
-      Title: ${booking.title},
-      Start: ${format(new Date(booking.startTime), "yyyy-MM-dd HH:mm a")},
-      End: ${format(new Date(booking.end), "yyyy-MM-dd HH:mm a")},
-      \n --------------------------------- \n`;
+      **rescheduleOrCancelId: ${
+        booking.rescheduleOrCancelId
+      }**,\n      Title: ${booking.title},\n      Start: ${format(
+        new Date(booking.start),
+        "yyyy-MM-dd HH:mm a"
+      )},\n      End: ${format(
+        new Date(booking.end),
+        "yyyy-MM-dd HH:mm a"
+      )},\n      \n --------------------------------- \n`;
       index++;
     }
     console.log("formattedResponse", { formattedResponse });
     return {
       success: true,
-      data: formattedResponse,
+      data: {
+        formatted: formattedResponse,
+        appointments: agentData,
+      },
     };
   } catch (err) {
     console.log("error getting appointments");

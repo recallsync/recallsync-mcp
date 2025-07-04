@@ -244,7 +244,7 @@ export async function handleBookAppointment(request: CallToolRequest) {
         content: [
           {
             type: "text",
-            text: `Failed to check availability: ${errorMessages}. Please provide the missing or incorrect information.`,
+            text: `Failed to Book Appointment: ${errorMessages}. Please provide the missing or incorrect information.`,
           },
         ],
       };
@@ -261,7 +261,7 @@ export async function handleBookAppointment(request: CallToolRequest) {
         content: [
           {
             type: "text",
-            text: "Failed to get appointments. Please try again.",
+            text: "Failed to Book appointment. You have some missing creds like, access token, location id, contact id, calendar id. Please try again.",
           },
         ],
       };
@@ -341,7 +341,7 @@ export async function handleRescheduleAppointment(request: CallToolRequest) {
         content: [
           {
             type: "text",
-            text: `Failed to check availability: ${errorMessages}. Please provide the missing or incorrect information.`,
+            text: `Failed to reschedule appointment: ${errorMessages}. Please provide the missing or incorrect information. You have some missing creds like, access token, location id, contact id, calendar id. Please try again.`,
           },
         ],
       };
@@ -358,7 +358,7 @@ export async function handleRescheduleAppointment(request: CallToolRequest) {
         content: [
           {
             type: "text",
-            text: "Failed to get appointments. Please try again.",
+            text: "Failed to Book appointment. You have some missing creds like, access token, location id, contact id, calendar id. Please try again.",
           },
         ],
       };
