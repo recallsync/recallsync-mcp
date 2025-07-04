@@ -172,7 +172,7 @@ export const bookAppointment = async ({
       const response = await bookMeeting({
         businessId: businessId,
         startTime: new Date(startTime).toISOString(),
-        contactId: contactId,
+        leadId: contactId,
         agencyId: agencyId,
         meetingId: data.data.uid,
         caledarType: CALENDAR_TYPE.CAL,

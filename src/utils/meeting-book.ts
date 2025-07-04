@@ -5,7 +5,7 @@ interface BookMeetingInput {
   businessId?: string;
   meetingId: string;
   startTime: Date | string;
-  contactId: string;
+  leadId: string;
   agencyId: string;
   caledarType: CALENDAR_TYPE;
   meetingSource: MEETING_SOURCE;
@@ -20,7 +20,7 @@ interface UpdateMeetingInput {
 export const bookMeeting = async ({
   businessId,
   startTime,
-  contactId,
+  leadId,
   agencyId,
   meetingId,
   caledarType,
@@ -35,7 +35,7 @@ export const bookMeeting = async ({
         id: meetingId,
         businessId: businessId || "",
         agencyId: agencyId,
-        leadId: contactId,
+        leadId,
         status: status,
         startTime: new Date(startTime).toISOString(),
         updatedAt: new Date(),

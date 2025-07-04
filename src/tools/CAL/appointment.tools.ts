@@ -38,14 +38,15 @@ export const appointmentTools = [
           description:
             "Start date to check availability from, if user said tomorrow or next day - always reference the Today's date. If today is 24th november 2025, it means tomorrow is 25th november 2025. Format: YYYY-MM-DD",
         },
-
         timezone: {
           type: "string",
-          description: "Timezone of the appointment. Example: Asia/Kolkata",
+          description:
+            "Timezone of the appointment. Must be called 'timezone' in the arguments.",
         },
         primaryAgentId: {
           type: "string",
-          description: "primaryAgentId from available details",
+          description:
+            "primaryAgentId from available details. Always include this from 'Available Details'. Must be called 'primaryAgentId' in the arguments.",
         },
       },
       required: ["startDate", "timezone", "primaryAgentId"],

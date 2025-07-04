@@ -1,5 +1,9 @@
-import { format, parse } from "date-fns";
-import { CheckAvailabilityRequest } from "../../schema/GHL/appointment.schema.js";
+import { addDays, format, parse } from "date-fns";
+import {
+  BookAppointmentRequest,
+  CheckAvailabilityRequest,
+  GetAppointmentsRequest,
+} from "../../schema/GHL/appointment.schema.js";
 import {
   GetGHLAppointmentsResponse,
   GHLAppointment,
@@ -39,18 +43,12 @@ export const ghlRequestContructor = ({
 };
 
 type GetGHLAppointments = {
-  businessId?: string;
   ghlContactId: string;
-  timezone?: string | undefined;
-  userTimezone?: string | undefined;
   ghlAccessToken: string;
 };
 
 export const getAppointments = async ({
-  businessId,
   ghlContactId,
-  timezone = "Asia/Kolkata",
-  userTimezone = "Asia/Kolkata",
   ghlAccessToken,
 }: GetGHLAppointments) => {
   try {
@@ -65,52 +63,19 @@ export const getAppointments = async ({
     const appointmentsData =
       (await response.json()) as GetGHLAppointmentsResponse;
     const appointments = appointmentsData.events;
+    console.log({ appointmentsData, appointments });
     // convert the appointment date to ISO string - parse from location timezone
-    const updatedAppointments = appointments?.map((appointment) => {
-      // Parse the time and specify it's in the location timezone
-      const parsedDate = parse(
-        appointment.startTime,
-        "yyyy-MM-dd HH:mm:ss",
-        new Date()
-      );
 
-      // Convert from location timezone to UTC
-      const utcDate = timezone
-        ? fromZonedTime(parsedDate, timezone)
-        : parsedDate;
-      return {
-        ...appointment,
-        startTime: utcDate.toISOString(),
-      };
-    });
     // filter out the upcoming appointments - "startTime": "2025-06-13 09:00:00"
-    const upcomingAppointments = updatedAppointments?.filter((appointment) => {
+    const upcomingAppointments = appointments?.filter((appointment) => {
       const appointmentDate = new Date(appointment.startTime);
-
       // Convert current date to appointment timezone if provided
-      const currentDate = timezone
-        ? new Date(new Date().toLocaleString("en-US", { timeZone: timezone }))
-        : new Date();
+      const currentDate = new Date();
       return appointmentDate > currentDate;
     });
 
-    // // convert the appointment date to the userTimezone
-    const upcomingAppointmentsInUserTimezone = upcomingAppointments?.map(
-      (appointment) => {
-        return {
-          ...appointment,
-          startTime: userTimezone
-            ? formatInTimeZone(
-                new Date(appointment.startTime),
-                userTimezone,
-                "MMM dd 'at' h:mm a"
-              )
-            : appointment.startTime,
-        };
-      }
-    );
     // // agent only needs startTime and id
-    const agentData = upcomingAppointmentsInUserTimezone?.map((item) => ({
+    const agentData = upcomingAppointments?.map((item) => ({
       startTime: item.startTime,
       id: item.id,
       title: item.title,
@@ -131,11 +96,11 @@ export const getAppointments = async ({
         formattedResponse += `Here are your upcoming meetings: \n\n`;
       }
       formattedResponse += `Bookings :\n 
-      **appointmentId: ${booking.id}**,
+      **rescheduleOrCancelId: ${booking.id}**,
       Title: ${booking.title},
-      Start: ${booking.startTime || booking.start},
-      End: ${booking.end},
-      \n\n --------------------------------- \n\n`;
+      Start: ${format(new Date(booking.startTime), "yyyy-MM-dd HH:mm a")},
+      End: ${format(new Date(booking.end), "yyyy-MM-dd HH:mm a")},
+      \n --------------------------------- \n`;
       index++;
     }
     console.log("formattedResponse", { formattedResponse });
@@ -154,9 +119,9 @@ export const getAppointments = async ({
 };
 
 interface CheckAvailabilityInput {
-  input: { date: number; timezone: string };
-  ghlAccessToken?: string;
-  ghlCalendarId?: string;
+  input: CheckAvailabilityRequest;
+  ghlAccessToken: string;
+  ghlCalendarId: string;
 }
 
 export const checkAvailability = async ({
@@ -164,13 +129,12 @@ export const checkAvailability = async ({
   ghlAccessToken,
   ghlCalendarId,
 }: CheckAvailabilityInput) => {
-  const { date, timezone } = input;
-  console.log({ input });
+  const { startDate: startDateString, timezone } = input;
   // Convert date string to timestamp (start of day)
-  const startDate = date;
+  const startDate = new Date(startDateString).getTime();
+
   let currentStartTime = startDate;
-  const twoDaysInMs = 2 * 24 * 60 * 60 * 1000;
-  let currentEndTime = currentStartTime + twoDaysInMs;
+  let currentEndTime = addDays(startDate, 1).getTime();
   let iterations = 0;
   const maxIterations = 3;
   // Function to normalize timestamp to start of day (00:00:00)
@@ -198,7 +162,7 @@ export const checkAvailability = async ({
     const queryParams = new URLSearchParams();
     queryParams.append("startDate", normalizedStartDate.toString());
     queryParams.append("endDate", normalizedEndDate.toString());
-    if (timezone) queryParams.append("timezone", "Asia/Calcutta");
+    if (timezone) queryParams.append("timezone", timezone);
     path = `${path}?${queryParams.toString()}`;
 
     console.log({ path, timezone, normalizedStartDate, normalizedEndDate });
@@ -232,8 +196,9 @@ export const checkAvailability = async ({
       return slots;
     }
     if (iterations < maxIterations) {
-      currentStartTime += twoDaysInMs;
-      currentEndTime += twoDaysInMs;
+      // increment the start and end date by 1 day
+      currentStartTime = addDays(currentStartTime, 1).getTime();
+      currentEndTime = addDays(currentEndTime, 1).getTime();
     }
   }
   return [];
@@ -247,26 +212,25 @@ export const getAvailableChunkedSlots = async (
   return chunkedSlots;
 };
 type BookGHLAppointment = {
-  businessId: string;
-  ghlContactId: string;
-  calendarId: string;
-  contactId: string;
-  startTime: string;
-  agencyId: string;
+  input: BookAppointmentRequest;
+  ghlCalendarId: string;
   ghlAccessToken: string;
+  businessId: string;
+  agencyId: string;
+  ghlContactId: string;
   ghlLocationId: string;
 };
 export const bookAppointment = async ({
   businessId,
   ghlContactId,
-  calendarId,
-  startTime,
-  contactId,
+  ghlCalendarId,
+  input,
   agencyId,
   ghlAccessToken,
   ghlLocationId,
 }: BookGHLAppointment) => {
   try {
+    const { dateTime: startTime, leadId } = input;
     let path = `/calendars/events/appointments`;
     console.log("book appointment", startTime);
     const request = ghlRequestContructor({
@@ -274,7 +238,7 @@ export const bookAppointment = async ({
       method: "POST",
       path,
       body: {
-        calendarId,
+        calendarId: ghlCalendarId,
         locationId: ghlLocationId,
         contactId: ghlContactId,
         startTime: new Date(startTime).toISOString(),
@@ -288,7 +252,7 @@ export const bookAppointment = async ({
       await bookMeeting({
         businessId,
         startTime: new Date(startTime).toISOString(),
-        contactId,
+        leadId,
         agencyId,
         meetingId: appointmentData.id,
         caledarType: CALENDAR_TYPE.GHL,
@@ -312,37 +276,32 @@ export const bookAppointment = async ({
 };
 type UpdateGHLAppointment =
   | {
-      appointmentId: string;
+      rescheduleOrCancelId: string;
       businessId: string;
       type: "cancel";
-      contactId: string;
+      leadId: string;
       agencyId: string;
       ghlAccessToken: string;
     }
   | {
-      appointmentId: string;
+      rescheduleOrCancelId: string;
       businessId: string;
       type: "reschedule";
       locationTimezone?: string;
       newStartTime: string;
-      contactId: string;
+      leadId: string;
       ghlAccessToken: string;
       agencyId: string;
     };
 
 export const updateAppointment = async (props: UpdateGHLAppointment) => {
   try {
-    const path = `/calendars/events/appointments/${props.appointmentId}`;
+    const path = `/calendars/events/appointments/${props.rescheduleOrCancelId}`;
     // Build update body based on what's provided
     const updateBody: Record<string, any> = {};
     if (props.type === "reschedule") {
       const startTime = props.newStartTime; // iso string
-      if (props.locationTimezone) {
-        const startTimeDate = new Date(startTime);
-        updateBody.startTime = startTimeDate;
-      } else {
-        updateBody.startTime = startTime;
-      }
+      updateBody.startTime = startTime;
     }
     if (props.type === "cancel") {
       updateBody.appointmentStatus = "cancelled";
@@ -360,7 +319,7 @@ export const updateAppointment = async (props: UpdateGHLAppointment) => {
     if (response.ok) {
       const appointment = await prisma.meeting.findUnique({
         where: {
-          id: props.appointmentId,
+          id: props.rescheduleOrCancelId,
         },
       });
       if (appointment) {
@@ -380,7 +339,8 @@ export const updateAppointment = async (props: UpdateGHLAppointment) => {
         await bookMeeting({
           businessId: props.businessId,
           startTime: scheduledAt,
-          contactId: props.contactId || "",
+
+          leadId: "",
           agencyId: props.agencyId,
           meetingId: appointmentData.id,
           caledarType: CALENDAR_TYPE.GHL,

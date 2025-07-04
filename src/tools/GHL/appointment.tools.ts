@@ -12,42 +12,42 @@ import {
   rescheduleAppointmentSchema,
   cancelAppointmentSchema,
   getAppointmentsSchema,
+  checkAvailabilitySchema,
 } from "../../schema/GHL/appointment.schema.js";
+import { getLeadById } from "../../utils/integration.util.js";
 
 export const appointmentTools = [
   {
     name: "check_availability",
-    description: `Ask the user for a date (e.g., 'July 1, 2024'). If the user says 'today' or 'tomorrow', always resolve it to the actual date at the time of the request. Only require a date and timezone. The tool will check available slots for the given date and the next day (2 days total). Respond with available slots in a user-friendly format, e.g., 'Available on July 1, Monday: 10am-1pm, 4pm-6pm'.`,
-    arguments: [],
+    description:
+      "Use this tool to check availability. Reference the Today's date-time when if user say tomorrow or next week etc. If the date is not provided use the current date for startDate. The timezone must be iana format, example: Aisa/Kolkata",
     inputSchema: {
       type: "object",
       properties: {
-        date: {
+        startDate: {
           type: "string",
           description:
-            "The date to check availability for, in YYYY-MM-DD format. If the user says 'today' or 'tomorrow', use the actual date at the time of the request. Must be called 'date' in the arguments.",
+            "Start date to check availability from, if user said tomorrow or next day - always reference the Today's date. If today is 24th november 2025, it means tomorrow is 25th november 2025. Format: YYYY-MM-DD. Must be called 'startDate' in the arguments. If the date is not clear use the current date for startDate",
         },
         timezone: {
           type: "string",
           description:
-            "Timezone of the appointment. Must be called 'timezone' in the arguments.",
+            "Timezone of the appointment. The timezone must be iana format, example: Aisa/Kolkata and Must be called 'timezone' in the arguments. If the timezone is not clear ask the user their country and city to determine the timezone.",
         },
-        primaryAgentId: {
+        leadId: {
           type: "string",
           description:
-            "primaryAgentId from available details. Always include this from 'Available Details'. Must be called 'primaryAgentId' in the arguments.",
-          required: true,
+            "leadId from available details. Always include this from 'Available Details'. Must be called 'leadId' in the arguments.",
         },
       },
-      required: ["date", "timezone", "primaryAgentId"],
+      required: ["startDate", "timezone", "leadId"],
       additionalProperties: false,
     },
   },
   {
     name: "book_appointment",
     description:
-      "Use this tool to book an appointment once the user provided the dateTime to book. If date and time are provided separately, combine them into a single ISO 8601 dateTime string. Prefer dateTime if available.",
-    arguments: [],
+      "Use this tool to book an appointment once the user provided the dateTime to book.",
     inputSchema: {
       type: "object",
       properties: {
@@ -59,124 +59,138 @@ export const appointmentTools = [
         timezone: {
           type: "string",
           description:
-            "'timezone' of the appointment in iana format, example: Asia/Kolkata. Must be called 'timezone' in the arguments.",
+            "Timezone of the appointment. The timezone must be iana format, example: Aisa/Kolkata and Must be called 'timezone' in the arguments. If the timezone is not clear ask the user their country and city to determine the timezone.",
         },
-        primaryAgentId: {
+        leadId: {
           type: "string",
           description:
-            "primaryAgentId from available details. Always include this from 'Available Details'. Must be called 'primaryAgentId' in the arguments.",
-          required: true,
-        },
-        contactId: {
-          type: "string",
-          description:
-            "contactId from available details. Always include this from 'Available Details'. Must be called 'contactId' in the arguments.",
-          required: true,
+            "leadId from available details. Always include this from 'Available Details'. Must be called 'leadId' in the arguments.",
         },
       },
-      required: ["dateTime", "timezone", "primaryAgentId", "contactId"],
+      required: ["dateTime", "timezone", "leadId"],
       additionalProperties: false,
     },
   },
-
   {
     name: "reschedule_appointment",
-    description: `Reschedule an existing appointment to a new date and time.
-  Rescheduling Guidelines:
-  - Firslty, use the get_appointments tool to get the list and ask them to select the appointment they wish to reschedule.
-  - if the user provide a new date-time, make sure you have the appointmentId from the get_appointments tool response.`,
-    arguments: [],
+    description: `Reschedule an existing appointment to a new date and time. You need 'rescheduleOrCancelId' to rescheduel the appointment. Either you have it from the recently booked appointment response, or you can call the get_appointments tool to list the appointments and ask the user to select the appointment they wish to reschedule. Required fields: 'rescheduleOrCancelId', 'newStartTime', 'leadId'`,
     inputSchema: {
       type: "object",
       properties: {
-        appointmentId: {
+        rescheduleOrCancelId: {
           type: "string",
           description:
-            "Copy the exact value after 'appointmentId: ' from get_appointments response. Example: if you see 'appointmentId: abc123xyz', use 'abc123xyz'. MUST be called 'appointmentId' in the arguments. Must be called 'appointmentId' in the arguments.",
+            "Use the exact value after 'rescheduleOrCancelId: ', example: 'xLCTaSvv2bGm7EfTjQ0C'. MUST be called 'rescheduleOrCancelId' in the arguments. Do not use numbers like 1,2,3 etc. Use the exact value from the rescheduleOrCancelId. ",
         },
         newStartTime: {
           type: "string",
-          description: `The new start time in ISO 8601 format with timezone offset. (e.g., '2025-07-04T12:30:00+05:30'). Always convert user input to this format. Must be called 'newStartTime' in the arguments.`,
+          description: `The new start time in ISO 8601 format. Must be called 'newStartTime' in the arguments.`,
         },
-        contactId: {
+        leadId: {
           type: "string",
           description:
-            "contactId from available details. Always include this from 'Available Details'. Must be called 'contactId' in the arguments.",
+            "leadId from available details. Always include this from 'Available Details'. Must be called 'leadId' in the arguments.",
         },
-        required: ["appointmentId", "newStartTime", "contactId"],
       },
+      required: ["rescheduleOrCancelId", "newStartTime", "leadId"],
+      additionalProperties: false,
     },
   },
   {
     name: "cancel_appointment",
     description:
       "cancel an existing appointment to a new date and time. If the user does not specify which appointment to cancel, first use the get_appointments tool to retrieve all appointments, then clearly ask the user to select the specific appointment they wish to cancel before proceeding.",
-    arguments: [],
     inputSchema: {
       type: "object",
       properties: {
-        appointmentId: {
+        rescheduleOrCancelId: {
           type: "string",
           description:
-            "Copy the exact value after 'appointmentId: ' from get_appointments response. Example: if you see 'appointmentId: abc123xyz', use 'abc123xyz'. MUST be called 'appointmentId' in the arguments. Must be called 'appointmentId' in the arguments.",
+            "Use the exact value after 'rescheduleOrCancelId: ', example: 'abcdxyq123'. MUST be called 'rescheduleOrCancelId' in the arguments.",
         },
-
-        contactId: {
+        leadId: {
           type: "string",
           description:
-            "contactId from available details. Always include this from 'Available Details'. Must be called 'contactId' in the arguments.",
+            "leadId from available details. Always include this from 'Available Details'. Must be called 'leadId' in the arguments.",
         },
-        required: ["appointmentId", "contactId"],
       },
+      required: ["rescheduleOrCancelId", "leadId"],
+      additionalProperties: false,
     },
   },
   {
     name: "get_appointments",
     description: "Use this tool to list the user's appointments",
-    arguments: [],
     inputSchema: {
       type: "object",
       properties: {
-        contactId: {
+        leadId: {
           type: "string",
           description:
-            "contactId from available details. Always include this from 'Available Details'",
+            "leadId from available details. Always include this from 'Available Details'. Must be called 'leadId' in the arguments.",
         },
-        required: ["contactId"],
       },
+      required: ["leadId"],
+      additionalProperties: false,
     },
   },
 ];
 
 export async function handleCheckAvailability(request: CallToolRequest) {
   try {
-    const args = request.params.arguments as {
-      date: string;
-      timezone: string;
-      primaryAgentId: string;
-    };
-    console.log("check availability args", args);
-    if (!args.date || !args.timezone) {
+    const rawArgs = request.params.arguments as any;
+
+    // Extract API key from injected arguments
+    const apiKey = rawArgs._apiKey;
+    if (!apiKey) {
       return {
         content: [
           {
             type: "text",
-            text: "Please provide a date (YYYY-MM-DD) and timezone to check availability.",
+            text: "Authentication failed: No API key provided",
           },
         ],
       };
     }
-
-    // Convert date to timestamp (start of day)
-    const startDate = new Date(args.date).getTime();
-    const date = startDate;
-    const primaryAgentId = (args.primaryAgentId as string) || "";
-    // Call the business logic with startTime and timezone
-    const primaryAgent = await getPrimaryAgent(primaryAgentId);
+    // Remove _apiKey from args before validation
+    const { _apiKey, ...cleanArgs } = rawArgs;
+    console.log({ rawArgs });
+    // Validate the input using Zod
+    const result = checkAvailabilitySchema.safeParse(cleanArgs);
+    if (!result.success) {
+      // Format Zod errors into a readable message
+      const errorMessages = result.error.errors
+        .map((err) => `${err.path.join(".")}: ${err.message}`)
+        .join(", ");
+      return {
+        content: [
+          {
+            type: "text",
+            text: `Failed to check availability: ${errorMessages}. Please provide the missing or incorrect information.`,
+          },
+        ],
+      };
+    }
+    const args = result.data;
+    console.log({ parsedArgs: args });
+    const lead = await getLeadById(args.leadId);
+    const ghlAccessToken = lead?.Business.BusinessIntegration?.ghlAccessToken;
+    const ghlContactId = lead?.ghlContactId;
+    const ghlCalendarId = lead?.Conversation?.ActiveAgent?.ghlCalendarId;
+    if (!ghlAccessToken || !ghlContactId || !ghlCalendarId) {
+      return {
+        content: [
+          {
+            type: "text",
+            text: "Failed to get appointments. Please try again.",
+          },
+        ],
+      };
+    }
     const slots = await getAvailableChunkedSlots({
-      input: { date, timezone: args.timezone },
-      ghlAccessToken: String(request.params?.arguments?._ghlAccessToken || ""),
-      ghlCalendarId: primaryAgent?.ghlCalendarId || undefined,
+      input: args,
+      ghlAccessToken,
+      ghlCalendarId,
     });
 
     return {
@@ -202,10 +216,27 @@ export async function handleCheckAvailability(request: CallToolRequest) {
 
 export async function handleBookAppointment(request: CallToolRequest) {
   try {
-    const args = request.params.arguments as any;
-    // Validate input using Zod schema
-    const result = bookAppointmentSchema.safeParse(args);
+    const rawArgs = request.params.arguments as any;
+
+    // Extract API key from injected arguments
+    const apiKey = rawArgs._apiKey;
+    if (!apiKey) {
+      return {
+        content: [
+          {
+            type: "text",
+            text: "Authentication failed: No API key provided",
+          },
+        ],
+      };
+    }
+    // Remove _apiKey from args before validation
+    const { _apiKey, ...cleanArgs } = rawArgs;
+    console.log({ rawArgs });
+    // Validate the input using Zod
+    const result = bookAppointmentSchema.safeParse(cleanArgs);
     if (!result.success) {
+      // Format Zod errors into a readable message
       const errorMessages = result.error.errors
         .map((err) => `${err.path.join(".")}: ${err.message}`)
         .join(", ");
@@ -213,60 +244,46 @@ export async function handleBookAppointment(request: CallToolRequest) {
         content: [
           {
             type: "text",
-            text: `Failed to book appointment: ${errorMessages}. Please provide the missing or incorrect information.`,
+            text: `Failed to check availability: ${errorMessages}. Please provide the missing or incorrect information.`,
           },
         ],
       };
     }
-    const validArgs = result.data;
-    const primaryAgentId = validArgs.primaryAgentId || "";
-    const primaryAgent = await getPrimaryAgent(primaryAgentId);
-    const lead = await prisma.lead.findUnique({
-      where: {
-        id: validArgs.contactId,
-      },
-      include: {
-        Business: {
-          include: {
-            BusinessIntegration: true,
-          },
-        },
-      },
-    });
-    // Combine date and time if dateTime is not provided (fallback logic)
-    let startTime = validArgs.dateTime;
-    if (!startTime && validArgs.date && validArgs.time) {
-      startTime = combineDateAndTime(validArgs.date, validArgs.time);
-    }
-    if (!startTime) {
+    const args = result.data;
+    console.log({ parsedArgs: args });
+    const lead = await getLeadById(args.leadId);
+    const ghlAccessToken = lead?.Business.BusinessIntegration?.ghlAccessToken;
+    const ghlLocationId = lead?.Business.BusinessIntegration?.ghlLocationId;
+    const ghlContactId = lead?.ghlContactId;
+    const ghlCalendarId = lead?.Conversation?.ActiveAgent?.ghlCalendarId;
+    if (!ghlAccessToken || !ghlContactId || !ghlCalendarId || !ghlLocationId) {
       return {
         content: [
           {
             type: "text",
-            text: `Missing valid dateTime or (date + time) for booking. Please provide a valid date and time.`,
+            text: "Failed to get appointments. Please try again.",
           },
         ],
       };
     }
+
     const resultBook = await bookAppointment({
-      calendarId: primaryAgent?.ghlCalendarId || "",
-      contactId: validArgs.contactId,
-      startTime,
-      ghlAccessToken: lead?.Business?.BusinessIntegration?.ghlAccessToken || "",
-      ghlLocationId:
-        primaryAgent?.Business?.BusinessIntegration?.ghlLocationId || "",
-      agencyId: primaryAgent?.agencyId || "",
-      businessId: primaryAgent?.Business?.id || "",
-      ghlContactId: lead?.ghlContactId || "",
+      input: args,
+      ghlCalendarId,
+      ghlAccessToken,
+      businessId: lead.businessId,
+      agencyId: lead.agencyId,
+      ghlContactId,
+      ghlLocationId,
     });
     if (resultBook.success) {
       return {
         content: [
           {
             type: "text",
-            text: `Appointment booked successfully! Details: ${JSON.stringify(
-              resultBook.data
-            )}`,
+            text: `Appointment booked successfully!. rescheduleOrCancelId: ${
+              resultBook.data?.id
+            } Details: ${JSON.stringify(resultBook.data)}`,
           },
         ],
       };
@@ -296,10 +313,27 @@ export async function handleBookAppointment(request: CallToolRequest) {
 
 export async function handleRescheduleAppointment(request: CallToolRequest) {
   try {
-    const args = request.params.arguments as any;
-    // Validate input using Zod schema
-    const result = rescheduleAppointmentSchema.safeParse(args);
+    const rawArgs = request.params.arguments as any;
+    console.log({ rescheduleRawArgs: rawArgs });
+
+    // Extract API key from injected arguments
+    const apiKey = rawArgs._apiKey;
+    if (!apiKey) {
+      return {
+        content: [
+          {
+            type: "text",
+            text: "Authentication failed: No API key provided",
+          },
+        ],
+      };
+    }
+    // Remove _apiKey from args before validation
+    const { _apiKey, ...cleanArgs } = rawArgs;
+    // Validate the input using Zod
+    const result = rescheduleAppointmentSchema.safeParse(cleanArgs);
     if (!result.success) {
+      // Format Zod errors into a readable message
       const errorMessages = result.error.errors
         .map((err) => `${err.path.join(".")}: ${err.message}`)
         .join(", ");
@@ -307,34 +341,37 @@ export async function handleRescheduleAppointment(request: CallToolRequest) {
         content: [
           {
             type: "text",
-            text: `Failed to reschedule appointment: ${errorMessages}. Please provide the missing or incorrect information.`,
+            text: `Failed to check availability: ${errorMessages}. Please provide the missing or incorrect information.`,
           },
         ],
       };
     }
-    const validArgs = result.data;
-    const lead = await prisma.lead.findUnique({
-      where: {
-        id: validArgs.contactId,
-      },
-      include: {
-        Business: {
-          include: {
-            BusinessIntegration: true,
+    const args = result.data;
+    console.log({ parsedArgs: args });
+    const lead = await getLeadById(args.leadId);
+    const ghlAccessToken = lead?.Business.BusinessIntegration?.ghlAccessToken;
+    const ghlLocationId = lead?.Business.BusinessIntegration?.ghlLocationId;
+    const ghlContactId = lead?.ghlContactId;
+    const ghlCalendarId = lead?.Conversation?.ActiveAgent?.ghlCalendarId;
+    if (!ghlAccessToken || !ghlContactId || !ghlCalendarId || !ghlLocationId) {
+      return {
+        content: [
+          {
+            type: "text",
+            text: "Failed to get appointments. Please try again.",
           },
-        },
-      },
-    });
-    const ghlAccessToken =
-      lead?.Business?.BusinessIntegration?.ghlAccessToken || "";
+        ],
+      };
+    }
+
     const response = await updateAppointment({
-      appointmentId: validArgs.appointementId,
+      rescheduleOrCancelId: args.rescheduleOrCancelId,
       type: "reschedule",
-      newStartTime: validArgs.newStartTime,
+      newStartTime: args.newStartTime,
       ghlAccessToken,
       agencyId: lead?.agencyId || "",
       businessId: lead?.businessId || "",
-      contactId: validArgs.contactId,
+      leadId: args.leadId,
     });
     if (response.success) {
       return {
@@ -391,7 +428,7 @@ export async function handleCancelAppointment(request: CallToolRequest) {
     const validArgs = result.data;
     const lead = await prisma.lead.findUnique({
       where: {
-        id: validArgs.contactId,
+        id: validArgs.leadId,
       },
       include: {
         Business: {
@@ -402,12 +439,12 @@ export async function handleCancelAppointment(request: CallToolRequest) {
       },
     });
     const response = await updateAppointment({
-      appointmentId: validArgs.appointmentId,
+      rescheduleOrCancelId: validArgs.rescheduleOrCancelId,
       type: "cancel",
       ghlAccessToken: lead?.Business?.BusinessIntegration?.ghlAccessToken || "",
       agencyId: lead?.agencyId || "",
       businessId: lead?.businessId || "",
-      contactId: validArgs.contactId,
+      leadId: validArgs.leadId,
     });
     if (response.success) {
       return {
@@ -445,10 +482,26 @@ export async function handleCancelAppointment(request: CallToolRequest) {
 }
 export async function handleGetAppointments(request: CallToolRequest) {
   try {
-    const args = request.params.arguments as any;
-    // Validate input using Zod schema
-    const result = getAppointmentsSchema.safeParse(args);
+    const rawArgs = request.params.arguments as any;
+
+    // Extract API key from injected arguments
+    const apiKey = rawArgs._apiKey;
+    if (!apiKey) {
+      return {
+        content: [
+          {
+            type: "text",
+            text: "Authentication failed: No API key provided",
+          },
+        ],
+      };
+    }
+    // Remove _apiKey from args before validation
+    const { _apiKey, ...cleanArgs } = rawArgs;
+    // Validate the input using Zod
+    const result = getAppointmentsSchema.safeParse(cleanArgs);
     if (!result.success) {
+      // Format Zod errors into a readable message
       const errorMessages = result.error.errors
         .map((err) => `${err.path.join(".")}: ${err.message}`)
         .join(", ");
@@ -456,27 +509,30 @@ export async function handleGetAppointments(request: CallToolRequest) {
         content: [
           {
             type: "text",
-            text: `Failed to get appointments: ${errorMessages}. Please provide the missing or incorrect information.`,
+            text: `Failed to check availability: ${errorMessages}. Please provide the missing or incorrect information.`,
           },
         ],
       };
     }
-    const validArgs = result.data;
-    const lead = await prisma.lead.findUnique({
-      where: {
-        id: validArgs.contactId,
-      },
-      include: {
-        Business: {
-          include: {
-            BusinessIntegration: true,
+    const args = result.data;
+
+    const lead = await getLeadById(args.leadId);
+    const ghlAccessToken = lead?.Business.BusinessIntegration?.ghlAccessToken;
+    const ghlContactId = lead?.ghlContactId;
+    if (!ghlAccessToken || !ghlContactId) {
+      return {
+        content: [
+          {
+            type: "text",
+            text: "Failed to get appointments. Please try again.",
           },
-        },
-      },
-    });
+        ],
+      };
+    }
+
     const appointments = await getAppointments({
-      ghlContactId: lead?.ghlContactId || "",
-      ghlAccessToken: lead?.Business?.BusinessIntegration?.ghlAccessToken || "",
+      ghlContactId,
+      ghlAccessToken: ghlAccessToken || "",
     });
     if (appointments.success) {
       return {
