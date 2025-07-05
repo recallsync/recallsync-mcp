@@ -13,7 +13,11 @@ export const getLeadById = async (id: string) => {
       },
       Conversation: {
         include: {
-          ActiveAgent: true,
+          ActiveAgent: {
+            include: {
+              CalenderIntegration: true,
+            },
+          },
         },
       },
     },

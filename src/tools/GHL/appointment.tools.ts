@@ -20,7 +20,7 @@ export const appointmentTools = [
   {
     name: "check_availability",
     description:
-      "Use this tool to check availability. Reference the Today's date-time when if user say tomorrow or next week etc. If the date is not provided use the current date for startDate. The timezone must be iana format, example: Aisa/Kolkata",
+      "Use this tool to check availability. Reference the Today's date-time when if user say tomorrow or next week etc. If the date is not provided use the current date for startDate. The timezone must be iana format, example: Aisa/Kolkata. If the user does not provide the timezone, the tool will use the default timezone of the lead but timezone should be in IANA format e.g. Asia/Kolkata",
     inputSchema: {
       type: "object",
       properties: {
@@ -32,7 +32,7 @@ export const appointmentTools = [
         timezone: {
           type: "string",
           description:
-            "Timezone of the appointment. The timezone must be iana format, example: Aisa/Kolkata and Must be called 'timezone' in the arguments. If the timezone is not clear ask the user their country and city to determine the timezone.",
+            "Timezone of the appointment. The timezone must be IANA format, example: Aisa/Kolkata and Must be called 'timezone' in the arguments. If the timezone is not clear ask the user their country and city to determine the timezone.",
         },
         leadId: {
           type: "string",
@@ -154,7 +154,7 @@ export async function handleCheckAvailability(request: CallToolRequest) {
     }
     // Remove _apiKey from args before validation
     const { _apiKey, ...cleanArgs } = rawArgs;
-    console.log({ rawArgs });
+    console.log({ checkAvailabilityRawArgs: rawArgs });
     // Validate the input using Zod
     const result = checkAvailabilitySchema.safeParse(cleanArgs);
     if (!result.success) {
@@ -250,7 +250,7 @@ export async function handleBookAppointment(request: CallToolRequest) {
       };
     }
     const args = result.data;
-    console.log({ parsedArgs: args });
+    console.log({ parsedMeetingBookArgs: args });
     const lead = await getLeadById(args.leadId);
     const ghlAccessToken = lead?.Business.BusinessIntegration?.ghlAccessToken;
     const ghlLocationId = lead?.Business.BusinessIntegration?.ghlLocationId;
@@ -275,6 +275,8 @@ export async function handleBookAppointment(request: CallToolRequest) {
       agencyId: lead.agencyId,
       ghlContactId,
       ghlLocationId,
+      previousTimezone: lead.ianaTimezone,
+      leadId: args.leadId,
     });
     if (resultBook.success) {
       return {
@@ -353,6 +355,7 @@ export async function handleRescheduleAppointment(request: CallToolRequest) {
     const ghlLocationId = lead?.Business.BusinessIntegration?.ghlLocationId;
     const ghlContactId = lead?.ghlContactId;
     const ghlCalendarId = lead?.Conversation?.ActiveAgent?.ghlCalendarId;
+    console.log({ ghlAccessToken, ghlContactId, ghlCalendarId, ghlLocationId });
     if (!ghlAccessToken || !ghlContactId || !ghlCalendarId || !ghlLocationId) {
       return {
         content: [
@@ -515,16 +518,17 @@ export async function handleGetAppointments(request: CallToolRequest) {
       };
     }
     const args = result.data;
-
+    console.log({ args });
     const lead = await getLeadById(args.leadId);
     const ghlAccessToken = lead?.Business.BusinessIntegration?.ghlAccessToken;
     const ghlContactId = lead?.ghlContactId;
+    console.log({ ghlAccessToken, ghlContactId });
     if (!ghlAccessToken || !ghlContactId) {
       return {
         content: [
           {
             type: "text",
-            text: "Failed to get appointments. Please try again.",
+            text: "Failed to get appointments - no access token or contact id. Please try again.",
           },
         ],
       };
@@ -532,7 +536,9 @@ export async function handleGetAppointments(request: CallToolRequest) {
 
     const appointments = await getAppointments({
       ghlContactId,
-      ghlAccessToken: ghlAccessToken || "",
+      ghlAccessToken: ghlAccessToken,
+      timezone: lead.ianaTimezone,
+      locationId: lead.Business.BusinessIntegration?.ghlLocationId || "",
     });
     if (appointments.success) {
       return {

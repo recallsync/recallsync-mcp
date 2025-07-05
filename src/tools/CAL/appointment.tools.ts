@@ -20,6 +20,7 @@ import {
 } from "../../controller/CAL/cal.appointment.js";
 import {
   getIntegration,
+  getLeadById,
   getPrimaryAgent,
 } from "../../utils/integration.util.js";
 import { prisma } from "../../lib/prisma.js";
@@ -43,13 +44,13 @@ export const appointmentTools = [
           description:
             "Timezone of the appointment. Must be called 'timezone' in the arguments.",
         },
-        primaryAgentId: {
+        leadId: {
           type: "string",
           description:
-            "primaryAgentId from available details. Always include this from 'Available Details'. Must be called 'primaryAgentId' in the arguments.",
+            "leadId from available details. Always include this from 'Available Details'. Must be called 'leadId' in the arguments.",
         },
       },
-      required: ["startDate", "timezone", "primaryAgentId"],
+      required: ["startDate", "timezone", "leadId"],
       additionalProperties: false,
     },
   },
@@ -61,15 +62,15 @@ export const appointmentTools = [
     inputSchema: {
       type: "object",
       properties: {
-        startTime: {
+        dateTime: {
           type: "string",
           description:
-            "start time of the appointment, if user said tomorrow or next day - always reference the Today's date. If today is 24th november 2025, it means tomorrow is 25th november 2025. Format: ISO 8601",
+            "date time of the appointment, if user said tomorrow or next day - always reference the Today's date. If today is 24th november 2025, it means tomorrow is 25th november 2025. Format: ISO 8601. Must be called 'dateTime' in the arguments.",
         },
         timezone: {
           type: "string",
           description:
-            "'timezone' of the appointment in iana format, example: Asia/Kolkata",
+            "Timezone of the appointment. The timezone must be iana format, example: Aisa/Kolkata and Must be called 'timezone' in the arguments. If the timezone is not clear ask the user their country and city to determine the timezone.",
         },
         name: {
           type: "string",
@@ -79,80 +80,63 @@ export const appointmentTools = [
           type: "string",
           description: "Email of the attendee",
         },
-        primaryAgentId: {
+        leadId: {
           type: "string",
           description:
-            "primaryAgentId from available details. Always include this from 'Available Details'",
-          required: true,
-        },
-        contactId: {
-          type: "string",
-          description:
-            "contactId from available details. Always include this from 'Available Details'",
-          required: true,
+            "leadId from available details. Always include this from 'Available Details'. Must be called 'leadId' in the arguments.",
         },
       },
-      required: [
-        "startTime",
-        "timezone",
-        "name",
-        "email",
-        "primaryAgentId",
-        "contactId",
-      ],
+      required: ["dateTime", "timezone", "name", "email", "leadId"],
       additionalProperties: false,
     },
   },
   {
     name: "reschedule_appointment",
     description:
-      "Use this tool to reschedule an appointment once the user provided the date-time to reschedule. Always call the get_appointments tool to get the list of meetings. if the user have not said which meeting to reschedule, ask the user to provide the meeting to reschedule. Alaways use the rescheduleOrCancelUid from the get_appointments response selected meeting.",
+      "Use this tool to reschedule an appointment once the user provided the date-time to reschedule. Always call the get_appointments tool to get the list of meetings. if the user have not said which meeting to reschedule, ask the user to provide the meeting to reschedule. Alaways use the rescheduleOrCancelId from the get_appointments response selected meeting.",
     arguments: [],
     inputSchema: {
       type: "object",
       properties: {
-        updatedStartTime: {
+        rescheduleOrCancelId: {
           type: "string",
           description:
-            "start time of the rescheduled appointment - the updated time of the appointment, if user said tomorrow or next day - always reference the Today's date. If today is 24th november 2025, it means tomorrow is 25th november 2025. Format: ISO 8601. MUST be called 'updatedStartTime' in the arguments.",
+            "Use the exact value after 'rescheduleOrCancelId: ', example: 'xLCTaSvv2bGm7EfTjQ0C'. MUST be called 'rescheduleOrCancelId' in the arguments. Do not use numbers like 1,2,3 etc. Use the exact value from the rescheduleOrCancelId. ",
         },
-        rescheduleOrCancelUid: {
+        newStartTime: {
           type: "string",
-          description:
-            "Copy the exact value after 'rescheduleOrCancelUid: ' from get_appointments response. Example: if you see 'rescheduleOrCancelUid: abc123xyz', use 'abc123xyz'. MUST be called 'rescheduleOrCancelUid' in the arguments.",
+          description: `The new start time in ISO 8601 format. Must be called 'newStartTime' in the arguments.`,
         },
-        primaryAgentId: {
+        leadId: {
           type: "string",
           description:
-            "primaryAgentId from available details. Always include this from 'Available Details'",
-          required: true,
+            "leadId from available details. Always include this from 'Available Details'. Must be called 'leadId' in the arguments.",
         },
       },
-      required: ["updatedStartTime", "rescheduleOrCancelUid", "primaryAgentId"],
+      required: ["rescheduleOrCancelId", "newStartTime", "leadId"],
       additionalProperties: false,
     },
   },
   {
     name: "cancel_appointment",
     description:
-      "Use this tool to cancel an appointment once the user provided the date-time to cancel. Always call the get_appointments tool to get the list of meetings. if the user have not said which meeting to cancel, ask the user to provide the meeting to cancel. Alaways use the rescheduleOrCancelUid from the get_appointments response selected meeting.",
+      "Use this tool to cancel an appointment once the user provided the date-time to cancel. Always call the get_appointments tool to get the list of meetings. if the user have not said which meeting to cancel, ask the user to provide the meeting to cancel. Alaways use the rescheduleOrCancelId from the get_appointments response selected meeting.",
     arguments: [],
     inputSchema: {
       type: "object",
       properties: {
-        rescheduleOrCancelUid: {
+        rescheduleOrCancelId: {
           type: "string",
           description:
-            "Copy the exact value after 'rescheduleOrCancelUid: ' from get_appointments response. Example: if you see 'rescheduleOrCancelUid: abc123xyz', use 'abc123xyz'. MUST be called 'rescheduleOrCancelUid' in the arguments.",
+            "Use the exact value after 'rescheduleOrCancelId: ', example: 'abcdxyq123'. MUST be called 'rescheduleOrCancelId' in the arguments.",
         },
-        primaryAgentId: {
+        leadId: {
           type: "string",
           description:
-            "primaryAgentId from available details. Always include this from 'Available Details'",
-          required: true,
+            "leadId from available details. Always include this from 'Available Details'. Must be called 'leadId' in the arguments.",
         },
       },
-      required: ["rescheduleOrCancelUid", "primaryAgentId"],
+      required: ["rescheduleOrCancelId", "leadId"],
       additionalProperties: false,
     },
   },
@@ -166,16 +150,15 @@ export const appointmentTools = [
         email: {
           type: "string",
           description:
-            "Email of the user, MUST be called 'email' in the arguments.",
+            "Email of the user 'email' from available details, MUST be called 'email' in the arguments.",
         },
-        primaryAgentId: {
+        leadId: {
           type: "string",
           description:
-            "primaryAgentId from available details. Always include this from 'Available Details'",
-          required: true,
+            "leadId from available details. Always include this from 'Available Details'. Must be called 'leadId' in the arguments.",
         },
       },
-      required: ["email", "primaryAgentId"],
+      required: ["email", "leadId"],
       additionalProperties: false,
     },
   },
@@ -197,36 +180,11 @@ export async function handleCheckAvailability(request: CallToolRequest) {
         ],
       };
     }
-
     // Remove _apiKey from args before validation
     const { _apiKey, ...cleanArgs } = rawArgs;
-    const args = cleanArgs as CheckAvailabilityRequest;
-
+    console.log({ rawArgs });
     // Validate the input using Zod
-    const result = checkAvailabilitySchema.safeParse(args);
-    const integration = await getIntegration(apiKey);
-    if (!integration) {
-      return {
-        content: [
-          {
-            type: "text",
-            text: "Integration not found",
-          },
-        ],
-      };
-    }
-    const agent = await getPrimaryAgent(args.primaryAgentId);
-    if (!agent?.CalenderIntegration) {
-      return {
-        content: [
-          {
-            type: "text",
-            text: "Primary agent not found",
-          },
-        ],
-      };
-    }
-
+    const result = checkAvailabilitySchema.safeParse(cleanArgs);
     if (!result.success) {
       // Format Zod errors into a readable message
       const errorMessages = result.error.errors
@@ -241,11 +199,29 @@ export async function handleCheckAvailability(request: CallToolRequest) {
         ],
       };
     }
+    const args = result.data;
+    console.log({ parsedArgs: args });
+    const lead = await getLeadById(args.leadId);
+    const calenderIntegration =
+      lead?.Conversation?.ActiveAgent?.CalenderIntegration;
+    console.log({
+      calenderIntegration,
+    });
+    if (!calenderIntegration) {
+      return {
+        content: [
+          {
+            type: "text",
+            text: "Failed to get appointments. Please try again.",
+          },
+        ],
+      };
+    }
     console.log("checking availability");
     // compact ai formatted response
     const response = await checkAvailability({
       args: result.data,
-      calendar: agent.CalenderIntegration,
+      calendar: calenderIntegration,
     });
     console.log("availability checked", response);
     return {
@@ -289,37 +265,11 @@ export async function handleBookAppointment(request: CallToolRequest) {
         ],
       };
     }
-
     // Remove _apiKey from args before validation
     const { _apiKey, ...cleanArgs } = rawArgs;
-    const args = cleanArgs as BookAppointmentRequest;
-    console.log("book appointment args", args);
+    console.log({ rawArgs });
     // Validate the input using Zod
-    const result = bookAppointmentSchema.safeParse(args);
-    console.log("book appointment parsing result", result);
-    const integration = await getIntegration(apiKey);
-    if (!integration) {
-      return {
-        content: [
-          {
-            type: "text",
-            text: "Integration not found",
-          },
-        ],
-      };
-    }
-    const agent = await getPrimaryAgent(args.primaryAgentId);
-    if (!agent?.CalenderIntegration) {
-      return {
-        content: [
-          {
-            type: "text",
-            text: "Primary agent not found",
-          },
-        ],
-      };
-    }
-
+    const result = bookAppointmentSchema.safeParse(cleanArgs);
     if (!result.success) {
       // Format Zod errors into a readable message
       const errorMessages = result.error.errors
@@ -334,21 +284,29 @@ export async function handleBookAppointment(request: CallToolRequest) {
         ],
       };
     }
+    const args = result.data;
+    console.log({ parsedArgs: args });
+    const lead = await getLeadById(args.leadId);
+    const calenderIntegration =
+      lead?.Conversation?.ActiveAgent?.CalenderIntegration;
+    if (!calenderIntegration) {
+      return {
+        content: [
+          {
+            type: "text",
+            text: "Failed to book appointment. Please try again.",
+          },
+        ],
+      };
+    }
     console.log("booking appointment");
-    //TODO: leter we can get the lead from workflow , and fing ghlcontactId from it
-    const lead = await prisma.lead.findFirst({
-      where: {
-        ghlContactId: args.contactId,
-      },
-    });
     // compact ai formatted response
     const response = await bookAppointment({
       args: result.data,
-      calendar: agent.CalenderIntegration,
-      businessName: integration.Business.name,
-      businessId: agent.businessId,
-      agencyId: agent.agencyId,
-      contactId: lead?.id || "",
+      calendar: calenderIntegration,
+      businessName: lead?.Business.name,
+      businessId: lead?.businessId,
+      agencyId: lead?.Business.agencyId,
     });
     console.log("booking appointment", response);
     return {
@@ -390,37 +348,11 @@ export async function handleRescheduleAppointment(request: CallToolRequest) {
         ],
       };
     }
-
     // Remove _apiKey from args before validation
     const { _apiKey, ...cleanArgs } = rawArgs;
-    const args = cleanArgs as RescheduleAppointmentRequest;
-    console.log("reschedule appointment args", args);
+    console.log({ rawArgs });
     // Validate the input using Zod
-    const result = rescheduleAppointmentSchema.safeParse(args);
-    console.log("reschedule appointment parsing result", result);
-    const integration = await getIntegration(apiKey);
-    if (!integration) {
-      return {
-        content: [
-          {
-            type: "text",
-            text: "Integration not found",
-          },
-        ],
-      };
-    }
-    const agent = await getPrimaryAgent(args.primaryAgentId);
-    if (!agent?.CalenderIntegration) {
-      return {
-        content: [
-          {
-            type: "text",
-            text: "Primary agent not found",
-          },
-        ],
-      };
-    }
-
+    const result = rescheduleAppointmentSchema.safeParse(cleanArgs);
     if (!result.success) {
       // Format Zod errors into a readable message
       const errorMessages = result.error.errors
@@ -430,7 +362,22 @@ export async function handleRescheduleAppointment(request: CallToolRequest) {
         content: [
           {
             type: "text",
-            text: `Failed to reschedule appointment: ${errorMessages}. Please provide the missing or incorrect information.`,
+            text: `Failed to check availability: ${errorMessages}. Please provide the missing or incorrect information.`,
+          },
+        ],
+      };
+    }
+    const args = result.data;
+    console.log({ parsedArgs: args });
+    const lead = await getLeadById(args.leadId);
+    const calenderIntegration =
+      lead?.Conversation?.ActiveAgent?.CalenderIntegration;
+    if (!calenderIntegration) {
+      return {
+        content: [
+          {
+            type: "text",
+            text: "Failed to reschedule appointment. Please try again.",
           },
         ],
       };
@@ -439,7 +386,7 @@ export async function handleRescheduleAppointment(request: CallToolRequest) {
     // compact ai formatted response
     const response = await rescheduleAppointment({
       args: result.data,
-      calendar: agent.CalenderIntegration,
+      calendar: calenderIntegration,
     });
     console.log("reschedule appointment", response);
     return {
@@ -467,53 +414,10 @@ export async function handleRescheduleAppointment(request: CallToolRequest) {
 
 export async function handleCancelAppointment(request: CallToolRequest) {
   try {
-    const rawArgs = request.params.arguments as any;
-
-    // Extract API key from injected arguments
-    const apiKey = rawArgs._apiKey;
-    if (!apiKey) {
-      return {
-        content: [
-          {
-            type: "text",
-            text: "Authentication failed: No API key provided",
-          },
-        ],
-      };
-    }
-
-    // Remove _apiKey from args before validation
-    const { _apiKey, ...cleanArgs } = rawArgs;
-    const args = cleanArgs as CancelAppointmentRequest;
-    console.log("cancel appointment args", args);
-    // Validate the input using Zod
+    const args = request.params.arguments as any;
+    // Validate input using Zod schema
     const result = cancelAppointmentSchema.safeParse(args);
-    console.log("cancel appointment parsing result", result);
-    const integration = await getIntegration(apiKey);
-    if (!integration) {
-      return {
-        content: [
-          {
-            type: "text",
-            text: "Integration not found",
-          },
-        ],
-      };
-    }
-    const agent = await getPrimaryAgent(args.primaryAgentId);
-    if (!agent?.CalenderIntegration) {
-      return {
-        content: [
-          {
-            type: "text",
-            text: "Primary agent not found",
-          },
-        ],
-      };
-    }
-
     if (!result.success) {
-      // Format Zod errors into a readable message
       const errorMessages = result.error.errors
         .map((err) => `${err.path.join(".")}: ${err.message}`)
         .join(", ");
@@ -526,11 +430,28 @@ export async function handleCancelAppointment(request: CallToolRequest) {
         ],
       };
     }
+    const validArgs = result.data;
+    const lead = await getLeadById(validArgs.leadId);
+    const calenderIntegration =
+      lead?.Conversation?.ActiveAgent?.CalenderIntegration;
+    if (
+      !lead?.Business?.BusinessIntegration?.ghlAccessToken ||
+      !calenderIntegration
+    ) {
+      return {
+        content: [
+          {
+            type: "text",
+            text: `Failed to cancel appointment. Please provide valid ghlAccessToken for the business.`,
+          },
+        ],
+      };
+    }
     console.log("cancel appointment");
     // compact ai formatted response
     const response = await cancelAppointment({
       args: result.data,
-      calendar: agent.CalenderIntegration,
+      calendar: calenderIntegration,
     });
     console.log("cancel appointment", response);
     return {
@@ -572,37 +493,11 @@ export async function handleGetAppointments(request: CallToolRequest) {
         ],
       };
     }
-
     // Remove _apiKey from args before validation
     const { _apiKey, ...cleanArgs } = rawArgs;
-    const args = cleanArgs as GetCalBookingsRequest;
-    console.log("get appointments args", args);
     // Validate the input using Zod
-    const result = getCalBookingsSchema.safeParse(args);
-    console.log("get appointments parsing result", result);
-    const integration = await getIntegration(apiKey);
-    if (!integration) {
-      return {
-        content: [
-          {
-            type: "text",
-            text: "Integration not found",
-          },
-        ],
-      };
-    }
-    const agent = await getPrimaryAgent(args.primaryAgentId);
-    if (!agent?.CalenderIntegration) {
-      return {
-        content: [
-          {
-            type: "text",
-            text: "Primary agent not found",
-          },
-        ],
-      };
-    }
-
+    console.log({ cleanArgs });
+    const result = getCalBookingsSchema.safeParse(cleanArgs);
     if (!result.success) {
       // Format Zod errors into a readable message
       const errorMessages = result.error.errors
@@ -617,11 +512,28 @@ export async function handleGetAppointments(request: CallToolRequest) {
         ],
       };
     }
+    const args = result.data;
+
+    const lead = await getLeadById(args.leadId);
+
+    const calenderIntegration =
+      lead?.Conversation?.ActiveAgent?.CalenderIntegration;
+    if (!calenderIntegration) {
+      return {
+        content: [
+          {
+            type: "text",
+            text: "Failed to get appointments. Please try again.",
+          },
+        ],
+      };
+    }
+
     console.log("get appointments");
     // compact ai formatted response
     const response = await getCalBookings({
       args: result.data,
-      calendar: agent.CalenderIntegration,
+      calendar: calenderIntegration,
     });
     console.log("get appointments", response);
     return {

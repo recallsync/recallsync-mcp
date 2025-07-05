@@ -15,11 +15,13 @@ interface BookMeetingInput {
   meetingSource: MEETING_SOURCE;
   status: MEETING_STATUS;
   meetingUrl?: string;
+  transaction?: any;
 }
 interface UpdateMeetingInput {
   meetingId: string;
   newStartTime?: Date;
   status: MEETING_STATUS;
+  transaction?: any;
 }
 export const bookMeeting = async ({
   businessId,
@@ -31,10 +33,12 @@ export const bookMeeting = async ({
   meetingSource,
   status,
   meetingUrl,
+  transaction,
 }: BookMeetingInput) => {
   try {
     console.log("book meeting", startTime);
-    const response = await prisma?.meeting.create({
+    const dbClient = transaction || prisma;
+    const response = await dbClient?.meeting.create({
       data: {
         id: meetingId,
         businessId: businessId || "",
@@ -66,6 +70,7 @@ export const updateMeeting = async ({
   meetingId,
   newStartTime,
   status,
+  transaction,
 }: UpdateMeetingInput) => {
   console.log("update meeting", { meetingId, newStartTime, status });
   try {
@@ -80,7 +85,8 @@ export const updateMeeting = async ({
           updatedAt: new Date(),
         };
 
-    const response = await prisma?.meeting.update({
+    const dbClient = transaction || prisma;
+    const response = await dbClient?.meeting.update({
       where: {
         id: meetingId,
       },

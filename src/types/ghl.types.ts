@@ -25,3 +25,21 @@ export type GHLAppointmentStatus =
   | "showed"
   | "noshow"
   | "invalid";
+
+export type GHLContactLocation = {
+  id: string;
+  name: string;
+  address: string;
+  city: string;
+  state: string;
+  zip: string;
+  country: string;
+  email: string;
+  phone: string;
+  timezone: string;
+};
+
+export type GetGHLLocationResponse = {
+  location: GHLContactLocation;
+  traceId: string;
+};
