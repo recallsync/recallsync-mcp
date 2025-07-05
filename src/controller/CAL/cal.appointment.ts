@@ -2,7 +2,7 @@ import {
   CALENDAR_TYPE,
   CalenderIntegration,
   MEETING_SOURCE,
-} from "@prisma/client";
+} from "../../generated/client/index.js";
 import {
   BookAppointmentRequest,
   CancelAppointmentRequest,
@@ -126,7 +126,6 @@ type BookAppointmentProps = {
   businessName: string;
   businessId: string;
   agencyId: string;
-  contactId: string;
 };
 export const bookAppointment = async ({
   args,
@@ -134,15 +133,14 @@ export const bookAppointment = async ({
   businessName,
   businessId,
   agencyId,
-  contactId,
 }: BookAppointmentProps) => {
   try {
-    const { startTime, timezone, name, email, primaryAgentId } = args;
+    const { dateTime, timezone, name, email, leadId } = args;
     const { calEventId, calApiKey } = calendar;
 
     const payload: BookAppointmentInput = {
       eventTypeId: +calEventId,
-      start: new Date(startTime).toISOString(),
+      start: new Date(dateTime).toISOString(),
       metadata: {
         source: "MCP",
       },
@@ -171,8 +169,8 @@ export const bookAppointment = async ({
     if (data) {
       const response = await bookMeeting({
         businessId: businessId,
-        startTime: new Date(startTime).toISOString(),
-        contactId: contactId,
+        startTime: new Date(dateTime).toISOString(),
+        leadId: leadId,
         agencyId: agencyId,
         meetingId: data.data.uid,
         caledarType: CALENDAR_TYPE.CAL,
@@ -201,11 +199,11 @@ export const rescheduleAppointment = async ({
   calendar,
 }: RescheduleAppointmentProps) => {
   try {
-    const { updatedStartTime, rescheduleOrCancelUid } = args;
-    const start = new Date(updatedStartTime).toISOString();
+    const { newStartTime, rescheduleOrCancelId } = args;
+    const start = new Date(newStartTime).toISOString();
     const { calApiKey } = calendar;
     const res = await axios.post<BookAppointmentResponse>(
-      `https://api.cal.com/v2/bookings/${rescheduleOrCancelUid}/reschedule`,
+      `https://api.cal.com/v2/bookings/${rescheduleOrCancelId}/reschedule`,
       {
         start: new Date(start).toISOString(),
         rescheduledBy: "MCP",
@@ -222,7 +220,7 @@ export const rescheduleAppointment = async ({
     if (data.data) {
       await updateMeeting({
         meetingId: data.data.uid,
-        newStartTime: new Date(updatedStartTime),
+        newStartTime: new Date(newStartTime),
         status: "UPCOMING",
       });
     }
@@ -245,10 +243,10 @@ export const cancelAppointment = async ({
   calendar,
 }: CancelAppointmentProps) => {
   try {
-    const { rescheduleOrCancelUid } = args;
+    const { rescheduleOrCancelId } = args;
     const { calApiKey } = calendar;
     const res = await axios.post<BookAppointmentResponse>(
-      `https://api.cal.com/v2/bookings/${rescheduleOrCancelUid}/cancel`,
+      `https://api.cal.com/v2/bookings/${rescheduleOrCancelId}/cancel`,
       {
         cancellationReason: "User requested cancellation",
       },
@@ -304,7 +302,7 @@ export const getCalBookings = async ({
       formattedResponse += `Here are your upcoming meetings: \n\n`;
     }
     formattedResponse += `Booking ${index + 1}:\n 
-    **rescheduleOrCancelUid: ${booking.uid}**,
+    **rescheduleOrCancelId: ${booking.uid}**,
     Title: ${booking.title},
     Start: ${format(new Date(booking.start), "dd MMM yyyy, hh:mm a")},
     End: ${format(new Date(booking.end), "dd MMM yyyy, hh:mm a")},

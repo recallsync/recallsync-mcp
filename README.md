@@ -33,3 +33,8 @@ docker-compose up --build
 - The server is written in TypeScript
 - Uses node-fetch for HTTP requests
 - Built with the Model Context Protocol SDK
+
+# Run MCP locally
+
+1. yarn dev
+2. $ npx ngrok http --domain=busy-strongly-mayfly.ngrok-free.app 3008

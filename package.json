@@ -15,7 +15,7 @@
   "license": "ISC",
   "description": "",
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.13.2",
+    "@modelcontextprotocol/sdk": "^1.15.0",
     "@prisma/client": "^6.10.1",
     "@types/cors": "^2.8.17",
     "axios": "^1.10.0",
@@ -23,11 +23,15 @@
     "date-fns": "^4.1.0",
     "date-fns-tz": "^3.2.0",
     "dotenv": "^16.4.7",
+    "express": "^5.1.0",
+    "morgan": "^1.10.0",
     "node-fetch": "^3.3.2",
-    "prisma": "^6.10.1"
+    "prisma": "^6.10.1",
+    "winston": "^3.17.0"
   },
   "devDependencies": {
     "@types/express": "^5.0.1",
+    "@types/morgan": "^1.9.10",
     "@types/node": "^20.11.19",
     "nodemon": "^3.1.9",
     "prisma": "^6.10.1",
