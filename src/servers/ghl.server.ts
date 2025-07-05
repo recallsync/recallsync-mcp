@@ -58,6 +58,7 @@ ghlServer.setRequestHandler(CallToolRequestSchema, async (request) => {
     case "get_appointments":
       return handleGetAppointments(request);
     default:
+      console.log({ error: "Got here - unknown tool call" });
       throw new Error("Unknown tool");
   }
 });

@@ -1,47 +1,46 @@
 import { z } from "zod";
 
 export const checkAvailabilitySchema = z.object({
-  startDate: z.string().min(1, "Start date is required"),
-  timezone: z.string().min(1, "Timezone is required"),
-  primaryAgentId: z.string().min(1, "primaryAgentId is required"),
+  startDate: z.string().min(1, "key 'startDate' is required in arguments"),
+  timezone: z.string().min(1, "key 'timezone' is required in arguments"),
+  leadId: z.string().min(1, "key 'leadId' is required in the arguments"),
 });
 export type CheckAvailabilityRequest = z.infer<typeof checkAvailabilitySchema>;
 
 export const bookAppointmentSchema = z.object({
-  startTime: z
+  dateTime: z
     .string()
-    .min(1, "Start date-time in ISO 8601 format is required"),
+    .min(1, "key 'dateTime' of the booking is required in arguments"),
   email: z.string().min(1, "Email is required"),
   name: z.string().min(1, "Name is required"),
   timezone: z.string().min(1, "Timezone is required"),
-  primaryAgentId: z.string().min(1, "primaryAgentId is required"),
-  contactId: z.string().min(1, "contactId is required"),
+  leadId: z.string().min(1, "key 'leadId' is required in the arguments"),
 });
 export type BookAppointmentRequest = z.infer<typeof bookAppointmentSchema>;
 
 export const rescheduleAppointmentSchema = z.object({
-  updatedStartTime: z
+  newStartTime: z
     .string()
-    .min(1, "updatedStartTime in ISO 8601 format is required"),
-  rescheduleOrCancelUid: z
+    .min(1, "key 'newStartTime' is required in arguments"),
+  rescheduleOrCancelId: z
     .string()
-    .min(1, "appointment 'rescheduleOrCancelUid' is required"),
-  primaryAgentId: z.string().min(1, "primaryAgentId is required"),
+    .min(1, "key 'rescheduleOrCancelId' is required in arguments"),
+  leadId: z.string().min(1, "key 'leadId' is required in arguments"),
 });
 export type RescheduleAppointmentRequest = z.infer<
   typeof rescheduleAppointmentSchema
 >;
 
 export const cancelAppointmentSchema = z.object({
-  rescheduleOrCancelUid: z
+  rescheduleOrCancelId: z
     .string()
-    .min(1, "appointment 'rescheduleOrCancelUid' is required"),
-  primaryAgentId: z.string().min(1, "primaryAgentId is required"),
+    .min(1, "key 'rescheduleOrCancelId' is required in arguments"),
+  leadId: z.string().min(1, "key 'leadId' is required in arguments"),
 });
 export type CancelAppointmentRequest = z.infer<typeof cancelAppointmentSchema>;
 
 export const getCalBookingsSchema = z.object({
   email: z.string().min(1, "Email is required"),
-  primaryAgentId: z.string().min(1, "primaryAgentId is required"),
+  leadId: z.string().min(1, "key 'leadId' is required in arguments"),
 });
 export type GetCalBookingsRequest = z.infer<typeof getCalBookingsSchema>;
