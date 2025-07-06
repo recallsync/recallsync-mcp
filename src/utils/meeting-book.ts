@@ -1,4 +1,4 @@
-import { AUTOMATION_EVENT } from "@prisma/client";
+import { AUTOMATION_EVENT } from "../generated/client/index.js";
 import {
   Automation,
   CALENDAR_TYPE,
