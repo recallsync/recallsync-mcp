@@ -60,12 +60,12 @@ export const bookMeeting = async ({
     await triggerAutomation({
       automations,
       event: AUTOMATION_EVENT.MEETING_CREATED,
-      data: data,
+      data: { meeting: data },
     });
     await triggerAutomation({
       automations,
       event: AUTOMATION_EVENT.MEETING_EVENTS,
-      data: data,
+      data: { meeting: data },
     });
     return {
       success: true,
@@ -120,12 +120,12 @@ export const updateMeeting = async ({
     await triggerAutomation({
       automations,
       event: AUTOMATION_EVENT.MEETING_UPDATED,
-      data: data,
+      data: { meeting: data },
     });
     await triggerAutomation({
       automations,
       event: AUTOMATION_EVENT.MEETING_EVENTS,
-      data: data,
+      data: { meeting: data },
     });
     return {
       success: true,
