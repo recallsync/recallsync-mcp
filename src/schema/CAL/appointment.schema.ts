@@ -40,7 +40,6 @@ export const cancelAppointmentSchema = z.object({
 export type CancelAppointmentRequest = z.infer<typeof cancelAppointmentSchema>;
 
 export const getCalBookingsSchema = z.object({
-  email: z.string().min(1, "Email is required"),
   leadId: z.string().min(1, "key 'leadId' is required in arguments"),
 });
 export type GetCalBookingsRequest = z.infer<typeof getCalBookingsSchema>;

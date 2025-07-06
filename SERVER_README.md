@@ -1,5 +1,4 @@
 NGROK Fusion: npx ngrok http --domain=hot-gar-just.ngrok-free.app 3008
-NGROK Nitin: npx ngrok http --domain=quietly-evolved-polecat.ngrok-free.app 3008
 
 ## AGENT MCP Authentication
 

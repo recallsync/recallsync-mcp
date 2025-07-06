@@ -2,6 +2,9 @@ import {
   CALENDAR_TYPE,
   CalenderIntegration,
   MEETING_SOURCE,
+  MESSAGE_SENDER,
+  SYSTEM_EVENT,
+  SYSTEM_EVENT_STATUS,
 } from "../../generated/client/index.js";
 import {
   BookAppointmentRequest,
@@ -24,15 +27,21 @@ import {
   slotsToAIString,
 } from "../../utils/ca.utils.js";
 import { bookMeeting, updateMeeting } from "../../utils/meeting-book.js";
+import { LeadWithBizz } from "../../utils/integration.util.js";
+import { prisma } from "../../lib/prisma.js";
 
 type CheckAvailabilityInput = {
   args: CheckAvailabilityRequest;
   calendar: CalenderIntegration;
+  lead: LeadWithBizz;
 };
 export const checkAvailability = async ({
   args,
   calendar,
+  lead,
 }: CheckAvailabilityInput) => {
+  if (!lead) return;
+  const { id, agencyId, businessId } = lead;
   const { startDate, timezone } = args;
   console.log("checkAvailability args", { args });
   const { calEventId, calApiKey } = calendar;
@@ -68,7 +77,36 @@ export const checkAvailability = async ({
 
         if (hasActualSlots) {
           const compact = compactTimeSlots(availabilityData);
+          const aiString = slotsToAIString(availabilityData);
           availability = compact;
+
+          // create a system message
+          const conversationId = lead.Conversation?.id;
+          if (conversationId) {
+            await prisma.conversationMessage.create({
+              data: {
+                content: "Checked availability",
+                sender: MESSAGE_SENDER.SYSTEM,
+                businessId: businessId,
+                agencyId: agencyId,
+                leadId: id,
+                conversationId,
+                // system fields
+                systemEvent: SYSTEM_EVENT.AVAILABILITY_CHECK,
+                systemDescription: `Here are the available slots: ${aiString}`,
+                systemData: {
+                  input: {
+                    ...args,
+                  },
+                  output: {
+                    compact: JSON.stringify(availability),
+                    raw: availabilityData,
+                  },
+                },
+              },
+            });
+          }
+
           break;
         }
       }
@@ -124,19 +162,25 @@ type BookAppointmentProps = {
   args: BookAppointmentRequest;
   calendar: CalenderIntegration;
   businessName: string;
-  businessId: string;
-  agencyId: string;
+
+  lead: LeadWithBizz;
 };
 export const bookAppointment = async ({
   args,
   calendar,
   businessName,
-  businessId,
-  agencyId,
+  lead,
 }: BookAppointmentProps) => {
   try {
+    if (!lead) return;
     const { dateTime, timezone, name, email, leadId } = args;
     const { calEventId, calApiKey } = calendar;
+    const {
+      id,
+      agencyId,
+      businessId,
+      Business: { Automations },
+    } = lead;
 
     const payload: BookAppointmentInput = {
       eventTypeId: +calEventId,
@@ -166,19 +210,52 @@ export const bookAppointment = async ({
     );
 
     const data = res.data; // for @db
+    const conversationId = lead.Conversation?.id;
     if (data) {
-      const response = await bookMeeting({
-        businessId: businessId,
-        startTime: new Date(dateTime).toISOString(),
-        leadId: leadId,
-        agencyId: agencyId,
-        meetingId: data.data.uid,
-        caledarType: CALENDAR_TYPE.CAL,
-        meetingSource: MEETING_SOURCE.DASHBOARD,
-        status: "UPCOMING",
-        meetingUrl: data.data.meetingUrl,
+      await prisma.$transaction(async (tx) => {
+        if (conversationId) {
+          await prisma.conversationMessage.create({
+            data: {
+              content: "Booked appointment",
+              sender: MESSAGE_SENDER.SYSTEM,
+              businessId: businessId,
+              agencyId: agencyId,
+              leadId: id,
+              conversationId,
+              // system fields
+              systemEvent: SYSTEM_EVENT.BOOK_APPOINTMENT,
+              systemDescription: `The appointment has been booked for ${format(
+                new Date(dateTime),
+                "dd MMM yyyy, hh:mm a"
+              )}`,
+              systemData: {
+                input: {
+                  args,
+                  payload,
+                },
+                output: {
+                  data: data,
+                },
+              },
+            },
+          });
+        }
+        await bookMeeting({
+          businessId: businessId,
+          startTime: new Date(dateTime).toISOString(),
+          leadId: leadId,
+          agencyId: agencyId,
+          meetingId: data.data.uid,
+          caledarType: CALENDAR_TYPE.CAL,
+          meetingSource: MEETING_SOURCE.PLATFORM,
+          status: "UPCOMING",
+          meetingUrl: data.data.meetingUrl,
+          automations: Automations,
+          data: data,
+          transaction: tx,
+        });
       });
-      console.log("Appointment booked successfully", response.data);
+
       return `Appointment booked successfully. Booking URL: ${data.data.meetingUrl}, Booking rescheduleOrCancelUid: ${data.data.uid}`;
     }
   } catch (err) {
@@ -193,15 +270,24 @@ export const bookAppointment = async ({
 type RescheduleAppointmentProps = {
   args: RescheduleAppointmentRequest;
   calendar: CalenderIntegration;
+  lead: LeadWithBizz;
 };
 export const rescheduleAppointment = async ({
   args,
   calendar,
+  lead,
 }: RescheduleAppointmentProps) => {
   try {
+    if (!lead) return;
     const { newStartTime, rescheduleOrCancelId } = args;
     const start = new Date(newStartTime).toISOString();
     const { calApiKey } = calendar;
+    const {
+      id,
+      agencyId,
+      businessId,
+      Business: { Automations },
+    } = lead;
     const res = await axios.post<BookAppointmentResponse>(
       `https://api.cal.com/v2/bookings/${rescheduleOrCancelId}/reschedule`,
       {
@@ -217,11 +303,42 @@ export const rescheduleAppointment = async ({
       }
     );
     const data = res.data; // for @db
+    const conversationId = lead.Conversation?.id;
     if (data.data) {
-      await updateMeeting({
-        meetingId: data.data.uid,
-        newStartTime: new Date(newStartTime),
-        status: "UPCOMING",
+      await prisma.$transaction(async (tx) => {
+        if (conversationId) {
+          await prisma.conversationMessage.create({
+            data: {
+              content: "Updated appointment",
+              sender: MESSAGE_SENDER.SYSTEM,
+              businessId: businessId,
+              agencyId: agencyId,
+              leadId: id,
+              conversationId,
+              // system fields
+              systemEvent: SYSTEM_EVENT.RESCHEDULE_APPOINTMENT,
+              systemDescription: `Rescheduled the appointment to ${format(
+                new Date(newStartTime),
+                "dd MMM yyyy, hh:mm a"
+              )}`,
+              systemData: {
+                input: {
+                  ...args,
+                },
+                output: {
+                  data: data,
+                },
+              },
+            },
+          });
+        }
+        await updateMeeting({
+          meetingId: data.data.uid,
+          newStartTime: new Date(newStartTime),
+          status: "UPCOMING",
+          automations: Automations,
+          transaction: tx,
+        });
       });
     }
     console.log("Appointment rescheduled successfully", data);
@@ -237,14 +354,23 @@ export const rescheduleAppointment = async ({
 type CancelAppointmentProps = {
   args: CancelAppointmentRequest;
   calendar: CalenderIntegration;
+  lead: LeadWithBizz;
 };
 export const cancelAppointment = async ({
   args,
   calendar,
+  lead,
 }: CancelAppointmentProps) => {
   try {
+    if (!lead) return;
     const { rescheduleOrCancelId } = args;
     const { calApiKey } = calendar;
+    const {
+      id,
+      agencyId,
+      businessId,
+      Business: { Automations },
+    } = lead;
     const res = await axios.post<BookAppointmentResponse>(
       `https://api.cal.com/v2/bookings/${rescheduleOrCancelId}/cancel`,
       {
@@ -258,10 +384,38 @@ export const cancelAppointment = async ({
       }
     );
     const data = res.data; // for @db
+    const conversationId = lead.Conversation?.id;
     if (data.data) {
-      await updateMeeting({
-        meetingId: data.data.uid,
-        status: "CANCELLED",
+      await prisma.$transaction(async (tx) => {
+        if (conversationId) {
+          await prisma.conversationMessage.create({
+            data: {
+              content: "Cancelled appointment",
+              sender: MESSAGE_SENDER.SYSTEM,
+              businessId: businessId,
+              agencyId: agencyId,
+              leadId: id,
+              conversationId,
+              // system fields
+              systemEvent: SYSTEM_EVENT.CANCEL_APPOINTMENT,
+              systemDescription: `Cancelled the appointment`,
+              systemData: {
+                input: {
+                  ...args,
+                },
+                output: {
+                  data: data,
+                },
+              },
+            },
+          });
+        }
+        await updateMeeting({
+          meetingId: data.data.uid,
+          status: "CANCELLED",
+          automations: Automations,
+          transaction: tx,
+        });
       });
     }
     console.log("Appointment cancelled successfully", data);
@@ -277,12 +431,17 @@ export const cancelAppointment = async ({
 type GetCalBookingsInput = {
   args: GetCalBookingsRequest;
   calendar: CalenderIntegration;
+  lead: LeadWithBizz;
+  email: string;
 };
 export const getCalBookings = async ({
   args,
   calendar,
+  email,
+  lead,
 }: GetCalBookingsInput) => {
-  const { email } = args;
+  if (!lead) return;
+  const { id, agencyId, businessId } = lead;
   const { calApiKey } = calendar;
   const res = await axios.get<GetCalBookingsResponse>(
     `https://api.cal.com/v2/bookings?attendeeEmail=${email}&status=upcoming&take=100`,
@@ -307,8 +466,35 @@ export const getCalBookings = async ({
     Start: ${format(new Date(booking.start), "dd MMM yyyy, hh:mm a")},
     End: ${format(new Date(booking.end), "dd MMM yyyy, hh:mm a")},
     Status: ${booking.status} 
-    \n\n --------------------------------- \n\n`;
+    --------------------------------- \n`;
     index++;
+  }
+
+  // create a system message
+  const conversationId = lead.Conversation?.id;
+  if (conversationId) {
+    await prisma.conversationMessage.create({
+      data: {
+        content: "Get upcoming appointments",
+        sender: MESSAGE_SENDER.SYSTEM,
+        businessId: businessId,
+        agencyId: agencyId,
+        leadId: id,
+        conversationId,
+        // system fields
+        systemEvent: SYSTEM_EVENT.GET_APPOINTMENTS,
+        systemDescription: `Fetched upcoming appointments`,
+        systemData: {
+          input: {
+            ...args,
+          },
+          output: {
+            formattedResponse,
+            raw: data,
+          },
+        },
+      },
+    });
   }
 
   console.log("Cal bookings fetched successfully", data);

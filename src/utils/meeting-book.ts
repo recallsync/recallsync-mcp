@@ -1,9 +1,14 @@
+import { AUTOMATION_EVENT } from "@prisma/client";
 import {
+  Automation,
   CALENDAR_TYPE,
   MEETING_SOURCE,
   MEETING_STATUS,
 } from "../generated/client/index.js";
 import { prisma } from "../lib/prisma.js";
+import { triggerAutomation } from "./integration.util.js";
+import { BookAppointmentResponse } from "../types/cal.types.js";
+import { GHLAppointment } from "../types/ghl.types.js";
 
 interface BookMeetingInput {
   businessId?: string;
@@ -15,14 +20,11 @@ interface BookMeetingInput {
   meetingSource: MEETING_SOURCE;
   status: MEETING_STATUS;
   meetingUrl?: string;
+  automations: Automation[];
   transaction?: any;
+  data: BookAppointmentResponse | GHLAppointment;
 }
-interface UpdateMeetingInput {
-  meetingId: string;
-  newStartTime?: Date;
-  status: MEETING_STATUS;
-  transaction?: any;
-}
+
 export const bookMeeting = async ({
   businessId,
   startTime,
@@ -33,12 +35,12 @@ export const bookMeeting = async ({
   meetingSource,
   status,
   meetingUrl,
-  transaction,
+  automations,
+  transaction = prisma,
+  data,
 }: BookMeetingInput) => {
   try {
-    console.log("book meeting", startTime);
-    const dbClient = transaction || prisma;
-    const response = await dbClient?.meeting.create({
+    const data = await transaction.meeting.create({
       data: {
         id: meetingId,
         businessId: businessId || "",
@@ -53,9 +55,21 @@ export const bookMeeting = async ({
         meetingUrl,
       },
     });
+
+    // send event to automation
+    await triggerAutomation({
+      automations,
+      event: AUTOMATION_EVENT.MEETING_CREATED,
+      data: data,
+    });
+    await triggerAutomation({
+      automations,
+      event: AUTOMATION_EVENT.MEETING_EVENTS,
+      data: data,
+    });
     return {
       success: true,
-      data: response,
+      data: data,
     };
   } catch (err) {
     console.log("error booking appointment");
@@ -66,11 +80,20 @@ export const bookMeeting = async ({
     };
   }
 };
+
+interface UpdateMeetingInput {
+  meetingId: string;
+  newStartTime?: Date;
+  status: MEETING_STATUS;
+  automations: Automation[];
+  transaction?: any;
+}
 export const updateMeeting = async ({
   meetingId,
   newStartTime,
   status,
-  transaction,
+  automations,
+  transaction = prisma,
 }: UpdateMeetingInput) => {
   console.log("update meeting", { meetingId, newStartTime, status });
   try {
@@ -85,8 +108,7 @@ export const updateMeeting = async ({
           updatedAt: new Date(),
         };
 
-    const dbClient = transaction || prisma;
-    const response = await dbClient?.meeting.update({
+    const data = await transaction.meeting.update({
       where: {
         id: meetingId,
       },
@@ -95,9 +117,19 @@ export const updateMeeting = async ({
         ...payload,
       },
     });
+    await triggerAutomation({
+      automations,
+      event: AUTOMATION_EVENT.MEETING_UPDATED,
+      data: data,
+    });
+    await triggerAutomation({
+      automations,
+      event: AUTOMATION_EVENT.MEETING_EVENTS,
+      data: data,
+    });
     return {
       success: true,
-      data: response,
+      data: data,
     };
   } catch (err) {
     console.log("error booking appointment");

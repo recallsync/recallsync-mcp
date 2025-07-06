@@ -5,7 +5,6 @@ import {
   getAppointments,
   updateAppointment,
 } from "../../controller/GHL/ghl.appointment.js";
-import { combineDateAndTime, getPrimaryAgent } from "../../utils/ghl.js";
 import { prisma } from "../../lib/prisma.js";
 import {
   bookAppointmentSchema,
@@ -15,6 +14,12 @@ import {
   checkAvailabilitySchema,
 } from "../../schema/GHL/appointment.schema.js";
 import { getLeadById } from "../../utils/integration.util.js";
+import {
+  MESSAGE_SENDER,
+  SYSTEM_EVENT,
+  SYSTEM_EVENT_STATUS,
+  SYSTEM_EVENT_TYPE,
+} from "../../generated/client/index.js";
 
 export const appointmentTools = [
   {
@@ -271,12 +276,12 @@ export async function handleBookAppointment(request: CallToolRequest) {
       input: args,
       ghlCalendarId,
       ghlAccessToken,
-      businessId: lead.businessId,
-      agencyId: lead.agencyId,
+
       ghlContactId,
       ghlLocationId,
       previousTimezone: lead.ianaTimezone,
       leadId: args.leadId,
+      lead,
     });
     if (resultBook.success) {
       return {
@@ -372,9 +377,9 @@ export async function handleRescheduleAppointment(request: CallToolRequest) {
       type: "reschedule",
       newStartTime: args.newStartTime,
       ghlAccessToken,
-      agencyId: lead?.agencyId || "",
-      businessId: lead?.businessId || "",
+
       leadId: args.leadId,
+      lead,
     });
     if (response.success) {
       return {
@@ -429,25 +434,24 @@ export async function handleCancelAppointment(request: CallToolRequest) {
       };
     }
     const validArgs = result.data;
-    const lead = await prisma.lead.findUnique({
-      where: {
-        id: validArgs.leadId,
-      },
-      include: {
-        Business: {
-          include: {
-            BusinessIntegration: true,
+    const lead = await getLeadById(validArgs.leadId);
+    const ghlAccessToken = lead?.Business.BusinessIntegration?.ghlAccessToken;
+    if (!lead || !ghlAccessToken) {
+      return {
+        content: [
+          {
+            type: "text",
+            text: "Failed to cancel appointment. Please try again.",
           },
-        },
-      },
-    });
+        ],
+      };
+    }
     const response = await updateAppointment({
       rescheduleOrCancelId: validArgs.rescheduleOrCancelId,
       type: "cancel",
-      ghlAccessToken: lead?.Business?.BusinessIntegration?.ghlAccessToken || "",
-      agencyId: lead?.agencyId || "",
-      businessId: lead?.businessId || "",
+      ghlAccessToken,
       leadId: validArgs.leadId,
+      lead,
     });
     if (response.success) {
       return {
@@ -518,12 +522,12 @@ export async function handleGetAppointments(request: CallToolRequest) {
       };
     }
     const args = result.data;
-    console.log({ args });
     const lead = await getLeadById(args.leadId);
     const ghlAccessToken = lead?.Business.BusinessIntegration?.ghlAccessToken;
     const ghlContactId = lead?.ghlContactId;
-    console.log({ ghlAccessToken, ghlContactId });
-    if (!ghlAccessToken || !ghlContactId) {
+    const conversationId = lead?.Conversation?.id;
+
+    if (!ghlAccessToken || !ghlContactId || !conversationId) {
       return {
         content: [
           {
@@ -539,6 +543,27 @@ export async function handleGetAppointments(request: CallToolRequest) {
       ghlAccessToken: ghlAccessToken,
       timezone: lead.ianaTimezone,
       locationId: lead.Business.BusinessIntegration?.ghlLocationId || "",
+    });
+
+    await prisma.conversationMessage.create({
+      data: {
+        content: "Get User's Appointments",
+        sender: MESSAGE_SENDER.SYSTEM,
+        businessId: lead.businessId,
+        agencyId: lead.agencyId,
+        leadId: lead.id,
+        conversationId,
+        // system fields
+        systemEvent: SYSTEM_EVENT.GET_APPOINTMENTS,
+        systemEventStatus: SYSTEM_EVENT_STATUS.SUCCESS,
+        systemDescription: `Retrieved user's appointments`,
+        systemData: {
+          input: {
+            ...args,
+          },
+          output: appointments.data,
+        },
+      },
     });
     if (appointments.success) {
       return {

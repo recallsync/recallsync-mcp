@@ -1,14 +1,9 @@
 import { CallToolRequest } from "@modelcontextprotocol/sdk/types.js";
 import {
-  BookAppointmentRequest,
   bookAppointmentSchema,
-  CancelAppointmentRequest,
   cancelAppointmentSchema,
-  CheckAvailabilityRequest,
   checkAvailabilitySchema,
-  GetCalBookingsRequest,
   getCalBookingsSchema,
-  RescheduleAppointmentRequest,
   rescheduleAppointmentSchema,
 } from "../../schema/CAL/appointment.schema.js";
 import {
@@ -147,11 +142,6 @@ export const appointmentTools = [
     inputSchema: {
       type: "object",
       properties: {
-        email: {
-          type: "string",
-          description:
-            "Email of the user 'email' from available details, MUST be called 'email' in the arguments.",
-        },
         leadId: {
           type: "string",
           description:
@@ -222,6 +212,7 @@ export async function handleCheckAvailability(request: CallToolRequest) {
     const response = await checkAvailability({
       args: result.data,
       calendar: calenderIntegration,
+      lead,
     });
     console.log("availability checked", response);
     return {
@@ -289,7 +280,7 @@ export async function handleBookAppointment(request: CallToolRequest) {
     const lead = await getLeadById(args.leadId);
     const calenderIntegration =
       lead?.Conversation?.ActiveAgent?.CalenderIntegration;
-    if (!calenderIntegration) {
+    if (!calenderIntegration || !lead) {
       return {
         content: [
           {
@@ -305,10 +296,9 @@ export async function handleBookAppointment(request: CallToolRequest) {
       args: result.data,
       calendar: calenderIntegration,
       businessName: lead?.Business.name,
-      businessId: lead?.businessId,
-      agencyId: lead?.Business.agencyId,
+      lead,
     });
-    console.log("booking appointment", response);
+
     return {
       content: [
         {
@@ -387,6 +377,7 @@ export async function handleRescheduleAppointment(request: CallToolRequest) {
     const response = await rescheduleAppointment({
       args: result.data,
       calendar: calenderIntegration,
+      lead,
     });
     console.log("reschedule appointment", response);
     return {
@@ -452,6 +443,7 @@ export async function handleCancelAppointment(request: CallToolRequest) {
     const response = await cancelAppointment({
       args: result.data,
       calendar: calenderIntegration,
+      lead,
     });
     console.log("cancel appointment", response);
     return {
@@ -513,11 +505,12 @@ export async function handleGetAppointments(request: CallToolRequest) {
       };
     }
     const args = result.data;
-
+    console.log({ args });
     const lead = await getLeadById(args.leadId);
-
+    console.log({ lead });
     const calenderIntegration =
       lead?.Conversation?.ActiveAgent?.CalenderIntegration;
+    console.log({ calenderIntegration: lead?.Conversation?.ActiveAgent });
     if (!calenderIntegration) {
       return {
         content: [
@@ -528,12 +521,24 @@ export async function handleGetAppointments(request: CallToolRequest) {
         ],
       };
     }
+    if (!lead?.email) {
+      return {
+        content: [
+          {
+            type: "text",
+            text: "Do not have any appointments.",
+          },
+        ],
+      };
+    }
 
     console.log("get appointments");
     // compact ai formatted response
     const response = await getCalBookings({
       args: result.data,
       calendar: calenderIntegration,
+      email: lead?.email,
+      lead,
     });
     console.log("get appointments", response);
     return {

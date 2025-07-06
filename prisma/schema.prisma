@@ -432,6 +432,12 @@ model ConversationMessage {
   channel  MESSAGE_CHANNEL   @default(EMAIL)
   itemType MESSAGE_ITEM_TYPE @default(MESSAGE)
 
+  // SYSTEM EVENTS (tool_calls etc)
+  systemEvent       SYSTEM_EVENT?
+  systemEventStatus SYSTEM_EVENT_STATUS?
+  systemData        Json?
+  systemDescription String?              @db.Text // ex: Appointment booked for 10:00 AM on 10th July 2025
+
   // Call Message Items
   callId String?
   Call   LeadCall? @relation(fields: [callId], references: [id], onDelete: Cascade)
@@ -594,7 +600,7 @@ model Meeting {
   Lead   Lead   @relation(fields: [leadId], references: [id], onDelete: Cascade)
 
   calendarType  CALENDAR_TYPE  @default(CAL)
-  meetingSource MEETING_SOURCE @default(DASHBOARD)
+  meetingSource MEETING_SOURCE @default(PLATFORM)
 
   // Metadata
   createdAt DateTime @default(now())
@@ -1427,10 +1433,34 @@ enum MESSAGE_ITEM_TYPE {
   CALL
 }
 
+enum SYSTEM_EVENT {
+  AVAILABILITY_CHECK
+  GET_APPOINTMENTS
+  BOOK_APPOINTMENT
+  CANCEL_APPOINTMENT
+  RESCHEDULE_APPOINTMENT
+  UPDATE_CONTACT
+}
+
+enum SYSTEM_EVENT_STATUS {
+  SUCCESS
+  FAILED
+  PENDING
+  PARTIAL
+}
+
+enum SYSTEM_EVENT_TYPE {
+  TOOL_CALL
+  NOTIFICATION
+  ACTION
+  ERROR
+}
+
 enum MESSAGE_SENDER {
   AI_AGENT
   HUMAN_AGENT
   LEAD
+  SYSTEM
 }
 
 enum CONVERSATION_MESSAGE_STATUS {
@@ -1490,6 +1520,6 @@ enum CALENDAR_TYPE {
 }
 
 enum MEETING_SOURCE {
-  DASHBOARD
+  PLATFORM
   OUTSIDE
 }

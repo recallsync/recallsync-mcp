@@ -11,9 +11,19 @@ import {
 } from "../../types/ghl.types.js";
 import { chunkConsecutiveSlots } from "../../utils/ghl.js";
 import { formatInTimeZone, fromZonedTime, toZonedTime } from "date-fns-tz";
-import { CALENDAR_TYPE, MEETING_SOURCE } from "../../generated/client/index.js";
+import {
+  CALENDAR_TYPE,
+  MEETING_SOURCE,
+  MESSAGE_SENDER,
+  Prisma,
+  PrismaClient,
+  SYSTEM_EVENT,
+  SYSTEM_EVENT_STATUS,
+} from "../../generated/client/index.js";
 import { bookMeeting, updateMeeting } from "../../utils/meeting-book.js";
 import { prisma } from "../../lib/prisma.js";
+import { LeadWithBizz } from "../../utils/integration.util.js";
+import { DefaultArgs } from "../../generated/client/runtime/library.js";
 
 type GHLRequestConstructor = {
   apiKey: string;
@@ -68,7 +78,6 @@ export const getAppointments = async ({
     const appointmentsData =
       (await response.json()) as GetGHLAppointmentsResponse;
     const appointments = appointmentsData.events;
-    console.log({ timezone });
 
     // Filter out cancelled appointments
     const filteredAppointments = appointments?.filter(
@@ -90,7 +99,6 @@ export const getAppointments = async ({
       end: item.endTime,
     }));
 
-    console.log("agentData", { agentData });
     if (!agentData || agentData.length === 0) {
       return {
         success: false,
@@ -112,9 +120,6 @@ export const getAppointments = async ({
         locationError
       );
     }
-
-    console.log("locationTimezone:", locationTimezone);
-    console.log("userTimezone:", timezone);
 
     let formattedResponse = "";
     let index = 1;
@@ -153,7 +158,6 @@ export const getAppointments = async ({
       index++;
     }
 
-    console.log("formattedResponse", { formattedResponse });
     return {
       success: true,
       data: {
@@ -203,7 +207,6 @@ export const checkAvailability = async ({
     return date.getTime();
   };
 
-  console.log({ currentStartTime, currentEndTime });
   while (iterations < maxIterations) {
     iterations++;
 
@@ -217,7 +220,6 @@ export const checkAvailability = async ({
     if (timezone) queryParams.append("timezone", timezone);
     path = `${path}?${queryParams.toString()}`;
 
-    console.log({ path, timezone, normalizedStartDate, normalizedEndDate });
     const request = ghlRequestContructor({
       apiKey: ghlAccessToken || "",
       method: "GET",
@@ -226,7 +228,6 @@ export const checkAvailability = async ({
 
     const response = await request;
     const slotsData = await response.json();
-    console.log({ slotsData });
     // Extract slots from the response format where dates are keys and slots are arrays
     // Format: { "2025-05-12": { "slots": ["2025-05-12T13:00:00-04:00", "2025-05-12T13:15:00-04:00"] } }
     const slots: string[] = [];
@@ -267,28 +268,35 @@ type BookGHLAppointment = {
   input: BookAppointmentRequest;
   ghlCalendarId: string;
   ghlAccessToken: string;
-  businessId: string;
-  agencyId: string;
+
   ghlContactId: string;
   ghlLocationId: string;
   previousTimezone?: string;
   leadId: string;
+  lead: LeadWithBizz;
 };
 export const bookAppointment = async ({
-  businessId,
   ghlContactId,
   ghlCalendarId,
   input,
-  agencyId,
   ghlAccessToken,
   ghlLocationId,
   previousTimezone,
-  leadId,
+  lead,
 }: BookGHLAppointment) => {
   try {
+    if (!lead)
+      return {
+        success: false,
+        data: null,
+      };
+    const {
+      businessId,
+      agencyId,
+      Business: { Automations },
+    } = lead;
     const { dateTime: startTime, leadId, timezone } = input;
     let path = `/calendars/events/appointments`;
-    console.log("book appointment", startTime);
     const startTimeUTC = new Date(startTime).toISOString();
     const request = ghlRequestContructor({
       apiKey: ghlAccessToken,
@@ -303,17 +311,50 @@ export const bookAppointment = async ({
     });
     const response = await request;
     const appointmentData = (await response.json()) as GHLAppointment;
+    const conversationId = lead.Conversation?.id;
     if (response.ok) {
       // Use transaction for database operations
       await prisma.$transaction(async (tx) => {
         // Update contact timezone if different
-        if (timezone !== previousTimezone) {
+        const diffTimezone = timezone !== previousTimezone;
+        if (diffTimezone) {
           await updateContact({
             contactId: appointmentData.contactId,
             ghlAccessToken,
             timezone,
             leadId,
             transaction: tx,
+            lead,
+          });
+        }
+        if (conversationId) {
+          await prisma.conversationMessage.create({
+            data: {
+              content: "Booked appointment",
+              sender: MESSAGE_SENDER.SYSTEM,
+              businessId: lead.businessId,
+              agencyId: lead.agencyId,
+              leadId: lead.id,
+              conversationId,
+              // system fields
+              systemEvent: SYSTEM_EVENT.BOOK_APPOINTMENT,
+              systemEventStatus: SYSTEM_EVENT_STATUS.SUCCESS,
+              systemDescription: `The appointment has been booked for ${format(
+                new Date(appointmentData.startTime),
+                "dd MMM yyyy, hh:mm a"
+              )}`,
+              systemData: {
+                input: {
+                  ...input,
+                },
+                output: {
+                  data: appointmentData,
+                  ...(diffTimezone && {
+                    timezone: timezone,
+                  }),
+                },
+              },
+            },
           });
         }
 
@@ -325,10 +366,12 @@ export const bookAppointment = async ({
           agencyId,
           meetingId: appointmentData.id,
           caledarType: CALENDAR_TYPE.GHL,
-          meetingSource: MEETING_SOURCE.DASHBOARD,
+          meetingSource: MEETING_SOURCE.PLATFORM,
           status: "UPCOMING",
           meetingUrl: appointmentData.address,
           transaction: tx,
+          automations: Automations,
+          data: appointmentData,
         });
       });
     }
@@ -348,25 +391,34 @@ export const bookAppointment = async ({
 type UpdateGHLAppointment =
   | {
       rescheduleOrCancelId: string;
-      businessId: string;
       type: "cancel";
       leadId: string;
-      agencyId: string;
       ghlAccessToken: string;
+      lead: LeadWithBizz;
     }
   | {
       rescheduleOrCancelId: string;
-      businessId: string;
       type: "reschedule";
       locationTimezone?: string;
       newStartTime: string;
       leadId: string;
       ghlAccessToken: string;
-      agencyId: string;
+      lead: LeadWithBizz;
     };
 
 export const updateAppointment = async (props: UpdateGHLAppointment) => {
   try {
+    if (!props.lead)
+      return {
+        success: false,
+        data: null,
+      };
+    const {
+      id,
+      businessId,
+      agencyId,
+      Business: { Automations },
+    } = props.lead;
     const path = `/calendars/events/appointments/${props.rescheduleOrCancelId}`;
     // Build update body based on what's provided
     const updateBody: Record<string, any> = {};
@@ -387,39 +439,74 @@ export const updateAppointment = async (props: UpdateGHLAppointment) => {
 
     const response = await request;
     const appointmentData = await response.json();
+    const conversationId = props.lead.Conversation?.id;
     if (response.ok) {
       // Use transaction for database operations
       await prisma.$transaction(async (tx) => {
+        if (conversationId) {
+          await prisma.conversationMessage.create({
+            data: {
+              content: "Updated appointment",
+              sender: MESSAGE_SENDER.SYSTEM,
+              businessId: businessId,
+              agencyId: agencyId,
+              leadId: id,
+              conversationId,
+              // system fields
+              systemEvent:
+                props.type === "cancel"
+                  ? SYSTEM_EVENT.CANCEL_APPOINTMENT
+                  : SYSTEM_EVENT.RESCHEDULE_APPOINTMENT,
+              systemEventStatus: SYSTEM_EVENT_STATUS.SUCCESS,
+              systemDescription:
+                props.type === "cancel"
+                  ? `Cancelled the appointment`
+                  : `Rescheduled the appointment to ${format(
+                      new Date(appointmentData.startTime),
+                      "dd MMM yyyy, hh:mm a"
+                    )}`,
+              systemData: {
+                input: {
+                  ...props,
+                },
+                output: {
+                  data: appointmentData,
+                },
+              },
+            },
+          });
+        }
         const appointment = await tx.meeting.findUnique({
           where: {
             id: props.rescheduleOrCancelId,
           },
         });
         if (appointment) {
-          console.log({ appointment }, "update");
           await updateMeeting({
             meetingId: appointmentData.id,
             newStartTime: new Date(appointment.startTime),
             status: "UPCOMING",
             transaction: tx,
+            automations: Automations,
           });
         } else {
-          console.log("create");
           const scheduledAt = new Date(
             props.type === "reschedule"
               ? props.newStartTime
               : appointmentData.startTime
           );
           await bookMeeting({
-            businessId: props.businessId,
+            businessId,
             startTime: scheduledAt,
             leadId: "",
-            agencyId: props.agencyId,
+            agencyId,
             meetingId: appointmentData.id,
             caledarType: CALENDAR_TYPE.GHL,
             meetingSource: MEETING_SOURCE.OUTSIDE,
             status: "UPCOMING",
             transaction: tx,
+            automations: Automations,
+            data: appointmentData,
           });
         }
       });
@@ -443,15 +530,34 @@ interface UpdateContact {
   timezone: string;
   leadId: string;
   transaction?: any;
+  lead: LeadWithBizz;
 }
-export const updateContact = async (props: UpdateContact) => {
+export const updateContact = async ({
+  contactId,
+  ghlAccessToken,
+  timezone,
+  leadId,
+  transaction = prisma,
+  lead,
+}: UpdateContact) => {
   try {
-    const path = `/contacts/${props.contactId}`;
+    if (!lead)
+      return {
+        success: false,
+        data: null,
+      };
+    const {
+      id,
+      businessId,
+      agencyId,
+      Business: { Automations },
+    } = lead;
+    const path = `/contacts/${contactId}`;
     const updateBody: Record<string, any> = {
-      timezone: props.timezone,
+      timezone: timezone,
     };
     const request = ghlRequestContructor({
-      apiKey: props.ghlAccessToken,
+      apiKey: ghlAccessToken,
       method: "PUT",
       path,
       body: updateBody,
@@ -459,16 +565,43 @@ export const updateContact = async (props: UpdateContact) => {
 
     const response = await request;
     const appointmentData = await response.json();
+    const conversationId = lead.Conversation?.id;
     if (response.ok) {
-      const dbClient = props.transaction || prisma;
-      const updatedContact = await dbClient.lead.update({
+      const dbClient = transaction || prisma;
+      await dbClient.lead.update({
         where: {
-          id: props.leadId,
+          id: leadId,
         },
         data: {
-          ianaTimezone: props.timezone,
+          ianaTimezone: timezone,
         },
       });
+      if (conversationId) {
+        await prisma.conversationMessage.create({
+          data: {
+            content: "Updated contact timezone",
+            sender: MESSAGE_SENDER.SYSTEM,
+            businessId: businessId,
+            agencyId: agencyId,
+            leadId: id,
+            conversationId,
+            // system fields
+            systemEvent: SYSTEM_EVENT.UPDATE_CONTACT,
+            systemEventStatus: SYSTEM_EVENT_STATUS.SUCCESS,
+            systemDescription: `Updated contact timezone`,
+            systemData: {
+              input: {
+                contactId,
+                timezone,
+                leadId,
+              },
+              output: {
+                data: appointmentData,
+              },
+            },
+          },
+        });
+      }
     }
     return {
       success: true,

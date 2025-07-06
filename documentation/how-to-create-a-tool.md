@@ -65,7 +65,6 @@ Create a corresponding Zod schema in `src/schema/CAL/appointment.schema.ts` that
 import { z } from "zod";
 
 export const getCalBookingsSchema = z.object({
-  email: z.string().min(1, "Email is required"),
   primaryAgentId: z.string().min(1, "primaryAgentId is required"),
 });
 export type GetCalBookingsRequest = z.infer<typeof getCalBookingsSchema>;
