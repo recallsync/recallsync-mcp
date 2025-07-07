@@ -1,6 +1,5 @@
 generator client {
   provider = "prisma-client-js"
-  output   = "../src/generated/client"
 }
 
 datasource db {
@@ -1379,9 +1378,7 @@ enum AUTOMATION_EVENT {
   FOLLOWUP_PRIORITY_CHANGED
 
   // CONVERSATION AUTOMATIONS
-  SEND_EMAIL
-  SEND_WHATSAPP_MESSAGE
-  SEND_SMS
+  SEND_MESSAGE
 }
 
 enum PRIORITY {
