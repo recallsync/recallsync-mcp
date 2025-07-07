@@ -29,6 +29,7 @@ import {
 import { bookMeeting, updateMeeting } from "../../utils/meeting-book.js";
 import { LeadWithBizz } from "../../utils/integration.util.js";
 import { prisma } from "../../lib/prisma.js";
+import { formatInTimeZone } from "date-fns-tz";
 
 type CheckAvailabilityInput = {
   args: CheckAvailabilityRequest;
@@ -43,7 +44,6 @@ export const checkAvailability = async ({
   if (!lead) return;
   const { id, agencyId, businessId } = lead;
   const { startDate, timezone } = args;
-  console.log("checkAvailability args", { args });
   const { calEventId, calApiKey } = calendar;
 
   let start = format(new Date(startDate), "yyyy-MM-dd");
@@ -112,9 +112,6 @@ export const checkAvailability = async ({
       }
 
       // No slots found, move to next range
-      console.log(
-        `No slots found for ${start} to ${end}, trying next range...`
-      );
     } catch (err) {
       console.error(`Error fetching availability for ${start} to ${end}:`, err);
       // Continue to next iteration even on error
@@ -184,7 +181,7 @@ export const bookAppointment = async ({
 
     const payload: BookAppointmentInput = {
       eventTypeId: +calEventId,
-      start: new Date(dateTime).toISOString(),
+      start: dateTime,
       metadata: {
         source: "MCP",
       },
@@ -197,7 +194,6 @@ export const bookAppointment = async ({
         title: `Meeting between ${businessName} and ${name}`,
       },
     };
-    console.log("bookAppointment Payload", { payload });
     const res = await axios.post<BookAppointmentResponse>(
       `https://api.cal.com/v2/bookings`,
       payload,
@@ -259,7 +255,6 @@ export const bookAppointment = async ({
       return `Appointment booked successfully. Booking URL: ${data.data.meetingUrl}, Booking rescheduleOrCancelUid: ${data.data.uid}`;
     }
   } catch (err) {
-    console.log({ err });
     if (err instanceof AxiosError) {
       console.log({ err: JSON.stringify(err.response?.data) });
     }
@@ -279,8 +274,14 @@ export const rescheduleAppointment = async ({
 }: RescheduleAppointmentProps) => {
   try {
     if (!lead) return;
+    const ianaTimezone = lead.ianaTimezone;
     const { newStartTime, rescheduleOrCancelId } = args;
-    const start = new Date(newStartTime).toISOString();
+    const start = formatInTimeZone(
+      newStartTime,
+      ianaTimezone,
+      "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'"
+    );
+
     const { calApiKey } = calendar;
     const {
       id,
@@ -291,7 +292,7 @@ export const rescheduleAppointment = async ({
     const res = await axios.post<BookAppointmentResponse>(
       `https://api.cal.com/v2/bookings/${rescheduleOrCancelId}/reschedule`,
       {
-        start: new Date(start).toISOString(),
+        start,
         rescheduledBy: "MCP",
         reschedulingReason: "User requested reschedule",
       },
@@ -318,7 +319,7 @@ export const rescheduleAppointment = async ({
               // system fields
               systemEvent: SYSTEM_EVENT.RESCHEDULE_APPOINTMENT,
               systemDescription: `Rescheduled the appointment to ${format(
-                new Date(newStartTime),
+                new Date(start),
                 "dd MMM yyyy, hh:mm a"
               )}`,
               systemData: {
@@ -341,7 +342,6 @@ export const rescheduleAppointment = async ({
         });
       });
     }
-    console.log("Appointment rescheduled successfully", data);
     return `Appointment rescheduled successfully. Booking ID: ${data.data.id}, Booking URL: ${data.data.meetingUrl}, Booking UID: ${data.data.uid}`;
   } catch (err) {
     if (err instanceof AxiosError) {
@@ -418,7 +418,7 @@ export const cancelAppointment = async ({
         });
       });
     }
-    console.log("Appointment cancelled successfully", data);
+
     return `Appointment cancelled successfully. Booking ID: ${data.data.id}, Booking URL: ${data.data.meetingUrl}, rescheduleOrCancelUid: ${data.data.uid}`;
   } catch (err) {
     if (err instanceof AxiosError) {
