@@ -9,7 +9,6 @@ import { randomUUID } from "node:crypto";
 import dotenv from "dotenv";
 import { primaryServer } from "./src/servers/primary.server.js";
 import { ghlServer } from "./src/servers/ghl.server.js";
-import { PrismaClient } from "./src/generated/client/index.js";
 import { calServer } from "./src/servers/cal.server.js";
 import { isInitializeRequest } from "@modelcontextprotocol/sdk/types.js";
 
@@ -73,6 +72,15 @@ const calTransports: { [sessionId: string]: StreamableHTTPServerTransport } =
 const sseTransports: { [sessionId: string]: SSEServerTransport } = {};
 const ghlSSETransports: { [sessionId: string]: SSEServerTransport } = {};
 const calSSETransports: { [sessionId: string]: SSEServerTransport } = {};
+
+// Root Endpoint (status)
+app.get("/", (req: Request, res: Response) => {
+  const port = process.env.PORT || 3001;
+  const nodeEnv = process.env.NODE_ENV || "development";
+  res.send(
+    `Recallsync MCP Server is running on port ${port} in ${nodeEnv} mode`
+  );
+});
 
 // =============================================================================
 // MODERN STREAMABLE HTTP ENDPOINTS (for VAPI, newer clients)

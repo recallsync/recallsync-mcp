@@ -1,14 +1,32 @@
 version: "3.8"
 
 services:
-  recallsync-mcp:
-    build: .
+  recallsync-mcp-prod:
+    build:
+      context: .
+      dockerfile: Dockerfile
     ports:
-      - "${PORT}:${PORT}"
+      - "3007:3007"
     env_file:
       - .env
     environment:
       - NODE_ENV=production
+      - PORT=3007
+    restart: unless-stopped
+    stdin_open: true
+    tty: true
+
+  recallsync-mcp-dev:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "3008:3008"
+    env_file:
+      - .env.local
+    environment:
+      - NODE_ENV=development
+      - PORT=3008
     restart: unless-stopped
     stdin_open: true
     tty: true
