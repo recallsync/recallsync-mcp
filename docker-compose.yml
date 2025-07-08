@@ -6,12 +6,12 @@ services:
       context: .
       dockerfile: Dockerfile
     ports:
-      - "3007:3007"
+      - "3006:3006"
     env_file:
       - .env
     environment:
       - NODE_ENV=production
-      - PORT=3007
+      - PORT=3006
     restart: unless-stopped
     stdin_open: true
     tty: true
@@ -21,12 +21,12 @@ services:
       context: .
       dockerfile: Dockerfile
     ports:
-      - "3008:3008"
+      - "3007:3007"
     env_file:
       - .env.local
     environment:
       - NODE_ENV=development
-      - PORT=3008
+      - PORT=3007
     restart: unless-stopped
     stdin_open: true
     tty: true
