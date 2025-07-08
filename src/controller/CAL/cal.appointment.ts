@@ -220,10 +220,11 @@ export const bookAppointment = async ({
               conversationId,
               // system fields
               systemEvent: SYSTEM_EVENT.BOOK_APPOINTMENT,
-              systemDescription: `The appointment has been booked for ${format(
+              systemDescription: `The appointment has been booked for ${formatInTimeZone(
                 new Date(dateTime),
+                timezone,
                 "dd MMM yyyy, hh:mm a"
-              )}`,
+              )} (TZ: ${timezone})`,
               systemData: {
                 input: {
                   args,
@@ -318,10 +319,11 @@ export const rescheduleAppointment = async ({
               conversationId,
               // system fields
               systemEvent: SYSTEM_EVENT.RESCHEDULE_APPOINTMENT,
-              systemDescription: `Rescheduled the appointment to ${format(
+              systemDescription: `Rescheduled the appointment to ${formatInTimeZone(
                 new Date(start),
+                ianaTimezone,
                 "dd MMM yyyy, hh:mm a"
-              )}`,
+              )} (TZ: ${ianaTimezone})`,
               systemData: {
                 input: {
                   ...args,
