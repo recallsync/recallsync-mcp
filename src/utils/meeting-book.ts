@@ -1,4 +1,4 @@
-import { AUTOMATION_EVENT } from "../generated/client/index.js";
+import { AUTOMATION_EVENT, Lead } from "../generated/client/index.js";
 import {
   Automation,
   CALENDAR_TYPE,
@@ -22,7 +22,7 @@ interface BookMeetingInput {
   meetingUrl?: string;
   automations: Automation[];
   transaction?: any;
-  data: BookAppointmentResponse | GHLAppointment;
+  leadFieldsToUpdate?: Partial<Record<keyof Lead, string>>;
 }
 
 export const bookMeeting = async ({
@@ -37,7 +37,7 @@ export const bookMeeting = async ({
   meetingUrl,
   automations,
   transaction = prisma,
-  data,
+  leadFieldsToUpdate,
 }: BookMeetingInput) => {
   try {
     const data = await transaction.meeting.create({
@@ -55,6 +55,15 @@ export const bookMeeting = async ({
         meetingUrl,
       },
     });
+
+    // update contact fields
+    const fields = leadFieldsToUpdate;
+    if (fields) {
+      await transaction.lead.update({
+        where: { id: leadId },
+        data: fields,
+      });
+    }
 
     // send event to automation
     await triggerAutomation({

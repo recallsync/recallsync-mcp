@@ -1,6 +1,7 @@
 import {
   CALENDAR_TYPE,
   CalenderIntegration,
+  Lead,
   MEETING_SOURCE,
   MESSAGE_SENDER,
   SYSTEM_EVENT,
@@ -179,6 +180,18 @@ export const bookAppointment = async ({
       Business: { Automations },
     } = lead;
 
+    const fieldsToUpdate: Partial<Record<keyof Lead, string>> = {};
+    if (lead.name !== args.name) {
+      fieldsToUpdate.name = args.name;
+    }
+    if (lead.email !== args.email) {
+      fieldsToUpdate.email = args.email;
+    }
+    if (lead.ianaTimezone !== timezone) {
+      fieldsToUpdate.ianaTimezone = timezone;
+    }
+    const canUpdateFields = Object.keys(fieldsToUpdate).length > 0;
+
     const payload: BookAppointmentInput = {
       eventTypeId: +calEventId,
       start: dateTime,
@@ -248,7 +261,7 @@ export const bookAppointment = async ({
           status: "UPCOMING",
           meetingUrl: data.data.meetingUrl,
           automations: Automations,
-          data: data,
+          leadFieldsToUpdate: canUpdateFields ? fieldsToUpdate : undefined,
           transaction: tx,
         });
       });

@@ -313,10 +313,11 @@ export const bookAppointment = async ({
     const appointmentData = (await response.json()) as GHLAppointment;
     const conversationId = lead.Conversation?.id;
     if (response.ok) {
+      const diffTimezone = timezone !== previousTimezone;
       // Use transaction for database operations
       await prisma.$transaction(async (tx) => {
         // Update contact timezone if different
-        const diffTimezone = timezone !== previousTimezone;
+
         if (diffTimezone) {
           await updateContact({
             contactId: appointmentData.contactId,
@@ -371,7 +372,11 @@ export const bookAppointment = async ({
           meetingUrl: appointmentData.address,
           transaction: tx,
           automations: Automations,
-          data: appointmentData,
+          leadFieldsToUpdate: diffTimezone
+            ? {
+                ianaTimezone: timezone,
+              }
+            : undefined,
         });
       });
     }
@@ -506,7 +511,6 @@ export const updateAppointment = async (props: UpdateGHLAppointment) => {
             status: "UPCOMING",
             transaction: tx,
             automations: Automations,
-            data: appointmentData,
           });
         }
       });
@@ -568,16 +572,8 @@ export const updateContact = async ({
     const conversationId = lead.Conversation?.id;
     if (response.ok) {
       const dbClient = transaction || prisma;
-      await dbClient.lead.update({
-        where: {
-          id: leadId,
-        },
-        data: {
-          ianaTimezone: timezone,
-        },
-      });
       if (conversationId) {
-        await prisma.conversationMessage.create({
+        await dbClient.conversationMessage.create({
           data: {
             content: "Updated contact timezone",
             sender: MESSAGE_SENDER.SYSTEM,
