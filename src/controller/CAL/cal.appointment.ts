@@ -349,7 +349,7 @@ export const rescheduleAppointment = async ({
           });
         }
         await updateMeeting({
-          meetingId: data.data.uid,
+          meetingId: rescheduleOrCancelId,
           newStartTime: new Date(newStartTime),
           status: "UPCOMING",
           automations: Automations,

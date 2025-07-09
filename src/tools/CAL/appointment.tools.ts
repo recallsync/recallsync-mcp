@@ -425,15 +425,12 @@ export async function handleCancelAppointment(request: CallToolRequest) {
     const lead = await getLeadById(validArgs.leadId);
     const calenderIntegration =
       lead?.Conversation?.ActiveAgent?.CalenderIntegration;
-    if (
-      !lead?.Business?.BusinessIntegration?.ghlAccessToken ||
-      !calenderIntegration
-    ) {
+    if (!calenderIntegration) {
       return {
         content: [
           {
             type: "text",
-            text: `Failed to cancel appointment. Please provide valid ghlAccessToken for the business.`,
+            text: "Failed to cancel appointment. Please try again.",
           },
         ],
       };
