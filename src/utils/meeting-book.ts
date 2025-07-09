@@ -23,6 +23,8 @@ interface BookMeetingInput {
   automations: Automation[];
   transaction?: any;
   leadFieldsToUpdate?: Partial<Record<keyof Lead, string>>;
+  createdAt?: Date;
+  updatedAt?: Date;
 }
 
 export const bookMeeting = async ({
@@ -38,6 +40,8 @@ export const bookMeeting = async ({
   automations,
   transaction = prisma,
   leadFieldsToUpdate,
+  createdAt,
+  updatedAt,
 }: BookMeetingInput) => {
   try {
     const data = await transaction.meeting.create({
@@ -48,11 +52,12 @@ export const bookMeeting = async ({
         leadId,
         status: status,
         startTime: new Date(startTime).toISOString(),
-        updatedAt: new Date(),
         messageOfLead: "",
         calendarType: caledarType,
         meetingSource: meetingSource,
         meetingUrl,
+        createdAt: createdAt || new Date(),
+        updatedAt: updatedAt || new Date(),
       },
     });
 

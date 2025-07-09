@@ -290,11 +290,21 @@ export const rescheduleAppointment = async ({
     if (!lead) return;
     const ianaTimezone = lead.ianaTimezone;
     const { newStartTime, rescheduleOrCancelId } = args;
+
+    // Console logs for debugging time and timezone
+    console.log("🔄 Rescheduling appointment - Time debugging:");
+    console.log("📅 Original newStartTime from args:", newStartTime);
+    console.log("🌍 Lead timezone (ianaTimezone):", ianaTimezone);
+
+    // Format the time in the lead's timezone without converting to UTC
     const start = formatInTimeZone(
       newStartTime,
       ianaTimezone,
-      "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'"
+      "yyyy-MM-dd'T'HH:mm:ss.SSSXXX"
     );
+
+    console.log("📝 Formatted start time string for API:", start);
+    console.log("🔍 rescheduleOrCancelId:", rescheduleOrCancelId);
 
     const { calApiKey } = calendar;
     const {
@@ -348,16 +358,78 @@ export const rescheduleAppointment = async ({
             },
           });
         }
-        await updateMeeting({
-          meetingId: rescheduleOrCancelId,
-          newStartTime: new Date(newStartTime),
-          status: "UPCOMING",
-          automations: Automations,
-          transaction: tx,
+        // Debug logging for meeting IDs
+        console.log("🔍 Meeting ID debugging:");
+        console.log(
+          "📋 Original rescheduleOrCancelId (looking for):",
+          rescheduleOrCancelId
+        );
+        console.log("🆕 New booking UID from Cal.com:", data.data.uid);
+
+        // Check if meeting exists before updating
+        const existingMeeting = await tx.meeting.findUnique({
+          where: { id: rescheduleOrCancelId },
         });
+
+        console.log("📊 Existing meeting found:", !!existingMeeting);
+
+        if (existingMeeting) {
+          if (data.data.uid !== rescheduleOrCancelId) {
+            console.log(
+              `🔄 Cal.com generated new UID: ${data.data.uid}, replacing record ${rescheduleOrCancelId}`
+            );
+
+            // Delete the old record and create new one with updated UID
+            await tx.meeting.delete({
+              where: { id: rescheduleOrCancelId },
+            });
+
+            await bookMeeting({
+              businessId: businessId,
+              startTime: new Date(newStartTime).toISOString(),
+              leadId: id,
+              agencyId: agencyId,
+              meetingId: data.data.uid, // Use new Cal.com UID
+              caledarType: CALENDAR_TYPE.CAL,
+              meetingSource: MEETING_SOURCE.PLATFORM,
+              status: "UPCOMING",
+              meetingUrl: data.data.meetingUrl,
+              automations: Automations,
+              transaction: tx,
+              createdAt: new Date(data.data.createdAt),
+              updatedAt: new Date(data.data.updatedAt),
+            });
+          } else {
+            await updateMeeting({
+              meetingId: rescheduleOrCancelId,
+              newStartTime: new Date(newStartTime),
+              status: "UPCOMING",
+              automations: Automations,
+              transaction: tx,
+            });
+          }
+        } else {
+          console.log(
+            `Meeting with ID ${rescheduleOrCancelId} not found, creating new record`
+          );
+          // Create a new meeting record if the original doesn't exist
+          await bookMeeting({
+            businessId: businessId,
+            startTime: new Date(newStartTime).toISOString(),
+            leadId: id,
+            agencyId: agencyId,
+            meetingId: data.data.uid,
+            caledarType: CALENDAR_TYPE.CAL,
+            meetingSource: MEETING_SOURCE.PLATFORM,
+            status: "UPCOMING",
+            meetingUrl: data.data.meetingUrl,
+            automations: Automations,
+            transaction: tx,
+          });
+        }
       });
     }
-    return `Appointment rescheduled successfully. Booking ID: ${data.data.id}, Booking URL: ${data.data.meetingUrl}, Booking UID: ${data.data.uid}`;
+    return `Appointment rescheduled successfully. Booking ID: ${data.data.id}, Booking URL: ${data.data.meetingUrl}, New rescheduleOrCancelId: ${data.data.uid}`;
   } catch (err) {
     if (err instanceof AxiosError) {
       console.log({ err: JSON.stringify(err.response?.data) });
@@ -425,12 +497,23 @@ export const cancelAppointment = async ({
             },
           });
         }
-        await updateMeeting({
-          meetingId: data.data.uid,
-          status: "CANCELLED",
-          automations: Automations,
-          transaction: tx,
+        // Check if meeting exists before updating
+        const existingMeeting = await tx.meeting.findUnique({
+          where: { id: rescheduleOrCancelId },
         });
+
+        if (existingMeeting) {
+          await updateMeeting({
+            meetingId: rescheduleOrCancelId, // Use original ID to find the meeting
+            status: "CANCELLED",
+            automations: Automations,
+            transaction: tx,
+          });
+        } else {
+          console.log(
+            `Meeting with ID ${rescheduleOrCancelId} not found for cancellation`
+          );
+        }
       });
     }
 
