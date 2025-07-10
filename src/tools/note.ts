@@ -157,7 +157,7 @@ export async function handleCreateNote(request: CallToolRequest) {
         content: [
           {
             type: "text",
-            text: `Failed to create note: ${errorMessages}. Please provide the missing or incorrect information.`,
+            text: `Failed to create note: ${errorMessages}. Retry again with correct tool parameters and values.`,
           },
         ],
       };
@@ -243,7 +243,7 @@ export async function handleGetNote(request: CallToolRequest) {
         content: [
           {
             type: "text",
-            text: `Failed to get note: ${errorMessages}. Please provide the missing or incorrect information.`,
+            text: `Failed to get note: ${errorMessages}. Retry again with correct tool parameters and values.`,
           },
         ],
       };
@@ -316,7 +316,7 @@ export async function handleGetAllNotes(request: CallToolRequest) {
         content: [
           {
             type: "text",
-            text: `Failed to get notes: ${errorMessages}. Please provide the missing or incorrect information.`,
+            text: `Failed to get notes: ${errorMessages}. Retry again with correct tool parameters and values.`,
           },
         ],
       };
@@ -420,7 +420,7 @@ export async function handleUpdateNote(request: CallToolRequest) {
         content: [
           {
             type: "text",
-            text: `Failed to update note: ${errorMessages}. Please provide the missing or incorrect information.`,
+            text: `Failed to update note: ${errorMessages}. Retry again with correct tool parameters and values.`,
           },
         ],
       };
@@ -495,7 +495,7 @@ export async function handleDeleteNote(request: CallToolRequest) {
         content: [
           {
             type: "text",
-            text: `Failed to delete note: ${errorMessages}. Please provide the missing or incorrect information.`,
+            text: `Failed to delete note: ${errorMessages}. Retry again with correct tool parameters and values.`,
           },
         ],
       };

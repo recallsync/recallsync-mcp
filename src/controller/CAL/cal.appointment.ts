@@ -200,7 +200,11 @@ export const bookAppointment = async ({
 
     const payload: BookAppointmentInput = {
       eventTypeId: +calEventId,
-      start: dateTime,
+      start: formatInTimeZone(
+        new Date(dateTime),
+        timezone,
+        "yyyy-MM-dd'T'HH:mm:ss.SSSXXX"
+      ),
       metadata: {
         source: "MCP",
       },
@@ -303,6 +307,7 @@ export const rescheduleAppointment = async ({
       ianaTimezone,
       "yyyy-MM-dd'T'HH:mm:ss.SSSXXX"
     );
+    console.log({ start });
 
     const { calApiKey } = calendar;
     const {
@@ -326,7 +331,6 @@ export const rescheduleAppointment = async ({
       }
     );
     const data = res.data; // for @db
-    console.log({ calRescheduling: data });
     const conversationId = lead.Conversation?.id;
     if (data.data) {
       await prisma.$transaction(async (tx) => {

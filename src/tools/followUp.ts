@@ -204,7 +204,7 @@ export async function handleCreateFollowUp(request: CallToolRequest) {
         content: [
           {
             type: "text",
-            text: `Failed to create follow-up: ${errorMessages}. Please provide the missing or incorrect information.`,
+            text: `Failed to create follow-up: ${errorMessages}. Retry again with correct tool parameters and values.`,
           },
         ],
       };
@@ -291,7 +291,7 @@ export async function handleGetFollowUp(request: CallToolRequest) {
         content: [
           {
             type: "text",
-            text: `Failed to get follow-up: ${errorMessages}. Please provide the missing or incorrect information.`,
+            text: `Failed to get follow-up: ${errorMessages}. Retry again with correct tool parameters and values.`,
           },
         ],
       };
@@ -365,7 +365,7 @@ export async function handleGetAllFollowUps(request: CallToolRequest) {
         content: [
           {
             type: "text",
-            text: `Failed to get follow-ups: ${errorMessages}. Please provide the missing or incorrect information.`,
+            text: `Failed to get follow-ups: ${errorMessages}. Retry again with correct tool parameters and values.`,
           },
         ],
       };
@@ -454,7 +454,7 @@ export async function handleUpdateFollowUp(request: CallToolRequest) {
         content: [
           {
             type: "text",
-            text: `Failed to update follow-up: ${errorMessages}. Please provide the missing or incorrect information.`,
+            text: `Failed to update follow-up: ${errorMessages}. Retry again with correct tool parameters and values.`,
           },
         ],
       };
@@ -558,7 +558,7 @@ export async function handleDeleteFollowUp(request: CallToolRequest) {
         content: [
           {
             type: "text",
-            text: `Failed to delete follow-up: ${errorMessages}. Please provide the missing or incorrect information.`,
+            text: `Failed to delete follow-up: ${errorMessages}. Retry again with correct tool parameters and values.`,
           },
         ],
       };

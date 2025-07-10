@@ -139,7 +139,7 @@ export async function handleGetAppointments(request: CallToolRequest) {
         content: [
           {
             type: "text",
-            text: `Failed to get appointments: ${errorMessages}. Please provide the missing or incorrect information.`,
+            text: `Failed to get appointments: ${errorMessages}. Retry again with correct tool parameters and values.`,
           },
         ],
       };

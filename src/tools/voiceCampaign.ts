@@ -140,7 +140,7 @@ export async function handleFindVoiceLead(request: CallToolRequest) {
         content: [
           {
             type: "text",
-            text: `Failed to find voice lead: ${errorMessages}. Please provide the missing or incorrect information.`,
+            text: `Failed to find voice lead: ${errorMessages}. Retry again with correct tool parameters and values.`,
           },
         ],
       };
@@ -204,7 +204,7 @@ export async function handleAddLeadToCampaign(request: CallToolRequest) {
         content: [
           {
             type: "text",
-            text: `Failed to add lead to campaign: ${errorMessages}. Please provide the missing or incorrect information.`,
+            text: `Failed to add lead to campaign: ${errorMessages}. Retry again with correct tool parameters and values.`,
           },
         ],
       };
@@ -261,7 +261,7 @@ export async function handleGetVoiceLead(request: CallToolRequest) {
         content: [
           {
             type: "text",
-            text: `Failed to get voice lead: ${errorMessages}. Please provide the missing or incorrect information.`,
+            text: `Failed to get voice lead: ${errorMessages}. Retry again with correct tool parameters and values.`,
           },
         ],
       };
@@ -319,7 +319,7 @@ export async function handleUpdateCampaignStatus(request: CallToolRequest) {
         content: [
           {
             type: "text",
-            text: `Failed to update campaign status: ${errorMessages}. Please provide the missing or incorrect information.`,
+            text: `Failed to update campaign status: ${errorMessages}. Retry again with correct tool parameters and values.`,
           },
         ],
       };
@@ -378,7 +378,7 @@ export async function handleFindLeadToCall(request: CallToolRequest) {
         content: [
           {
             type: "text",
-            text: `Failed to find lead to call: ${errorMessages}. Please provide the missing or incorrect information.`,
+            text: `Failed to find lead to call: ${errorMessages}. Retry again with correct tool parameters and values.`,
           },
         ],
       };
@@ -436,7 +436,7 @@ export async function handleGetAllVoiceCampaigns(request: CallToolRequest) {
         content: [
           {
             type: "text",
-            text: `Failed to get voice campaigns: ${errorMessages}. Please provide the missing or incorrect information.`,
+            text: `Failed to get voice campaigns: ${errorMessages}. Retry again with correct tool parameters and values.`,
           },
         ],
       };

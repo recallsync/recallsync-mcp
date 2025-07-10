@@ -144,7 +144,7 @@ export const appointmentTools = [
 export async function handleCheckAvailability(request: CallToolRequest) {
   try {
     const rawArgs = request.params.arguments as any;
-
+    console.log({ checkAvailabilityRawArgs: rawArgs });
     // Extract API key from injected arguments
     const apiKey = rawArgs._apiKey;
     if (!apiKey) {
@@ -159,7 +159,6 @@ export async function handleCheckAvailability(request: CallToolRequest) {
     }
     // Remove _apiKey from args before validation
     const { _apiKey, ...cleanArgs } = rawArgs;
-    console.log({ checkAvailabilityRawArgs: rawArgs });
     // Validate the input using Zod
     const result = checkAvailabilitySchema.safeParse(cleanArgs);
     if (!result.success) {
@@ -171,7 +170,7 @@ export async function handleCheckAvailability(request: CallToolRequest) {
         content: [
           {
             type: "text",
-            text: `Failed to check availability: ${errorMessages}. Please provide the missing or incorrect information.`,
+            text: `Failed to check availability: ${errorMessages}. Retry again with correct tool parameters and values.`,
           },
         ],
       };
@@ -249,7 +248,7 @@ export async function handleBookAppointment(request: CallToolRequest) {
         content: [
           {
             type: "text",
-            text: `Failed to Book Appointment: ${errorMessages}. Please provide the missing or incorrect information.`,
+            text: `Failed to Book Appointment: ${errorMessages}. Retry again with correct tool parameters and values.`,
           },
         ],
       };
@@ -348,7 +347,7 @@ export async function handleRescheduleAppointment(request: CallToolRequest) {
         content: [
           {
             type: "text",
-            text: `Failed to reschedule appointment: ${errorMessages}. Please provide the missing or incorrect information. You have some missing creds like, access token, location id, contact id, calendar id. Please try again.`,
+            text: `Failed to reschedule appointment: ${errorMessages}. Retry again with correct tool parameters and values.`,
           },
         ],
       };
@@ -360,13 +359,12 @@ export async function handleRescheduleAppointment(request: CallToolRequest) {
     const ghlLocationId = lead?.Business.BusinessIntegration?.ghlLocationId;
     const ghlContactId = lead?.ghlContactId;
     const ghlCalendarId = lead?.Conversation?.ActiveAgent?.ghlCalendarId;
-    console.log({ ghlAccessToken, ghlContactId, ghlCalendarId, ghlLocationId });
     if (!ghlAccessToken || !ghlContactId || !ghlCalendarId || !ghlLocationId) {
       return {
         content: [
           {
             type: "text",
-            text: "Failed to Book appointment. You have some missing creds like, access token, location id, contact id, calendar id. Please try again.",
+            text: "Failed to Book appointment. You have some missing creds like, access token, location id, contact id, calendar id. Retry again with correct tool parameters and values.",
           },
         ],
       };
@@ -428,7 +426,7 @@ export async function handleCancelAppointment(request: CallToolRequest) {
         content: [
           {
             type: "text",
-            text: `Failed to cancel appointment: ${errorMessages}. Please provide the missing or incorrect information.`,
+            text: `Failed to cancel appointment: ${errorMessages}. Retry again with correct tool parameters and values.`,
           },
         ],
       };
@@ -516,7 +514,7 @@ export async function handleGetAppointments(request: CallToolRequest) {
         content: [
           {
             type: "text",
-            text: `Failed to check availability: ${errorMessages}. Please provide the missing or incorrect information.`,
+            text: `Failed to check availability: ${errorMessages}. Retry again with correct tool parameters and values.`,
           },
         ],
       };

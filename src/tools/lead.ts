@@ -281,7 +281,7 @@ export async function handleCreateLead(request: CallToolRequest) {
         content: [
           {
             type: "text",
-            text: `Failed to create lead: ${errorMessages}. Please provide the missing or incorrect information.`,
+            text: `Failed to create lead: ${errorMessages}. Retry again with correct tool parameters and values.`,
           },
         ],
       };

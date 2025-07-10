@@ -126,9 +126,9 @@ export const getAppointments = async ({
     }
 
     let formattedResponse = "";
-    let index = 1;
+    let index = 0;
     for (const booking of agentData) {
-      if (index === 1) {
+      if (index === 0) {
         formattedResponse += `Here are your upcoming meetings: \n\n`;
       }
 

@@ -235,7 +235,7 @@ export async function handleCreateMeeting(request: CallToolRequest) {
         content: [
           {
             type: "text",
-            text: `Failed to create meeting: ${errorMessages}. Please provide the missing or incorrect information.`,
+            text: `Failed to create meeting: ${errorMessages}. Retry again with correct tool parameters and values.`,
           },
         ],
       };
@@ -419,7 +419,7 @@ export async function handleUpdateMeeting(request: CallToolRequest) {
         content: [
           {
             type: "text",
-            text: `Failed to update meeting: ${errorMessages}. Please provide the missing or incorrect information.`,
+            text: `Failed to update meeting: ${errorMessages}. Retry again with correct tool parameters and values.`,
           },
         ],
       };
@@ -488,7 +488,7 @@ export async function handleUpdateMeetingByLead(request: CallToolRequest) {
         content: [
           {
             type: "text",
-            text: `Failed to update meeting: ${errorMessages}. Please provide the missing or incorrect information.`,
+            text: `Failed to update meeting: ${errorMessages}. Retry again with correct tool parameters and values.`,
           },
         ],
       };
@@ -557,7 +557,7 @@ export async function handleUpdateMeetingStatus(request: CallToolRequest) {
         content: [
           {
             type: "text",
-            text: `Failed to update meeting status: ${errorMessages}. Please provide the missing or incorrect information.`,
+            text: `Failed to update meeting status: ${errorMessages}. Retry again with correct tool parameters and values.`,
           },
         ],
       };
@@ -625,7 +625,7 @@ export async function handleUpdateOverdueNoShow(request: CallToolRequest) {
         content: [
           {
             type: "text",
-            text: `Failed to update overdue meetings: ${errorMessages}. Please provide the missing or incorrect information.`,
+            text: `Failed to update overdue meetings: ${errorMessages}. Retry again with correct tool parameters and values.`,
           },
         ],
       };

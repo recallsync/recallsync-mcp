@@ -129,7 +129,7 @@ When developing new tools for the MCP SDK, follow these steps:
        content: [
          {
            type: "text",
-           text: `Failed to process request: ${errorMessages}. Please provide the missing or incorrect information.`,
+           text: `Failed to process request: ${errorMessages}. Retry again with correct tool parameters and values.`,
          },
        ],
      };

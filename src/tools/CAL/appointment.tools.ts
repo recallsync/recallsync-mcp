@@ -184,7 +184,7 @@ export async function handleCheckAvailability(request: CallToolRequest) {
         content: [
           {
             type: "text",
-            text: `Failed to check availability: ${errorMessages}. Please provide the missing or incorrect information.`,
+            text: `Failed to check availability: ${errorMessages}. Retry again with correct tool parameters and values.`,
           },
         ],
       };
@@ -270,7 +270,7 @@ export async function handleBookAppointment(request: CallToolRequest) {
         content: [
           {
             type: "text",
-            text: `Failed to book appointment: ${errorMessages}. Please provide the missing or incorrect information.`,
+            text: `Failed to book appointment: ${errorMessages}. Retry again with correct tool parameters and values.`,
           },
         ],
       };
@@ -352,7 +352,7 @@ export async function handleRescheduleAppointment(request: CallToolRequest) {
         content: [
           {
             type: "text",
-            text: `Failed to check availability: ${errorMessages}. Please provide the missing or incorrect information.`,
+            text: `Failed to check availability: ${errorMessages}. Retry again with correct tool parameters and values.`,
           },
         ],
       };
@@ -416,7 +416,7 @@ export async function handleCancelAppointment(request: CallToolRequest) {
         content: [
           {
             type: "text",
-            text: `Failed to cancel appointment: ${errorMessages}. Please provide the missing or incorrect information.`,
+            text: `Failed to cancel appointment: ${errorMessages}. Retry again with correct tool parameters and values.`,
           },
         ],
       };
@@ -496,7 +496,7 @@ export async function handleGetAppointments(request: CallToolRequest) {
         content: [
           {
             type: "text",
-            text: `Failed to get appointments: ${errorMessages}. Please provide the missing or incorrect information.`,
+            text: `Failed to get appointments: ${errorMessages}. Retry again with correct tool parameters and values.`,
           },
         ],
       };
