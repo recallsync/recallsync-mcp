@@ -481,11 +481,14 @@ export const updateAppointment = async (props: UpdateGHLAppointment) => {
             },
           });
         }
+
+        // Check if meeting exists before updating
         const appointment = await tx.meeting.findUnique({
           where: {
-            id: props.rescheduleOrCancelId,
+            meetingId: props.rescheduleOrCancelId,
           },
         });
+
         if (appointment) {
           await updateMeeting({
             meetingId: appointmentData.id,
@@ -503,7 +506,7 @@ export const updateAppointment = async (props: UpdateGHLAppointment) => {
           await bookMeeting({
             businessId,
             startTime: scheduledAt,
-            leadId: "",
+            leadId: id,
             agencyId,
             meetingId: appointmentData.id,
             caledarType: CALENDAR_TYPE.GHL,

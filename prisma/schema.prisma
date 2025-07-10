@@ -579,7 +579,8 @@ model Agent {
 }
 
 model Meeting {
-  id String @id @default(uuid())
+  id        String @id @default(uuid())
+  meetingId String @unique
 
   startTime     String
   messageOfLead String         @db.Text

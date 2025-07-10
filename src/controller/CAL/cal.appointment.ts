@@ -291,20 +291,12 @@ export const rescheduleAppointment = async ({
     const ianaTimezone = lead.ianaTimezone;
     const { newStartTime, rescheduleOrCancelId } = args;
 
-    // Console logs for debugging time and timezone
-    console.log("🔄 Rescheduling appointment - Time debugging:");
-    console.log("📅 Original newStartTime from args:", newStartTime);
-    console.log("🌍 Lead timezone (ianaTimezone):", ianaTimezone);
-
     // Format the time in the lead's timezone without converting to UTC
     const start = formatInTimeZone(
       newStartTime,
       ianaTimezone,
       "yyyy-MM-dd'T'HH:mm:ss.SSSXXX"
     );
-
-    console.log("📝 Formatted start time string for API:", start);
-    console.log("🔍 rescheduleOrCancelId:", rescheduleOrCancelId);
 
     const { calApiKey } = calendar;
     const {
@@ -358,64 +350,29 @@ export const rescheduleAppointment = async ({
             },
           });
         }
-        // Debug logging for meeting IDs
-        console.log("🔍 Meeting ID debugging:");
-        console.log(
-          "📋 Original rescheduleOrCancelId (looking for):",
-          rescheduleOrCancelId
-        );
-        console.log("🆕 New booking UID from Cal.com:", data.data.uid);
+
+        const newMeetingId = data.data.uid;
 
         // Check if meeting exists before updating
         const existingMeeting = await tx.meeting.findUnique({
-          where: { id: rescheduleOrCancelId },
+          where: { meetingId: rescheduleOrCancelId },
         });
-
-        console.log("📊 Existing meeting found:", !!existingMeeting);
+        console.log("existingMeeting", existingMeeting);
 
         if (existingMeeting) {
-          if (data.data.uid !== rescheduleOrCancelId) {
-            console.log(
-              `🔄 Cal.com generated new UID: ${data.data.uid}, replacing record ${rescheduleOrCancelId}`
-            );
-
-            // Delete the old record and create new one with updated UID
-            await tx.meeting.delete({
-              where: { id: rescheduleOrCancelId },
-            });
-
-            await bookMeeting({
-              businessId: businessId,
-              startTime: new Date(newStartTime).toISOString(),
-              leadId: id,
-              agencyId: agencyId,
-              meetingId: data.data.uid, // Use new Cal.com UID
-              caledarType: CALENDAR_TYPE.CAL,
-              meetingSource: MEETING_SOURCE.PLATFORM,
-              status: "UPCOMING",
-              meetingUrl: data.data.meetingUrl,
-              automations: Automations,
-              transaction: tx,
-              createdAt: new Date(data.data.createdAt),
-              updatedAt: new Date(data.data.updatedAt),
-            });
-          } else {
-            await updateMeeting({
-              meetingId: rescheduleOrCancelId,
-              newStartTime: new Date(newStartTime),
-              status: "UPCOMING",
-              automations: Automations,
-              transaction: tx,
-            });
-          }
+          console.log("updating meeting");
+          await tx.meeting.update({
+            where: { id: existingMeeting.id },
+            data: {
+              meetingId: newMeetingId,
+              startTime: new Date(start).toISOString(),
+            },
+          });
         } else {
-          console.log(
-            `Meeting with ID ${rescheduleOrCancelId} not found, creating new record`
-          );
           // Create a new meeting record if the original doesn't exist
           await bookMeeting({
             businessId: businessId,
-            startTime: new Date(newStartTime).toISOString(),
+            startTime: new Date(start).toISOString(),
             leadId: id,
             agencyId: agencyId,
             meetingId: data.data.uid,
@@ -450,6 +407,7 @@ export const cancelAppointment = async ({
 }: CancelAppointmentProps) => {
   try {
     if (!lead) return;
+    console.log({ args });
     const { rescheduleOrCancelId } = args;
     const { calApiKey } = calendar;
     const {

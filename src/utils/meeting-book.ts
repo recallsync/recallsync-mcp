@@ -46,7 +46,7 @@ export const bookMeeting = async ({
   try {
     const data = await transaction.meeting.create({
       data: {
-        id: meetingId,
+        meetingId: meetingId,
         businessId: businessId || "",
         agencyId: agencyId,
         leadId,
@@ -124,7 +124,7 @@ export const updateMeeting = async ({
 
     const data = await transaction.meeting.update({
       where: {
-        id: meetingId,
+        meetingId: meetingId,
       },
 
       data: {
