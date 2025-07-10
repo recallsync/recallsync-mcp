@@ -1,4 +1,5 @@
 import {
+  AUTOMATION_EVENT,
   CALENDAR_TYPE,
   CalenderIntegration,
   Lead,
@@ -28,7 +29,10 @@ import {
   slotsToAIString,
 } from "../../utils/ca.utils.js";
 import { bookMeeting, updateMeeting } from "../../utils/meeting-book.js";
-import { LeadWithBizz } from "../../utils/integration.util.js";
+import {
+  LeadWithBizz,
+  triggerAutomation,
+} from "../../utils/integration.util.js";
 import { prisma } from "../../lib/prisma.js";
 import { formatInTimeZone } from "date-fns-tz";
 
@@ -46,9 +50,10 @@ export const checkAvailability = async ({
   const { id, agencyId, businessId } = lead;
   const { startDate, timezone } = args;
   const { calEventId, calApiKey } = calendar;
+  const GAP = 1; // 1 day gap between start and end
 
   let start = format(new Date(startDate), "yyyy-MM-dd");
-  let end = format(addDays(new Date(start), 2), "yyyy-MM-dd");
+  let end = format(addDays(new Date(start), GAP), "yyyy-MM-dd");
 
   let availability: CompactAvailability = {};
   let iteration = 0;
@@ -115,12 +120,13 @@ export const checkAvailability = async ({
       // No slots found, move to next range
     } catch (err) {
       console.error(`Error fetching availability for ${start} to ${end}:`, err);
-      // Continue to next iteration even on error
     }
 
     // Move to next range of dates (2 days forward)
-    start = format(addDays(new Date(start), 2), "yyyy-MM-dd");
-    end = format(addDays(new Date(end), 2), "yyyy-MM-dd");
+    start = format(addDays(new Date(start), GAP), "yyyy-MM-dd");
+    end = format(addDays(new Date(end), GAP), "yyyy-MM-dd");
+    // wait for 500ms
+    await new Promise((resolve) => setTimeout(resolve, 500));
   }
 
   if (Object.keys(availability).length === 0) {
@@ -266,7 +272,7 @@ export const bookAppointment = async ({
         });
       });
 
-      return `Appointment booked successfully. Booking URL: ${data.data.meetingUrl}, Booking rescheduleOrCancelUid: ${data.data.uid}`;
+      return `Appointment booked successfully. Booking URL: ${data.data.meetingUrl}, **rescheduleOrCancelId: ${data.data.uid}**`;
     }
   } catch (err) {
     if (err instanceof AxiosError) {
@@ -357,11 +363,9 @@ export const rescheduleAppointment = async ({
         const existingMeeting = await tx.meeting.findUnique({
           where: { meetingId: rescheduleOrCancelId },
         });
-        console.log("existingMeeting", existingMeeting);
-
+        let updatedMeeting;
         if (existingMeeting) {
-          console.log("updating meeting");
-          await tx.meeting.update({
+          updatedMeeting = await tx.meeting.update({
             where: { id: existingMeeting.id },
             data: {
               meetingId: newMeetingId,
@@ -370,23 +374,36 @@ export const rescheduleAppointment = async ({
           });
         } else {
           // Create a new meeting record if the original doesn't exist
-          await bookMeeting({
-            businessId: businessId,
-            startTime: new Date(start).toISOString(),
-            leadId: id,
-            agencyId: agencyId,
-            meetingId: data.data.uid,
-            caledarType: CALENDAR_TYPE.CAL,
-            meetingSource: MEETING_SOURCE.PLATFORM,
-            status: "UPCOMING",
-            meetingUrl: data.data.meetingUrl,
-            automations: Automations,
-            transaction: tx,
+          updatedMeeting = await tx.meeting.create({
+            data: {
+              meetingId: newMeetingId,
+              businessId: businessId,
+              agencyId: agencyId,
+              leadId: id,
+              status: "UPCOMING",
+              startTime: new Date(start).toISOString(),
+              messageOfLead: "",
+              calendarType: CALENDAR_TYPE.CAL,
+              meetingSource: MEETING_SOURCE.OUTSIDE,
+              meetingUrl: data.data.meetingUrl || "",
+            },
           });
         }
+
+        // send event to automation
+        await triggerAutomation({
+          automations: Automations,
+          event: AUTOMATION_EVENT.MEETING_UPDATED,
+          data: { meeting: existingMeeting, updatedMeeting },
+        });
+        await triggerAutomation({
+          automations: Automations,
+          event: AUTOMATION_EVENT.MEETING_EVENTS,
+          data: { meeting: existingMeeting, updatedMeeting },
+        });
       });
     }
-    return `Appointment rescheduled successfully. Booking ID: ${data.data.id}, Booking URL: ${data.data.meetingUrl}, New rescheduleOrCancelId: ${data.data.uid}`;
+    return `Appointment rescheduled successfully. Booking ID: ${data.data.id}, Booking URL: ${data.data.meetingUrl}, Updated **rescheduleOrCancelId: ${data.data.uid}**`;
   } catch (err) {
     if (err instanceof AxiosError) {
       console.log({ err: JSON.stringify(err.response?.data) });
@@ -429,6 +446,7 @@ export const cancelAppointment = async ({
       }
     );
     const data = res.data; // for @db
+    const newMeetingId = data.data.uid;
     const conversationId = lead.Conversation?.id;
     if (data.data) {
       await prisma.$transaction(async (tx) => {
@@ -457,30 +475,54 @@ export const cancelAppointment = async ({
         }
         // Check if meeting exists before updating
         const existingMeeting = await tx.meeting.findUnique({
-          where: { id: rescheduleOrCancelId },
+          where: { meetingId: rescheduleOrCancelId },
         });
 
+        let updatedMeeting;
+
         if (existingMeeting) {
-          await updateMeeting({
-            meetingId: rescheduleOrCancelId, // Use original ID to find the meeting
+          updatedMeeting = await updateMeeting({
+            meetingId: rescheduleOrCancelId,
             status: "CANCELLED",
-            automations: Automations,
             transaction: tx,
           });
         } else {
-          console.log(
-            `Meeting with ID ${rescheduleOrCancelId} not found for cancellation`
-          );
+          // Create a new meeting record if the original doesn't exist
+          updatedMeeting = await tx.meeting.create({
+            data: {
+              meetingId: newMeetingId,
+              businessId: businessId,
+              agencyId: agencyId,
+              leadId: id,
+              status: "CANCELLED",
+              startTime: new Date(data.data.start).toISOString(),
+              messageOfLead: "",
+              calendarType: CALENDAR_TYPE.CAL,
+              meetingSource: MEETING_SOURCE.PLATFORM,
+              meetingUrl: data.data.meetingUrl || "",
+            },
+          });
         }
+        // send event to automation
+        await triggerAutomation({
+          automations: Automations,
+          event: AUTOMATION_EVENT.MEETING_UPDATED,
+          data: { meeting: existingMeeting, updatedMeeting },
+        });
+        await triggerAutomation({
+          automations: Automations,
+          event: AUTOMATION_EVENT.MEETING_EVENTS,
+          data: { meeting: existingMeeting, updatedMeeting },
+        });
       });
     }
 
-    return `Appointment cancelled successfully. Booking ID: ${data.data.id}, Booking URL: ${data.data.meetingUrl}, rescheduleOrCancelUid: ${data.data.uid}`;
+    return `Appointment cancelled successfully. Booking ID: ${data.data.id}, Booking URL: ${data.data.meetingUrl}, **rescheduleOrCancelId: ${data.data.uid}**`;
   } catch (err) {
     if (err instanceof AxiosError) {
       console.log({ err: JSON.stringify(err.response?.data) });
     }
-    return "Appointment cancellation failed, ask for another time or date-time";
+    return "Appointment cancellation failed, get user's upcoming appointments";
   }
 };
 
@@ -552,7 +594,5 @@ export const getCalBookings = async ({
       },
     });
   }
-
-  console.log("Cal bookings fetched successfully", data);
   return formattedResponse;
 };

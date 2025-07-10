@@ -12,6 +12,7 @@ import {
 import { chunkConsecutiveSlots } from "../../utils/ghl.js";
 import { formatInTimeZone, fromZonedTime, toZonedTime } from "date-fns-tz";
 import {
+  AUTOMATION_EVENT,
   CALENDAR_TYPE,
   MEETING_SOURCE,
   MESSAGE_SENDER,
@@ -22,7 +23,10 @@ import {
 } from "../../generated/client/index.js";
 import { bookMeeting, updateMeeting } from "../../utils/meeting-book.js";
 import { prisma } from "../../lib/prisma.js";
-import { LeadWithBizz } from "../../utils/integration.util.js";
+import {
+  LeadWithBizz,
+  triggerAutomation,
+} from "../../utils/integration.util.js";
 import { DefaultArgs } from "../../generated/client/runtime/library.js";
 
 type GHLRequestConstructor = {
@@ -189,8 +193,9 @@ export const checkAvailability = async ({
   // Convert date string to timestamp (start of day)
   const startDate = new Date(startDateString).getTime();
 
+  const GAP = 1; // 1 day gap between start and end
   let currentStartTime = startDate;
-  let currentEndTime = addDays(startDate, 1).getTime();
+  let currentEndTime = addDays(startDate, GAP).getTime();
   let iterations = 0;
   const maxIterations = 3;
   // Function to normalize timestamp to start of day (00:00:00)
@@ -250,8 +255,10 @@ export const checkAvailability = async ({
     }
     if (iterations < maxIterations) {
       // increment the start and end date by 1 day
-      currentStartTime = addDays(currentStartTime, 1).getTime();
-      currentEndTime = addDays(currentEndTime, 1).getTime();
+      currentStartTime = addDays(currentStartTime, GAP).getTime();
+      currentEndTime = addDays(currentEndTime, GAP).getTime();
+      // wait for 500ms
+      await new Promise((resolve) => setTimeout(resolve, 500));
     }
   }
   return [];
@@ -483,39 +490,48 @@ export const updateAppointment = async (props: UpdateGHLAppointment) => {
         }
 
         // Check if meeting exists before updating
-        const appointment = await tx.meeting.findUnique({
+        const existingMeeting = await tx.meeting.findUnique({
           where: {
             meetingId: props.rescheduleOrCancelId,
           },
         });
 
-        if (appointment) {
-          await updateMeeting({
+        let updatedMeeting;
+
+        if (existingMeeting) {
+          updatedMeeting = await updateMeeting({
             meetingId: appointmentData.id,
-            newStartTime: new Date(appointment.startTime),
-            status: "UPCOMING",
+            newStartTime: new Date(appointmentData.startTime),
+            status: props.type === "cancel" ? "CANCELLED" : "UPCOMING",
             transaction: tx,
-            automations: Automations,
           });
         } else {
-          const scheduledAt = new Date(
-            props.type === "reschedule"
-              ? props.newStartTime
-              : appointmentData.startTime
-          );
-          await bookMeeting({
-            businessId,
-            startTime: scheduledAt,
-            leadId: id,
-            agencyId,
-            meetingId: appointmentData.id,
-            caledarType: CALENDAR_TYPE.GHL,
-            meetingSource: MEETING_SOURCE.OUTSIDE,
-            status: "UPCOMING",
-            transaction: tx,
-            automations: Automations,
+          updatedMeeting = await tx.meeting.create({
+            data: {
+              meetingId: appointmentData.id,
+              businessId: businessId,
+              agencyId: agencyId,
+              leadId: id,
+              status: "UPCOMING",
+              startTime: new Date(appointmentData.startTime).toISOString(),
+              messageOfLead: "",
+              calendarType: CALENDAR_TYPE.GHL,
+              meetingSource: MEETING_SOURCE.OUTSIDE,
+            },
           });
         }
+
+        // send event to automation
+        await triggerAutomation({
+          automations: Automations,
+          event: AUTOMATION_EVENT.MEETING_UPDATED,
+          data: { meeting: existingMeeting, updatedMeeting },
+        });
+        await triggerAutomation({
+          automations: Automations,
+          event: AUTOMATION_EVENT.MEETING_EVENTS,
+          data: { meeting: existingMeeting, updatedMeeting },
+        });
       });
     }
     return {

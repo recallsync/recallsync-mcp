@@ -99,14 +99,12 @@ interface UpdateMeetingInput {
   meetingId: string;
   newStartTime?: Date;
   status: MEETING_STATUS;
-  automations: Automation[];
   transaction?: any;
 }
 export const updateMeeting = async ({
   meetingId,
   newStartTime,
   status,
-  automations,
   transaction = prisma,
 }: UpdateMeetingInput) => {
   console.log("update meeting", { meetingId, newStartTime, status });
@@ -130,16 +128,6 @@ export const updateMeeting = async ({
       data: {
         ...payload,
       },
-    });
-    await triggerAutomation({
-      automations,
-      event: AUTOMATION_EVENT.MEETING_UPDATED,
-      data: { meeting: data },
-    });
-    await triggerAutomation({
-      automations,
-      event: AUTOMATION_EVENT.MEETING_EVENTS,
-      data: { meeting: data },
     });
     return {
       success: true,
