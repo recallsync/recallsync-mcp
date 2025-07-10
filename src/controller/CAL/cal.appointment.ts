@@ -27,7 +27,7 @@ import {
   CompactAvailability,
   compactTimeSlots,
   slotsToAIString,
-} from "../../utils/ca.utils.js";
+} from "../../utils/cal.utils.js";
 import { bookMeeting, updateMeeting } from "../../utils/meeting-book.js";
 import {
   LeadWithBizz,
@@ -562,9 +562,18 @@ export const getCalBookings = async ({
       formattedResponse += `Booking ${index + 1}:\n 
       **rescheduleOrCancelId: ${booking.uid}**,
       Title: ${booking.title},
-      Start: ${format(new Date(booking.start), "dd MMM yyyy, hh:mm a")},
-      End: ${format(new Date(booking.end), "dd MMM yyyy, hh:mm a")},
+      Start: ${formatInTimeZone(
+        new Date(booking.start),
+        lead.ianaTimezone,
+        "dd MMM yyyy, hh:mm a"
+      )},
+      End: ${formatInTimeZone(
+        new Date(booking.end),
+        lead.ianaTimezone,
+        "dd MMM yyyy, hh:mm a"
+      )},
       Status: ${booking.status} 
+      TZ: ${lead.ianaTimezone}
       --------------------------------- \n`;
       index++;
     }

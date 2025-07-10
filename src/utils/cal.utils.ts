@@ -1,3 +1,4 @@
+import { formatInTimeZone } from "date-fns-tz";
 import { AvailabilityData } from "../types/cal.types";
 
 interface CompactSlot {
@@ -11,12 +12,7 @@ export interface CompactAvailability {
 }
 
 function formatTime12Hour(date: Date, timezone: string): string {
-  return date.toLocaleTimeString("en-US", {
-    hour: "numeric",
-    minute: "2-digit",
-    hour12: true,
-    timeZone: timezone,
-  });
+  return formatInTimeZone(date, timezone, "h:mm a");
 }
 
 function formatDate(dateStr: string): string {
@@ -114,29 +110,3 @@ export function slotsToAIString(
 
   return result.join("\n");
 }
-
-// Example usage:
-/*
-  const availabilityData = {
-    "data": {
-      "2025-07-02": [
-        {
-          "start": "2025-07-02T10:00:00.000+05:30",
-          "end": "2025-07-02T10:30:00.000+05:30"
-        },
-        {
-          "start": "2025-07-02T10:30:00.000+05:30",
-          "end": "2025-07-02T11:00:00.000+05:30"
-        }
-        // ... more slots
-      ]
-    },
-    "status": "success"
-  };
-  
-  const compact = compactTimeSlots(availabilityData);
-  console.log(compact);
-  
-  const aiString = slotsToAIString(availabilityData);
-  console.log(aiString);
-  */
