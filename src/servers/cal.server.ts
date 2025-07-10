@@ -13,6 +13,7 @@ import {
   handleGetAppointments,
   handleRescheduleAppointment,
 } from "../tools/CAL/appointment.tools.js";
+import { executeToolWithTimeout } from "../utils/tool-timeout.util.js";
 
 export const calServer = new Server(
   {
@@ -46,19 +47,45 @@ calServer.setRequestHandler(ListToolsRequestSchema, async () => {
 
 // Handle tool execution
 calServer.setRequestHandler(CallToolRequestSchema, async (request) => {
-  switch (request.params.name) {
-    case "check_availability":
-      return handleCheckAvailability(request);
-    case "book_appointment":
-      return handleBookAppointment(request);
-    case "reschedule_appointment":
-      return handleRescheduleAppointment(request);
-    case "cancel_appointment":
-      return handleCancelAppointment(request);
-    case "get_appointments":
-      return handleGetAppointments(request);
-    default:
-      throw new Error("Unknown tool");
+  const { name } = request.params;
+  try {
+    switch (name) {
+      case "check_availability":
+        return await executeToolWithTimeout(
+          () => handleCheckAvailability(request),
+          name,
+          { retries: 2 }
+        );
+      case "get_appointments":
+        return await executeToolWithTimeout(
+          () => handleGetAppointments(request),
+          name,
+          { retries: 2 }
+        );
+      case "book_appointment":
+        return await executeToolWithTimeout(
+          () => handleBookAppointment(request),
+          name
+        );
+      case "reschedule_appointment":
+        return await executeToolWithTimeout(
+          () => handleRescheduleAppointment(request),
+          name
+        );
+      case "cancel_appointment":
+        return await executeToolWithTimeout(
+          () => handleCancelAppointment(request),
+          name
+        );
+      default:
+        throw new Error(`Unknown tool: ${name}`);
+    }
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "An unknown error occurred";
+    return {
+      content: [{ type: "text", text: `Tool execution failed: ${message}` }],
+    };
   }
 });
 

@@ -326,6 +326,7 @@ export const rescheduleAppointment = async ({
       }
     );
     const data = res.data; // for @db
+    console.log({ calRescheduling: data });
     const conversationId = lead.Conversation?.id;
     if (data.data) {
       await prisma.$transaction(async (tx) => {
@@ -408,7 +409,7 @@ export const rescheduleAppointment = async ({
     if (err instanceof AxiosError) {
       console.log({ err: JSON.stringify(err.response?.data) });
     }
-    return "Appointment rescheduling failed, ask for another time or date-time";
+    return "Appointment rescheduling failed, get upcoming appointments";
   }
 };
 

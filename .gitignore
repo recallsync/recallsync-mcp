@@ -4,7 +4,7 @@ node_modules
 dist
 
 /src/generated/prisma
-
+playground/
 # Log files
 *.log
 error.log
