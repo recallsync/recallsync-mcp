@@ -281,8 +281,9 @@ export const bookAppointment = async ({
   } catch (err) {
     if (err instanceof AxiosError) {
       console.log({ err: JSON.stringify(err.response?.data) });
+      return "Appointment booking failed:" + err.response?.data.message;
     }
-    return "Appointment booking failed, ask for another time or date-time";
+    return "Appointment booking failed, give user another timeslot around the same time";
   }
 };
 

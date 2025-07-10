@@ -303,7 +303,7 @@ export async function handleBookAppointment(request: CallToolRequest) {
       content: [
         {
           type: "text",
-          text: `Appointment booked successfully: \n ${response}`,
+          text: response,
         },
       ],
     };
