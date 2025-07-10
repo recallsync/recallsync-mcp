@@ -554,18 +554,22 @@ export const getCalBookings = async ({
   // format the string response for AI - also include the booking 'uid'
   let formattedResponse = "";
   let index = 1;
-  for (const booking of data.data) {
-    if (index === 0) {
-      formattedResponse += `Here are your upcoming meetings: \n\n`;
+  if (data.data.length > 0) {
+    for (const booking of data.data) {
+      if (index === 0) {
+        formattedResponse += `Here are your upcoming meetings: \n\n`;
+      }
+      formattedResponse += `Booking ${index + 1}:\n 
+      **rescheduleOrCancelId: ${booking.uid}**,
+      Title: ${booking.title},
+      Start: ${format(new Date(booking.start), "dd MMM yyyy, hh:mm a")},
+      End: ${format(new Date(booking.end), "dd MMM yyyy, hh:mm a")},
+      Status: ${booking.status} 
+      --------------------------------- \n`;
+      index++;
     }
-    formattedResponse += `Booking ${index + 1}:\n 
-    **rescheduleOrCancelId: ${booking.uid}**,
-    Title: ${booking.title},
-    Start: ${format(new Date(booking.start), "dd MMM yyyy, hh:mm a")},
-    End: ${format(new Date(booking.end), "dd MMM yyyy, hh:mm a")},
-    Status: ${booking.status} 
-    --------------------------------- \n`;
-    index++;
+  } else {
+    formattedResponse = "No upcoming appointments found";
   }
 
   // create a system message
