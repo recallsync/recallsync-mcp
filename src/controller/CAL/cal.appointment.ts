@@ -82,8 +82,8 @@ export const checkAvailability = async ({
         );
 
         if (hasActualSlots) {
-          const compact = compactTimeSlots(availabilityData);
-          const aiString = slotsToAIString(availabilityData);
+          const compact = compactTimeSlots(availabilityData, timezone);
+          const aiString = slotsToAIString(availabilityData, timezone);
           availability = compact;
 
           // create a system message
@@ -105,7 +105,7 @@ export const checkAvailability = async ({
                     ...args,
                   },
                   output: {
-                    compact: JSON.stringify(availability),
+                    compact: JSON.parse(JSON.stringify(availability)),
                     raw: availabilityData,
                   },
                 },

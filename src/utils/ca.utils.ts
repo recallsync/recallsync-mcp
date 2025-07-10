@@ -10,11 +10,12 @@ export interface CompactAvailability {
   [date: string]: CompactSlot[];
 }
 
-function formatTime12Hour(date: Date): string {
+function formatTime12Hour(date: Date, timezone: string): string {
   return date.toLocaleTimeString("en-US", {
     hour: "numeric",
     minute: "2-digit",
     hour12: true,
+    timeZone: timezone,
   });
 }
 
@@ -46,7 +47,8 @@ function calculateDuration(startTime: Date, endTime: Date): string {
 }
 
 export function compactTimeSlots(
-  availability: AvailabilityData
+  availability: AvailabilityData,
+  timezone: string
 ): CompactAvailability {
   const compact: CompactAvailability = {};
 
@@ -67,8 +69,8 @@ export function compactTimeSlots(
       } else {
         // Gap found, save current range and start new one
         compactSlots.push({
-          start: formatTime12Hour(currentRangeStart),
-          end: formatTime12Hour(currentRangeEnd),
+          start: formatTime12Hour(currentRangeStart, timezone),
+          end: formatTime12Hour(currentRangeEnd, timezone),
           duration: calculateDuration(currentRangeStart, currentRangeEnd),
         });
 
@@ -79,8 +81,8 @@ export function compactTimeSlots(
 
     // Don't forget the last range
     compactSlots.push({
-      start: formatTime12Hour(currentRangeStart),
-      end: formatTime12Hour(currentRangeEnd),
+      start: formatTime12Hour(currentRangeStart, timezone),
+      end: formatTime12Hour(currentRangeEnd, timezone),
       duration: calculateDuration(currentRangeStart, currentRangeEnd),
     });
 
@@ -91,8 +93,11 @@ export function compactTimeSlots(
 }
 
 // Alternative function for AI-friendly string format
-export function slotsToAIString(availability: AvailabilityData): string {
-  const compact = compactTimeSlots(availability);
+export function slotsToAIString(
+  availability: AvailabilityData,
+  timezone: string
+): string {
+  const compact = compactTimeSlots(availability, timezone);
   const result: string[] = [];
 
   for (const [dateStr, slots] of Object.entries(compact)) {
