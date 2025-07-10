@@ -30,7 +30,7 @@ export const executeToolWithTimeout = async <T>(
   toolName: string,
   options: { retries?: number } = {}
 ): Promise<T> => {
-  const timeoutMs = 30000;
+  const timeoutMs = 60000;
   const { retries: maxRetries = 0 } = options;
   let lastError: Error | null = null;
 
