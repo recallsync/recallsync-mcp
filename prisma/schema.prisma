@@ -873,6 +873,8 @@ model FollowUp {
   source     FOLLOW_UP_SOURCE @default(MANUAL_SCHEDULED) // source of the follow up
   channel    Json             @default("[]") // multiple channel of the follow up
 
+  referenceId String? // for meeting followup reference id will be meeting id
+
   leadId String
   Lead   Lead   @relation(fields: [leadId], references: [id], onDelete: Cascade)
 
