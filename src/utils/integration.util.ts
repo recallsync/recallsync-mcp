@@ -93,6 +93,6 @@ export const sendEventToAutomation = async (
       },
     });
   } catch (err: any) {
-    console.log("Error sending event", { err: err.response });
+    console.log("Error sending event", { err: err.message });
   }
 };

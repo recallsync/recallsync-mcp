@@ -73,6 +73,19 @@ const sseTransports: { [sessionId: string]: SSEServerTransport } = {};
 const ghlSSETransports: { [sessionId: string]: SSEServerTransport } = {};
 const calSSETransports: { [sessionId: string]: SSEServerTransport } = {};
 
+// Session cleanup function
+const cleanupTransport = (
+  transportMap: any,
+  sessionId: string,
+  transportType: string
+) => {
+  if (transportMap[sessionId]) {
+    delete transportMap[sessionId];
+    // Only log cleanup if needed for debugging
+    // console.log(`🗑️ ${transportType} transport cleaned up:`, sessionId);
+  }
+};
+
 // Root Endpoint (status)
 app.get("/", (req: Request, res: Response) => {
   const port = process.env.PORT || 3001;
@@ -279,52 +292,54 @@ app.all("/mcp-cal", async (req: Request, res: Response) => {
   try {
     const sessionId = req.headers["mcp-session-id"] as string | undefined;
     const api_key = req.headers["api_key"] as string;
+
     let transport: StreamableHTTPServerTransport;
+
+    // Check if this is a tool call and we have a valid session
+    const isToolCall = req.body && req.body.method === "tools/call";
 
     if (sessionId && calTransports[sessionId]) {
       // Reuse existing transport
       transport = calTransports[sessionId];
-      logger.debug(`Reusing existing Cal transport`, { sessionId });
     } else if (!sessionId && isInitializeRequest(req.body)) {
       // New initialization request
-      logger.info(`Creating new Cal MCP transport`);
       transport = new StreamableHTTPServerTransport({
         sessionIdGenerator: () => randomUUID(),
         onsessioninitialized: (sessionId) => {
           calTransports[sessionId] = transport;
-          logger.info(`Cal MCP session initialized`, { sessionId });
         },
       });
 
       // Clean up transport when closed
       transport.onclose = () => {
         if (transport.sessionId) {
-          delete calTransports[transport.sessionId];
-          logger.info(`Cal MCP transport closed`, {
-            sessionId: transport.sessionId,
-          });
+          cleanupTransport(calTransports, transport.sessionId, "Cal MCP");
         }
       };
 
       // Connect to the Cal server
       await calServer.connect(transport);
     } else {
-      // Invalid request
-      logger.warn(`Invalid Cal MCP request - no valid session ID provided`);
-      res.status(400).json({
-        jsonrpc: "2.0",
-        error: {
-          code: -32000,
-          message: "Bad Request: No valid session ID provided",
-        },
-        id: null,
-      });
-      return;
+      // Invalid request - but for n8n, let's be more lenient
+      if (isToolCall && Object.keys(calTransports).length > 0) {
+        // If it's a tool call and we have any active session, use the first one
+        const availableSessionId = Object.keys(calTransports)[0];
+        transport = calTransports[availableSessionId];
+      } else {
+        res.status(400).json({
+          jsonrpc: "2.0",
+          error: {
+            code: -32000,
+            message: "Bad Request: No valid session ID provided",
+          },
+          id: null,
+        });
+        return;
+      }
     }
 
     // Check for API key
     if (!api_key) {
-      logger.warn(`Unauthorized Cal request - missing API key`, { sessionId });
       res.status(401).json({
         jsonrpc: "2.0",
         error: {
@@ -349,15 +364,11 @@ app.all("/mcp-cal", async (req: Request, res: Response) => {
           },
         },
       };
-      logger.debug("Injected API key into Cal tool call arguments", {
-        sessionId,
-      });
     }
 
     // Handle the request
     await transport.handleRequest(req, res, modifiedBody);
   } catch (error) {
-    logger.error("Error handling Cal MCP request", { error });
     if (!res.headersSent) {
       res.status(500).json({
         jsonrpc: "2.0",

@@ -87,7 +87,7 @@ export const bookMeeting = async ({
     };
   } catch (err) {
     console.log("error booking appointment");
-    console.log({ err });
+    console.log({ err: (err as Error)?.message });
     return {
       success: false,
       data: null,

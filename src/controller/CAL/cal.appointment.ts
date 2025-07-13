@@ -229,6 +229,11 @@ export const bookAppointment = async ({
     );
 
     const data = res.data; // for @db
+    const startInTimezone = formatInTimeZone(
+      new Date(dateTime),
+      timezone,
+      "dd MMM yyyy, hh:mm a"
+    );
     const conversationId = lead.Conversation?.id;
     if (data) {
       await prisma.$transaction(async (tx) => {
@@ -243,11 +248,7 @@ export const bookAppointment = async ({
               conversationId,
               // system fields
               systemEvent: SYSTEM_EVENT.BOOK_APPOINTMENT,
-              systemDescription: `The appointment has been booked for ${formatInTimeZone(
-                new Date(dateTime),
-                timezone,
-                "dd MMM yyyy, hh:mm a"
-              )} (TZ: ${timezone})`,
+              systemDescription: `The appointment has been booked for ${startInTimezone} (TZ: ${timezone})`,
               systemData: {
                 input: {
                   args,
@@ -276,7 +277,7 @@ export const bookAppointment = async ({
         });
       });
 
-      return `Appointment booked successfully. Booking URL: ${data.data.meetingUrl}, **rescheduleOrCancelId: ${data.data.uid}**`;
+      return `Appointment booked successfully. Booking Date: ${startInTimezone}, Booking URL: ${data.data.meetingUrl}, **rescheduleOrCancelId: ${data.data.uid}**`;
     }
   } catch (err) {
     if (err instanceof AxiosError) {
@@ -523,7 +524,13 @@ export const cancelAppointment = async ({
       });
     }
 
-    return `Appointment cancelled successfully. Booking ID: ${data.data.id}, Booking URL: ${data.data.meetingUrl}, **rescheduleOrCancelId: ${data.data.uid}**`;
+    const startInTimezone = formatInTimeZone(
+      new Date(data.data.start),
+      lead.ianaTimezone,
+      "dd MMM yyyy, hh:mm a"
+    );
+
+    return `Appointment cancelled successfully.  Booking Date: ${startInTimezone}, **rescheduleOrCancelId: ${data.data.uid}**`;
   } catch (err) {
     if (err instanceof AxiosError) {
       console.log({ err: JSON.stringify(err.response?.data) });
