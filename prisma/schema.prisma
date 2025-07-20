@@ -853,7 +853,7 @@ model Automation {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  @@unique([agencyId, event])
+  @@unique([businessId, event])
   @@index([agencyId])
   @@index([businessId])
 }
@@ -871,7 +871,7 @@ model FollowUp {
   attempts   Int              @default(0) // number of attempts
   type       FOLLOW_UP_TYPE   @default(AI_AGENT) // type of follow up
   source     FOLLOW_UP_SOURCE @default(MANUAL_SCHEDULED) // source of the follow up
-  channel    Json             @default("[]") // multiple channel of the follow up
+  channel    CHANNEL          @default(EMAIL)
 
   referenceId String? // for meeting followup reference id will be meeting id
 
@@ -895,6 +895,7 @@ model FollowUp {
   @@index([leadId])
   @@index([createdAt])
   @@index([businessId])
+  @@index([referenceId])
 }
 
 model Business {

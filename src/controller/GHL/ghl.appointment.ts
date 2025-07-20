@@ -305,6 +305,16 @@ export const bookAppointment = async ({
     const { dateTime: startTime, leadId, timezone } = input;
     let path = `/calendars/events/appointments`;
     const startTimeUTC = new Date(startTime).toISOString();
+    console.log({
+      startTimeUTC,
+      startTime,
+      timezone,
+      previousTimezone,
+      ghlCalendarId,
+      ghlContactId,
+      ghlLocationId,
+      ghlAccessToken,
+    });
     const request = ghlRequestContructor({
       apiKey: ghlAccessToken,
       method: "POST",
@@ -317,6 +327,7 @@ export const bookAppointment = async ({
       },
     });
     const response = await request;
+    console.log("response", response);
     const appointmentData = (await response.json()) as GHLAppointment;
     const conversationId = lead.Conversation?.id;
     if (response.ok) {
@@ -347,8 +358,9 @@ export const bookAppointment = async ({
               // system fields
               systemEvent: SYSTEM_EVENT.BOOK_APPOINTMENT,
               systemEventStatus: SYSTEM_EVENT_STATUS.SUCCESS,
-              systemDescription: `The appointment has been booked for ${format(
-                new Date(appointmentData.startTime),
+              systemDescription: `The appointment has been booked for ${formatInTimeZone(
+                new Date(startTimeUTC),
+                timezone,
                 "dd MMM yyyy, hh:mm a"
               )}`,
               systemData: {
@@ -369,7 +381,7 @@ export const bookAppointment = async ({
         // Book meeting
         await bookMeeting({
           businessId,
-          startTime: new Date(startTime).toISOString(),
+          startTime: startTimeUTC,
           leadId,
           agencyId,
           meetingId: appointmentData.id,
