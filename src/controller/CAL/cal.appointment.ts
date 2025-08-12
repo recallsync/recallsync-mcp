@@ -175,17 +175,17 @@ export const bookAppointment = async ({
   businessName,
   lead,
 }: BookAppointmentProps) => {
+  if (!lead) return;
+  const { dateTime, timezone, name, email, leadId } = args;
+  const { calEventId, calApiKey } = calendar;
+  const {
+    id,
+    agencyId,
+    businessId,
+    Business: { Automations },
+  } = lead;
+  const conversationId = lead.Conversation?.id;
   try {
-    if (!lead) return;
-    const { dateTime, timezone, name, email, leadId } = args;
-    const { calEventId, calApiKey } = calendar;
-    const {
-      id,
-      agencyId,
-      businessId,
-      Business: { Automations },
-    } = lead;
-
     const fieldsToUpdate: Partial<Record<keyof Lead, string>> = {};
     if (lead.name !== args.name) {
       fieldsToUpdate.name = args.name;
@@ -234,7 +234,7 @@ export const bookAppointment = async ({
       timezone,
       "dd MMM yyyy, hh:mm a"
     );
-    const conversationId = lead.Conversation?.id;
+
     if (data) {
       await prisma.$transaction(async (tx) => {
         if (conversationId) {
@@ -280,7 +280,32 @@ export const bookAppointment = async ({
       return `Appointment booked successfully. Booking Date: ${startInTimezone}, Booking URL: ${data.data.meetingUrl}, **rescheduleOrCancelId: ${data.data.uid}**`;
     }
   } catch (err) {
+    // error conversation message (system log)
+
     if (err instanceof AxiosError) {
+      if (conversationId) {
+        await prisma.conversationMessage.create({
+          data: {
+            content: "Booking appointment failed",
+            sender: MESSAGE_SENDER.SYSTEM,
+            businessId: businessId,
+            agencyId: agencyId,
+            leadId: id,
+            conversationId,
+            // system fields
+            systemEvent: SYSTEM_EVENT.BOOK_APPOINTMENT,
+            systemDescription: `The appointment booking failed: ${err?.response?.data.error?.message}`,
+            systemData: {
+              input: {
+                args,
+              },
+              output: {
+                data: err?.response?.data,
+              },
+            },
+          },
+        });
+      }
       console.log({ err: JSON.stringify(err.response?.data) });
       return "Appointment booking failed:" + err.response?.data?.error?.message;
     }
@@ -298,8 +323,16 @@ export const rescheduleAppointment = async ({
   calendar,
   lead,
 }: RescheduleAppointmentProps) => {
+  if (!lead) return;
+  const {
+    id,
+    agencyId,
+    businessId,
+    Business: { Automations },
+  } = lead;
+  const conversationId = lead.Conversation?.id;
+
   try {
-    if (!lead) return;
     const ianaTimezone = lead.ianaTimezone;
     const { newStartTime, rescheduleOrCancelId } = args;
 
@@ -312,12 +345,7 @@ export const rescheduleAppointment = async ({
     console.log({ start });
 
     const { calApiKey } = calendar;
-    const {
-      id,
-      agencyId,
-      businessId,
-      Business: { Automations },
-    } = lead;
+
     const res = await axios.post<BookAppointmentResponse>(
       `https://api.cal.com/v2/bookings/${rescheduleOrCancelId}/reschedule`,
       {
@@ -333,7 +361,7 @@ export const rescheduleAppointment = async ({
       }
     );
     const data = res.data; // for @db
-    const conversationId = lead.Conversation?.id;
+
     if (data.data) {
       await prisma.$transaction(async (tx) => {
         if (conversationId) {
@@ -413,6 +441,29 @@ export const rescheduleAppointment = async ({
     return `Appointment rescheduled successfully. Booking ID: ${data.data.id}, Booking URL: ${data.data.meetingUrl}, Updated **rescheduleOrCancelId: ${data.data.uid}**`;
   } catch (err) {
     if (err instanceof AxiosError) {
+      if (conversationId) {
+        await prisma.conversationMessage.create({
+          data: {
+            content: "Rescheduling appointment failed",
+            sender: MESSAGE_SENDER.SYSTEM,
+            businessId: businessId,
+            agencyId: agencyId,
+            leadId: id,
+            conversationId,
+            // system fields
+            systemEvent: SYSTEM_EVENT.RESCHEDULE_APPOINTMENT,
+            systemDescription: `The appointment rescheduling failed: ${err?.response?.data.error?.message}`,
+            systemData: {
+              input: {
+                args,
+              },
+              output: {
+                data: err?.response?.data,
+              },
+            },
+          },
+        });
+      }
       console.log({ err: JSON.stringify(err.response?.data) });
     }
     return "Appointment rescheduling failed, get upcoming appointments";
@@ -429,17 +480,19 @@ export const cancelAppointment = async ({
   calendar,
   lead,
 }: CancelAppointmentProps) => {
+  if (!lead) return;
+  const {
+    id,
+    agencyId,
+    businessId,
+    Business: { Automations },
+  } = lead;
+  const conversationId = lead.Conversation?.id;
   try {
-    if (!lead) return;
     console.log({ args });
     const { rescheduleOrCancelId } = args;
     const { calApiKey } = calendar;
-    const {
-      id,
-      agencyId,
-      businessId,
-      Business: { Automations },
-    } = lead;
+
     const res = await axios.post<BookAppointmentResponse>(
       `https://api.cal.com/v2/bookings/${rescheduleOrCancelId}/cancel`,
       {
@@ -454,7 +507,7 @@ export const cancelAppointment = async ({
     );
     const data = res.data; // for @db
     const newMeetingId = data.data.uid;
-    const conversationId = lead.Conversation?.id;
+
     if (data.data) {
       await prisma.$transaction(async (tx) => {
         if (conversationId) {
@@ -533,6 +586,29 @@ export const cancelAppointment = async ({
     return `Appointment cancelled successfully.  Booking Date: ${startInTimezone}, **rescheduleOrCancelId: ${data.data.uid}**`;
   } catch (err) {
     if (err instanceof AxiosError) {
+      if (conversationId) {
+        await prisma.conversationMessage.create({
+          data: {
+            content: "Cancellation appointment failed",
+            sender: MESSAGE_SENDER.SYSTEM,
+            businessId: businessId,
+            agencyId: agencyId,
+            leadId: id,
+            conversationId,
+            // system fields
+            systemEvent: SYSTEM_EVENT.CANCEL_APPOINTMENT,
+            systemDescription: `Cancellation appointment failed: ${err?.response?.data.error?.message}`,
+            systemData: {
+              input: {
+                ...args,
+              },
+              output: {
+                data: err?.response?.data,
+              },
+            },
+          },
+        });
+      }
       console.log({ err: JSON.stringify(err.response?.data) });
     }
     return "Appointment cancellation failed, get user's upcoming appointments";
@@ -553,26 +629,28 @@ export const getCalBookings = async ({
 }: GetCalBookingsInput) => {
   if (!lead) return;
   const { id, agencyId, businessId } = lead;
+  const conversationId = lead.Conversation?.id;
   const { calApiKey } = calendar;
-  const res = await axios.get<GetCalBookingsResponse>(
-    `https://api.cal.com/v2/bookings?attendeeEmail=${email}&status=upcoming&take=100`,
-    {
-      headers: {
-        "cal-api-version": "2024-08-13",
-        Authorization: `Bearer ${calApiKey}`,
-      },
-    }
-  );
-  const data = res.data; // for @db
-  // format the string response for AI - also include the booking 'uid'
-  let formattedResponse = "";
-  let index = 1;
-  if (data.data.length > 0) {
-    for (const booking of data.data) {
-      if (index === 0) {
-        formattedResponse += `Here are your upcoming meetings: \n\n`;
+  try {
+    const res = await axios.get<GetCalBookingsResponse>(
+      `https://api.cal.com/v2/bookings?attendeeEmail=${email}&status=upcoming&take=100`,
+      {
+        headers: {
+          "cal-api-version": "2024-08-13",
+          Authorization: `Bearer ${calApiKey}`,
+        },
       }
-      formattedResponse += `Booking ${index + 1}:\n 
+    );
+    const data = res.data; // for @db
+    // format the string response for AI - also include the booking 'uid'
+    let formattedResponse = "";
+    let index = 1;
+    if (data.data.length > 0) {
+      for (const booking of data.data) {
+        if (index === 0) {
+          formattedResponse += `Here are your upcoming meetings: \n\n`;
+        }
+        formattedResponse += `Booking ${index + 1}:\n 
       **rescheduleOrCancelId: ${booking.uid}**,
       Title: ${booking.title},
       Start: ${formatInTimeZone(
@@ -588,37 +666,66 @@ export const getCalBookings = async ({
       Status: ${booking.status} 
       TZ: ${lead.ianaTimezone}
       --------------------------------- \n`;
-      index++;
+        index++;
+      }
+    } else {
+      formattedResponse = "No upcoming appointments found";
     }
-  } else {
-    formattedResponse = "No upcoming appointments found";
-  }
 
-  // create a system message
-  const conversationId = lead.Conversation?.id;
-  if (conversationId) {
-    await prisma.conversationMessage.create({
-      data: {
-        content: "Get upcoming appointments",
-        sender: MESSAGE_SENDER.SYSTEM,
-        businessId: businessId,
-        agencyId: agencyId,
-        leadId: id,
-        conversationId,
-        // system fields
-        systemEvent: SYSTEM_EVENT.GET_APPOINTMENTS,
-        systemDescription: `Fetched upcoming appointments`,
-        systemData: {
-          input: {
-            ...args,
-          },
-          output: {
-            formattedResponse,
-            raw: data,
+    // create a system message
+
+    if (conversationId) {
+      await prisma.conversationMessage.create({
+        data: {
+          content: "Get upcoming appointments",
+          sender: MESSAGE_SENDER.SYSTEM,
+          businessId: businessId,
+          agencyId: agencyId,
+          leadId: id,
+          conversationId,
+          // system fields
+          systemEvent: SYSTEM_EVENT.GET_APPOINTMENTS,
+          systemDescription: `Fetched upcoming appointments`,
+          systemData: {
+            input: {
+              ...args,
+            },
+            output: {
+              formattedResponse,
+              raw: data,
+            },
           },
         },
-      },
-    });
+      });
+    }
+    return formattedResponse;
+  } catch (err) {
+    if (err instanceof AxiosError) {
+      if (conversationId) {
+        await prisma.conversationMessage.create({
+          data: {
+            content: "Get upcoming appointments failed",
+            sender: MESSAGE_SENDER.SYSTEM,
+            businessId: businessId,
+            agencyId: agencyId,
+            leadId: id,
+            conversationId,
+            // system fields
+            systemEvent: SYSTEM_EVENT.GET_APPOINTMENTS,
+            systemDescription: `Get upcoming appointments failed: ${err?.response?.data.error?.message}`,
+            systemData: {
+              input: {
+                ...args,
+              },
+              output: {
+                data: err?.response?.data,
+              },
+            },
+          },
+        });
+      }
+      console.log({ err: JSON.stringify(err.response?.data) });
+    }
+    return "Get upcoming appointments failed";
   }
-  return formattedResponse;
 };
