@@ -34,7 +34,25 @@ import {
   triggerAutomation,
 } from "../../utils/integration.util.js";
 import { prisma } from "../../lib/prisma.js";
-import { formatInTimeZone } from "date-fns-tz";
+import { formatInTimeZone, toZonedTime } from "date-fns-tz";
+
+// Helper function to properly handle timezone conversion
+const createDateInTimezone = (
+  dateTimeString: string,
+  timezone: string
+): Date => {
+  // Check if the datetime string already has timezone info
+  // Pattern: ends with Z, +HH:MM, or -HH:MM
+  const hasTimezoneInfo = /[Z]$|[+-]\d{2}:\d{2}$/.test(dateTimeString);
+
+  if (hasTimezoneInfo) {
+    return new Date(dateTimeString);
+  }
+
+  // If no timezone info, treat the time as being in the specified timezone
+  // and convert it to UTC
+  return toZonedTime(dateTimeString, timezone);
+};
 
 type CheckAvailabilityInput = {
   args: CheckAvailabilityRequest;
@@ -198,10 +216,18 @@ export const bookAppointment = async ({
     }
     const canUpdateFields = Object.keys(fieldsToUpdate).length > 0;
 
+    // Create proper date object considering the timezone
+    const appointmentDate = createDateInTimezone(dateTime, timezone);
+
+    console.log({
+      inputDate: dateTime,
+      updatedDate: appointmentDate,
+    });
+
     const payload: BookAppointmentInput = {
       eventTypeId: +calEventId,
       start: formatInTimeZone(
-        new Date(dateTime),
+        appointmentDate,
         timezone,
         "yyyy-MM-dd'T'HH:mm:ss.SSSXXX"
       ),
