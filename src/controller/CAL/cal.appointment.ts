@@ -37,21 +37,29 @@ import { prisma } from "../../lib/prisma.js";
 import { formatInTimeZone, toZonedTime } from "date-fns-tz";
 
 // Helper function to properly handle timezone conversion
-const createDateInTimezone = (
+const createDateTimeWithTimezone = (
   dateTimeString: string,
   timezone: string
-): Date => {
-  // Check if the datetime string already has timezone info
-  // Pattern: ends with Z, +HH:MM, or -HH:MM
+): string => {
   const hasTimezoneInfo = /[Z]$|[+-]\d{2}:\d{2}$/.test(dateTimeString);
+  if (hasTimezoneInfo) return dateTimeString;
 
-  if (hasTimezoneInfo) {
-    return new Date(dateTimeString);
-  }
+  // Extract original hours/minutes
+  const originalDate = new Date(dateTimeString);
+  const originalHours = originalDate.getHours();
+  const originalMinutes = originalDate.getMinutes();
 
-  // If no timezone info, treat the time as being in the specified timezone
-  // and convert it to UTC
-  return toZonedTime(dateTimeString, timezone);
+  // Create date in target timezone with original time
+  const tempDate = new Date(dateTimeString + "Z");
+  const zonedDate = new Date(
+    tempDate.toLocaleString("en-US", { timeZone: timezone })
+  );
+
+  // Set back to original hours/minutes (this preserves the timezone context)
+  zonedDate.setHours(originalHours, originalMinutes, 0, 0);
+
+  // Format with timezone offset
+  return formatInTimeZone(zonedDate, timezone, "yyyy-MM-dd'T'HH:mm:ss.SSSXXX");
 };
 
 type CheckAvailabilityInput = {
@@ -216,8 +224,7 @@ export const bookAppointment = async ({
     }
     const canUpdateFields = Object.keys(fieldsToUpdate).length > 0;
 
-    // Create proper date object considering the timezone
-    const appointmentDate = createDateInTimezone(dateTime, timezone);
+    const appointmentDate = createDateTimeWithTimezone(dateTime, timezone);
 
     console.log({
       inputDate: dateTime,
@@ -226,11 +233,7 @@ export const bookAppointment = async ({
 
     const payload: BookAppointmentInput = {
       eventTypeId: +calEventId,
-      start: formatInTimeZone(
-        appointmentDate,
-        timezone,
-        "yyyy-MM-dd'T'HH:mm:ss.SSSXXX"
-      ),
+      start: appointmentDate,
       metadata: {
         source: "MCP",
       },
