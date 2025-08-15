@@ -27,6 +27,7 @@ import {
   CompactAvailability,
   compactTimeSlots,
   slotsToAIString,
+  createDateTimeWithTimezone,
 } from "../../utils/cal.utils.js";
 import { bookMeeting, updateMeeting } from "../../utils/meeting-book.js";
 import {
@@ -35,32 +36,6 @@ import {
 } from "../../utils/integration.util.js";
 import { prisma } from "../../lib/prisma.js";
 import { formatInTimeZone, toZonedTime } from "date-fns-tz";
-
-// Helper function to properly handle timezone conversion
-const createDateTimeWithTimezone = (
-  dateTimeString: string,
-  timezone: string
-): string => {
-  const hasTimezoneInfo = /[Z]$|[+-]\d{2}:\d{2}$/.test(dateTimeString);
-  if (hasTimezoneInfo) return dateTimeString;
-
-  // Extract original hours/minutes
-  const originalDate = new Date(dateTimeString);
-  const originalHours = originalDate.getHours();
-  const originalMinutes = originalDate.getMinutes();
-
-  // Create date in target timezone with original time
-  const tempDate = new Date(dateTimeString + "Z");
-  const zonedDate = new Date(
-    tempDate.toLocaleString("en-US", { timeZone: timezone })
-  );
-
-  // Set back to original hours/minutes (this preserves the timezone context)
-  zonedDate.setHours(originalHours, originalMinutes, 0, 0);
-
-  // Format with timezone offset
-  return formatInTimeZone(zonedDate, timezone, "yyyy-MM-dd'T'HH:mm:ss.SSSXXX");
-};
 
 type CheckAvailabilityInput = {
   args: CheckAvailabilityRequest;

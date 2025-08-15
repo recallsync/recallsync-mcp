@@ -1,4 +1,7 @@
-import { formatInTimeZone } from "date-fns-tz";
+import {
+  formatInTimeZone,
+  getTimezoneOffset as getTzOffset,
+} from "date-fns-tz";
 import { AvailabilityData } from "../types/cal.types";
 
 interface CompactSlot {
@@ -109,4 +112,30 @@ export function slotsToAIString(
   }
 
   return result.join("\n");
+}
+
+// Helper function to add timezone offset without time conversion
+export const createDateTimeWithTimezone = (
+  dateTimeString: string,
+  timezone: string
+): string => {
+  // Check if the string is already timezone formatted (contains .000±HH:MM pattern)
+  const timezonePattern = /\.000[+-]\d{2}:\d{2}$/;
+  if (timezonePattern.test(dateTimeString)) {
+    return dateTimeString; // Already formatted, return as is
+  }
+
+  const offsetMinutes = getTimezoneOffset(timezone, new Date(dateTimeString));
+
+  const sign = offsetMinutes < 0 ? "-" : "+";
+  const absOffset = Math.abs(offsetMinutes);
+  const hours = String(Math.floor(absOffset / 60)).padStart(2, "0");
+  const minutes = String(absOffset % 60).padStart(2, "0");
+
+  return `${dateTimeString}.000${sign}${hours}:${minutes}`;
+};
+
+// Helper function to get timezone offset in minutes
+function getTimezoneOffset(timezone: string, date: Date): number {
+  return getTzOffset(timezone, date) / (1000 * 60); // Convert milliseconds to minutes
 }
