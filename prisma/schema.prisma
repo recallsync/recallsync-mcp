@@ -1,6 +1,5 @@
 generator client {
   provider = "prisma-client-js"
-  output   = "../src/generated/client"
 }
 
 datasource db {
@@ -90,6 +89,7 @@ model User {
   preferenceId         String?
   Agents               Agent[]
   PrimaryAgents        PrimaryAgent[]
+  ChatSessions         ChatSession[]
 
   @@index([agencyId])
   @@index([businessId])
@@ -340,6 +340,7 @@ model Lead {
   FollowUp             FollowUp[]
   Conversation         Conversation?
   ConversationMessages ConversationMessage[]
+  ChatSessions         ChatSession[]
 
   @@index([agencyId])
   @@index([salesAgentId])
@@ -429,7 +430,7 @@ model ConversationMessage {
   status  CONVERSATION_MESSAGE_STATUS @default(SENT)
   snippet String                      @default("")
 
-  channel  MESSAGE_CHANNEL   @default(EMAIL)
+  channel  CHANNEL           @default(EMAIL)
   itemType MESSAGE_ITEM_TYPE @default(MESSAGE)
 
   // SYSTEM EVENTS (tool_calls etc)
@@ -437,6 +438,8 @@ model ConversationMessage {
   systemEventStatus SYSTEM_EVENT_STATUS?
   systemData        Json?
   systemDescription String?              @db.Text // ex: Appointment booked for 10:00 AM on 10th July 2025
+
+  ghlMessageId String?
 
   // Call Message Items
   callId String?
@@ -470,10 +473,8 @@ model PrimaryAgent {
   id String @id @default(uuid())
 
   name         String
-  internalName String     @default("")
-  description  String?    @db.Text
-  type         AGENT_TYPE @default(N8N)
-  source       SOURCE     @default(DEFAULT)
+  internalName String  @default("")
+  description  String? @db.Text
 
   agentGoal               String? @db.Text
   goalCompleteCriteria    String? @db.Text
@@ -509,6 +510,7 @@ model PrimaryAgent {
   Agents             Agent[]
   Conversations      Conversation[]
   PrimaryAgentAssets PrimaryAgentAsset[]
+  ChatSessions       ChatSession[]
 
   @@index([businessId])
   @@index([agencyId])
@@ -546,14 +548,29 @@ model Agent {
   description String? @db.Text
 
   // n8n config 
-  n8nUrl   String @default("")
-  n8nToken String @default("")
+  n8nUrl        String  @default("")
+  n8nToken      String  @default("")
+  // n8n workflow id
+  n8nWorkflowId String?
 
   // agent settings
   settings Json
   isActive Boolean @default(false)
 
-  channel CHANNEL @default(EMAIL)
+  // sequence config
+  sequenceActive Boolean @default(false)
+  sequenceConfig Json?   @default("{}") // sequence config json 
+
+  // followup config 
+  followupActive Boolean @default(false)
+  followupConfig Json?   @default("{}") // followup config json 
+
+  channel CHANNEL    @default(EMAIL)
+  type    AGENT_TYPE @default(INTEGRATED)
+
+  // integrated channel config 
+  flow         Json? @default("{\"nodes\":[{\"id\":\"start-1\",\"type\":\"start\",\"position\":{\"x\":100,\"y\":200},\"data\":{\"label\":\"Start\",\"description\":\"Conversation starts here\"}}],\"edges\":[]}") // react flow json 
+  flowSettings Json? @default("{}") // react flow settings json 
 
   // VAPI
   vapiPhoneNumberId String?
@@ -567,7 +584,10 @@ model Agent {
   Agency   User   @relation(fields: [agencyId], references: [id], onDelete: Cascade)
 
   primaryAgentId String
-  PrimaryAgent   PrimaryAgent @relation(fields: [primaryAgentId], references: [id], onDelete: Cascade)
+  PrimaryAgent   PrimaryAgent  @relation(fields: [primaryAgentId], references: [id], onDelete: Cascade)
+  ChatSessions   ChatSession[]
+
+  AgentChannelConfig AgentChannelConfig?
 
   // Metadata
   createdAt DateTime @default(now())
@@ -706,7 +726,7 @@ model VoiceCampaignLead {
   id String @id @default(uuid())
 
   voiceCampaignId String
-  VoiceCampaign   VoiceCampaign @relation(fields: [voiceCampaignId], references: [id])
+  VoiceCampaign   VoiceCampaign @relation(fields: [voiceCampaignId], references: [id], onDelete: Cascade)
 
   leadId String
   Lead   Lead   @relation(fields: [leadId], references: [id], onDelete: Cascade)
@@ -959,6 +979,9 @@ model Business {
   Agents               Agent[]
   PrimaryAgents        PrimaryAgent[]
   calenderIntegrations CalenderIntegration[]
+  n8nIntegrations      N8NIntegration[]
+  ChatSessions         ChatSession[]
+  Providers            Provider[]
 
   @@index([agencyId])
 }
@@ -982,25 +1005,18 @@ model BusinessIntegration {
   businessId String   @unique
   Business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
 
-  // GHL
-  ghlAccessToken  String?   @db.Text
-  ghlRefreshToken String?   @db.Text
-  ghlTokenExpiry  DateTime?
-  ghlLocationId   String?
-  ghlCompanyId    String?
-  ghlLocationName String?
-  ghlUserId       String?
-  ghlUserType     String?
-  ghlConfigured   Boolean   @default(false)
+  // Twilio 
+  twilioAccountSid String? @db.Text
+  twilioAuthToken  String? @db.Text
 
-  // OpenAI 
-  openAiApiKey String? @db.Text
-
-  // VAPI
-  vapiPrivateKey String? @db.Text
-  vapiPublicKey  String? @db.Text
+  // Twilio Trunk - @todo must be a separate table (with multiple trunks)
+  twilioTrunkAuthUsername      String? @db.Text
+  twilioTrunkAuthPassword      String? @db.Text
+  twilioTrunkTerminationSIPUrl String? @db.Text
+  twilioTrunkSIPNumber         String?
 
   calenderIntegrations CalenderIntegration[]
+  n8nIntegrations      N8NIntegration[]
 
   @@index([businessId])
 }
@@ -1027,6 +1043,118 @@ model CalenderIntegration {
 
   @@index([businessId])
   @@index([businessIntegrationId])
+}
+
+model N8NIntegration {
+  id String @id @default(uuid())
+
+  name        String
+  description String
+  url         String
+  token       String
+
+  // Relations
+  businessId String
+  Business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  businessIntegrationId String
+  BusinessIntegration   BusinessIntegration @relation(fields: [businessIntegrationId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([businessId])
+  @@index([businessIntegrationId])
+}
+
+// Agentic Layer Tables
+model ChatSession {
+  id String @id @default(uuid())
+
+  rsRunId   String // restack run id 
+  rsAgentId String // restack agent id 
+
+  status       AGENT_SESSION_STATUS @default(ACTIVE)
+  statusReason String?              @db.Text // reason for the status change
+
+  // Relations
+  agencyId String
+  Agency   User   @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+
+  businessId String
+  Business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  leadId String
+  Lead   Lead   @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  primaryAgentId String
+  PrimaryAgent   PrimaryAgent @relation(fields: [primaryAgentId], references: [id], onDelete: Cascade)
+
+  agentId String
+  Agent   Agent  @relation(fields: [agentId], references: [id], onDelete: Cascade)
+
+  // sequence & followup 
+  activeSequencePosition Int?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([businessId])
+  @@index([leadId])
+  @@index([agencyId])
+  @@index([primaryAgentId])
+  @@index([agentId])
+}
+
+model Provider {
+  id       String   @id @default(uuid())
+  provider PROVIDER
+
+  isActive   Boolean @default(true)
+  config     Json?
+  businessId String
+
+  AgentChannelConfig AgentChannelConfig[] // provider is connected with multiple channel configs
+
+  Business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([businessId])
+}
+
+model AgentChannelConfig {
+  id String @id @default(uuid())
+
+  isActive Boolean @default(true)
+
+  provider PROVIDER
+
+  agentId String @unique
+  Agent   Agent  @relation(fields: [agentId], references: [id], onDelete: Cascade)
+
+  providerId String?
+  Provider   Provider? @relation(fields: [providerId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([providerId])
+  @@index([agentId])
+}
+
+enum AGENT_TYPE {
+  INTEGRATED // platform managed agents
+  N8N // n8n managed agents
+  VAPI // vapi managed agents
+}
+
+enum AGENT_SESSION_STATUS {
+  ACTIVE
+  TERMINATED
+  COMPLETED
+  FAILED
 }
 
 enum CALENDER_TYPE {
@@ -1416,18 +1544,13 @@ enum FOLLOW_UP_SOURCE {
   ENGAGEMENT
 }
 
-enum MESSAGE_CHANNEL {
-  EMAIL
-  VOICE_AI
-  PHONE
-  WHATSAPP
-  TELEGRAM
-  SMS
-  LINKEDIN
-  FACEBOOK
-  INSTAGRAM
-  TWITTER
-  OTHER
+enum PROVIDER {
+  VAPI
+  TWILIO
+  GHL
+  HUBSPOT
+  N8N
+  LLM
 }
 
 enum MESSAGE_ITEM_TYPE {
@@ -1442,6 +1565,8 @@ enum SYSTEM_EVENT {
   CANCEL_APPOINTMENT
   RESCHEDULE_APPOINTMENT
   UPDATE_CONTACT
+  AGENT_TRIGGERED
+  AGENT_TERMINATED
 }
 
 enum SYSTEM_EVENT_STATUS {
@@ -1490,10 +1615,6 @@ enum MIGRATION_STATUS {
   FAILED
 }
 
-enum AGENT_TYPE {
-  N8N
-}
-
 // WhatsApp (DEFAULT) -> Standalone Channel (Every agent will have a SOURCE->DEFAULT->CHANNEL->WHATSAPP)
 // GRM (GHL) -> Multiple Channels (Every Agent will have a SOURCE->GOHIGHLEVEL->CHANNEL->WHATSAPP)
 enum SOURCE {
@@ -1502,6 +1623,11 @@ enum SOURCE {
   HUBSPOT
   ZOHO
   SALESFORCE
+}
+
+enum CALENDAR {
+  CAL
+  GOHIGHLEVEL
 }
 
 enum CHANNEL {
