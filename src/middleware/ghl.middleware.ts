@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from "express";
 import { PrismaClient } from "../generated/client/index.js";
 import { getAPIKeyBusiness } from "../utils/ghl.js";
+import { GHLProviderConfig } from "../schema/recall.schema.js";
 
 const prisma = new PrismaClient();
 
@@ -17,7 +18,11 @@ export const ghlMiddleware = async (
   try {
     const api_token = req.headers["api_key"] as string;
     const business = await getAPIKeyBusiness(api_token);
-    const ghlToken = business?.Business?.BusinessIntegration?.ghlAccessToken;
+    const ghlProvider = business.Business.Providers.find(
+      (p) => p.provider === "GHL"
+    );
+    const config = ghlProvider?.config as GHLProviderConfig | null;
+    const ghlToken = config?.ghlAccessToken;
     req.ghlAccessToken = typeof ghlToken === "string" ? ghlToken : undefined;
     next();
   } catch (err) {

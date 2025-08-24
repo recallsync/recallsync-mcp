@@ -11,7 +11,7 @@ export const getLeadById = async (id: string) => {
       Business: {
         include: {
           Automations: true,
-          BusinessIntegration: true,
+          Providers: true,
         },
       },
       Conversation: {

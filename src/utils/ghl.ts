@@ -11,7 +11,7 @@ export const getAPIKeyBusiness = async (api_token: string) => {
     include: {
       Business: {
         include: {
-          BusinessIntegration: true,
+          Providers: true,
         },
       },
 

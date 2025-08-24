@@ -20,6 +20,7 @@ import {
   SYSTEM_EVENT_STATUS,
   SYSTEM_EVENT_TYPE,
 } from "../../generated/client/index.js";
+import { GHLProviderConfig } from "../../schema/recall.schema.js";
 
 export const appointmentTools = [
   {
@@ -178,7 +179,11 @@ export async function handleCheckAvailability(request: CallToolRequest) {
     const args = result.data;
     console.log({ parsedArgs: args });
     const lead = await getLeadById(args.leadId);
-    const ghlAccessToken = lead?.Business.BusinessIntegration?.ghlAccessToken;
+    const ghlProvider = lead?.Business.Providers.find(
+      (p) => p.provider === "GHL"
+    );
+    const config = ghlProvider?.config as GHLProviderConfig | null;
+    const ghlAccessToken = config?.ghlAccessToken;
     const ghlContactId = lead?.ghlContactId;
     const ghlCalendarId = lead?.Conversation?.ActiveAgent?.ghlCalendarId;
     if (!ghlAccessToken || !ghlContactId || !ghlCalendarId) {
@@ -256,8 +261,12 @@ export async function handleBookAppointment(request: CallToolRequest) {
     const args = result.data;
     console.log({ parsedMeetingBookArgs: args });
     const lead = await getLeadById(args.leadId);
-    const ghlAccessToken = lead?.Business.BusinessIntegration?.ghlAccessToken;
-    const ghlLocationId = lead?.Business.BusinessIntegration?.ghlLocationId;
+    const ghlProvider = lead?.Business.Providers.find(
+      (p) => p.provider === "GHL"
+    );
+    const config = ghlProvider?.config as GHLProviderConfig | null;
+    const ghlAccessToken = config?.ghlAccessToken;
+    const ghlLocationId = config?.ghlLocationId;
     const ghlContactId = lead?.ghlContactId;
     const ghlCalendarId = lead?.Conversation?.ActiveAgent?.ghlCalendarId;
     if (!ghlAccessToken || !ghlContactId || !ghlCalendarId || !ghlLocationId) {
@@ -355,8 +364,12 @@ export async function handleRescheduleAppointment(request: CallToolRequest) {
     const args = result.data;
     console.log({ parsedArgs: args });
     const lead = await getLeadById(args.leadId);
-    const ghlAccessToken = lead?.Business.BusinessIntegration?.ghlAccessToken;
-    const ghlLocationId = lead?.Business.BusinessIntegration?.ghlLocationId;
+    const ghlProvider = lead?.Business.Providers.find(
+      (p) => p.provider === "GHL"
+    );
+    const config = ghlProvider?.config as GHLProviderConfig | null;
+    const ghlAccessToken = config?.ghlAccessToken;
+    const ghlLocationId = config?.ghlLocationId;
     const ghlContactId = lead?.ghlContactId;
     const ghlCalendarId = lead?.Conversation?.ActiveAgent?.ghlCalendarId;
     if (!ghlAccessToken || !ghlContactId || !ghlCalendarId || !ghlLocationId) {
@@ -433,7 +446,11 @@ export async function handleCancelAppointment(request: CallToolRequest) {
     }
     const validArgs = result.data;
     const lead = await getLeadById(validArgs.leadId);
-    const ghlAccessToken = lead?.Business.BusinessIntegration?.ghlAccessToken;
+    const ghlProvider = lead?.Business.Providers.find(
+      (p) => p.provider === "GHL"
+    );
+    const config = ghlProvider?.config as GHLProviderConfig | null;
+    const ghlAccessToken = config?.ghlAccessToken;
     if (!lead || !ghlAccessToken) {
       return {
         content: [
@@ -521,7 +538,15 @@ export async function handleGetAppointments(request: CallToolRequest) {
     }
     const args = result.data;
     const lead = await getLeadById(args.leadId);
-    const ghlAccessToken = lead?.Business.BusinessIntegration?.ghlAccessToken;
+    const ghlProvider = lead?.Business.Providers.find(
+      (p) => p.provider === "GHL"
+    );
+    const config = ghlProvider?.config as GHLProviderConfig | null;
+    if (!config) {
+      throw new Error(`GHL provider is not`);
+    }
+
+    const ghlAccessToken = config.ghlAccessToken;
     const ghlContactId = lead?.ghlContactId;
     const conversationId = lead?.Conversation?.id;
 
@@ -540,7 +565,7 @@ export async function handleGetAppointments(request: CallToolRequest) {
       ghlContactId,
       ghlAccessToken: ghlAccessToken,
       timezone: lead.ianaTimezone,
-      locationId: lead.Business.BusinessIntegration?.ghlLocationId || "",
+      locationId: config.ghlLocationId || "",
     });
 
     await prisma.conversationMessage.create({
