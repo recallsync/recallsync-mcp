@@ -233,9 +233,8 @@ export const bookAppointment = async ({
     );
 
     const data = res.data; // for @db
-    const startInTimezone = formatInTimeZone(
-      new Date(dateTime),
-      timezone,
+    const startInTimezone = format(
+      new Date(data.data.start),
       "dd MMM yyyy, hh:mm a"
     );
 
@@ -257,6 +256,7 @@ export const bookAppointment = async ({
                 input: {
                   args,
                   payload,
+                  appointmentDate,
                 },
                 output: {
                   data: data,
