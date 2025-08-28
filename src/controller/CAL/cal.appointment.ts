@@ -234,7 +234,7 @@ export const bookAppointment = async ({
 
     const data = res.data; // for @db
     const startInTimezone = format(
-      new Date(data.data.start),
+      new Date(appointmentDate),
       "dd MMM yyyy, hh:mm a"
     );
 
@@ -265,6 +265,7 @@ export const bookAppointment = async ({
             },
           });
         }
+        console.log("book meeting", { dateTime });
         await bookMeeting({
           businessId: businessId,
           startTime: new Date(dateTime).toISOString(),

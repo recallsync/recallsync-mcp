@@ -119,8 +119,13 @@ export const createDateTimeWithTimezone = (
   dateTimeString: string,
   timezone: string
 ): string => {
+  // Check if the string already has any timezone offset (±HH:MM format)
   // Check if the string is already timezone formatted (contains .000±HH:MM pattern)
-  const timezonePattern = /\.000[+-]\d{2}:\d{2}$/;
+  const timezonePattern = /\.\d{3}[+-]\d{2}:\d{2}$/;
+  if (dateTimeString.includes("+") || dateTimeString.includes("-")) {
+    return dateTimeString;
+  }
+
   if (timezonePattern.test(dateTimeString)) {
     return dateTimeString; // Already formatted, return as is
   }
