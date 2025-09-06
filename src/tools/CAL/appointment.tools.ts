@@ -170,16 +170,20 @@ export async function handleCheckAvailability(request: CallToolRequest) {
         ],
       };
     }
+    console.log("api key", { apiKey });
     // Remove _apiKey from args before validation
     const { _apiKey, ...cleanArgs } = rawArgs;
     console.log({ rawArgs });
+    console.log("clean args", { cleanArgs });
     // Validate the input using Zod
     const result = checkAvailabilitySchema.safeParse(cleanArgs);
+    console.log("result", { result });
     if (!result.success) {
       // Format Zod errors into a readable message
       const errorMessages = result.error.errors
         .map((err) => `${err.path.join(".")}: ${err.message}`)
         .join(", ");
+      console.log("error messages", { errorMessages });
       return {
         content: [
           {
@@ -192,6 +196,7 @@ export async function handleCheckAvailability(request: CallToolRequest) {
     const args = result.data;
     console.log({ parsedArgs: args });
     const lead = await getLeadById(args.leadId);
+    console.log({ lead });
     const calenderIntegration =
       lead?.Conversation?.ActiveAgent?.CalenderIntegration;
     console.log({

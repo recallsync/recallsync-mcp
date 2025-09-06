@@ -74,8 +74,8 @@ model User {
   agencyApiKeys  ApiKey[] @relation("AgencyToApiKey")
   managerApiKeys ApiKey[] @relation("ManagerToApiKey")
 
-  VoiceCampaigns       VoiceCampaign[]
-  VoiceCampaignLeads   VoiceCampaignLead[]
+  Campaigns            Campaign[]
+  CampaignLeads        CampaignLead[]
   Assistant            Assistant[]
   Pipelines            Pipeline[]
   Opportunities        Opportunity[]
@@ -131,7 +131,7 @@ model Assistant {
   businessId String
   Business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
 
-  voiceCampaigns VoiceCampaign[]
+  Campaigns Campaign[]
 
   // Metadata
   createdAt DateTime @default(now())
@@ -303,8 +303,10 @@ model Lead {
   voiceCallActive Boolean @default(false)
 
   // Channel Specific Metadata Fields
-  instagramSID  String?
-  instaUsername String?
+  instagramSID     String?
+  instaUsername    String?
+  facebookSenderId String?
+  facebookUsername String?
 
   // Metadata 
   status     LEAD_STATUS      @default(NEW)
@@ -334,7 +336,7 @@ model Lead {
 
   Meeting              Meeting[]
   LeadCalls            LeadCall[]
-  VoiceCampaignLead    VoiceCampaignLead[]
+  CampaignLead         CampaignLead[]
   LeadTags             LeadTag[]
   LeadNotes            LeadNote[]
   Opportunity          Opportunity[]
@@ -342,6 +344,7 @@ model Lead {
   Conversation         Conversation?
   ConversationMessages ConversationMessage[]
   ChatSessions         ChatSession[]
+  isTestLead           Boolean               @default(false)
 
   @@index([agencyId])
   @@index([salesAgentId])
@@ -512,6 +515,7 @@ model PrimaryAgent {
   Conversations      Conversation[]
   PrimaryAgentAssets PrimaryAgentAsset[]
   ChatSessions       ChatSession[]
+  Campaigns          Campaign[]
 
   @@index([businessId])
   @@index([agencyId])
@@ -577,6 +581,14 @@ model Agent {
   vapiPhoneNumberId String?
   vapiAssistantId   String?
 
+  //ELEVEN_LABS
+  elevenlabsAgentId       String?
+  elevenlabsPhoneNumberId String?
+
+  // RETELL
+  retellAgentId     String?
+  retellPhoneNumber String?
+
   // Relations
   businessId String
   Business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
@@ -589,6 +601,8 @@ model Agent {
   ChatSessions   ChatSession[]
 
   AgentChannelConfig AgentChannelConfig?
+
+  useN8N Boolean @default(false)
 
   // Metadata
   createdAt DateTime @default(now())
@@ -645,12 +659,13 @@ model LeadCall {
   transcript  Json?
   audioUrl    String          @default("")
 
-  callType LEAD_CALL_TYPE @default(GLOBAL)
+  callType   LEAD_CALL_TYPE @default(GLOBAL)
+  callSource CALL_SOURCE    @default(VAPI)
 
-  callDuration Float @default(0)
-  costVAPI     Float @default(0) // total voiceAi cost
-  costTwilio   Float @default(0) // total twilio cost
-  totalCost    Float @default(0) // total call cost
+  callDuration  Float @default(0)
+  costVAPI      Float @default(0) // total voiceAi cost
+  costTelephony Float @default(0) // total telephony cost
+  totalCost     Float @default(0) // total call cost
 
   // Relations
   leadId String?
@@ -665,8 +680,8 @@ model LeadCall {
   salesAgentId String?
   SalesAgent   User?   @relation("SalesAgentToLeadCall", fields: [salesAgentId], references: [id], onDelete: SetNull)
 
-  voiceCampaignId String?
-  VoiceCampaign   VoiceCampaign? @relation(fields: [voiceCampaignId], references: [id], onDelete: Cascade)
+  campaignId String?
+  Campaign   Campaign? @relation(fields: [campaignId], references: [id], onDelete: Cascade)
 
   // Metadata
   createdAt            DateTime              @default(now())
@@ -676,16 +691,16 @@ model LeadCall {
   @@index([agencyId])
   @@index([salesAgentId])
   @@index([leadId])
-  @@index([voiceCampaignId])
+  @@index([campaignId])
   @@index([businessId])
 }
 
-model VoiceCampaign {
+model Campaign {
   id String @id @default(uuid())
 
   name        String
-  description String                @db.Text
-  status      VOICE_CAMPAIGN_STATUS @default(DRAFT)
+  description String          @db.Text
+  status      CAMPAIGN_STATUS @default(DRAFT)
 
   // Settings
   withRetries       Boolean   @default(false)
@@ -701,6 +716,11 @@ model VoiceCampaign {
   timeZone          String    @default("IST")
   settingsUpdated   Boolean   @default(false)
 
+  // New Settings Fields
+  retryInterval     Int?    @default(2)
+  retryIntervalType String? @default("hour") // "hour" | "day"
+  weeklySchedule    Json? // Weekly schedule with time slots per day
+
   // Relations
   agencyId String
   Agency   User   @relation(fields: [agencyId], references: [id], onDelete: Cascade)
@@ -708,26 +728,28 @@ model VoiceCampaign {
   businessId String
   Business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
 
-  assistants      Assistant[]
-  vapiAssistants  Json        @default("[]")
-  isVapiAssistant Boolean     @default(false)
+  assistants Assistant[]
+
+  primaryAgentId String?
+  PrimaryAgent   PrimaryAgent? @relation(fields: [primaryAgentId], references: [id], onDelete: Cascade)
 
   // Metadata
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  VoiceCampaignLeads VoiceCampaignLead[]
-  LeadCalls          LeadCall[]
+  CampaignLeads CampaignLead[]
+  LeadCalls     LeadCall[]
 
   @@index([agencyId])
   @@index([businessId])
+  @@index([primaryAgentId])
 }
 
-model VoiceCampaignLead {
+model CampaignLead {
   id String @id @default(uuid())
 
-  voiceCampaignId String
-  VoiceCampaign   VoiceCampaign @relation(fields: [voiceCampaignId], references: [id], onDelete: Cascade)
+  campaignId String
+  Campaign   Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
 
   leadId String
   Lead   Lead   @relation(fields: [leadId], references: [id], onDelete: Cascade)
@@ -738,10 +760,10 @@ model VoiceCampaignLead {
   businessId String
   Business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
 
-  status     VOICE_CAMPAIGN_LEAD_STATUS  @default(PENDING)
-  quality    VOICE_CAMPAIGN_LEAD_QUALITY @default(LOW)
-  result     VOICE_CAMPAIGN_LEAD_RESULT  @default(SUCCESS)
-  notes      String?                     @db.Text
+  status     CAMPAIGN_LEAD_STATUS  @default(PENDING)
+  quality    CAMPAIGN_LEAD_QUALITY @default(LOW)
+  result     CAMPAIGN_LEAD_RESULT  @default(SUCCESS)
+  notes      String?               @db.Text
   followUpAt DateTime?
 
   calledAt    DateTime?
@@ -750,7 +772,7 @@ model VoiceCampaignLead {
 
   @@index([agencyId])
   @@index([businessId])
-  @@index([voiceCampaignId])
+  @@index([campaignId])
   @@index([leadId])
 }
 
@@ -967,8 +989,8 @@ model Business {
   Conversation         Conversation[]
   ConversationMessage  ConversationMessage[]
   Meetings             Meeting[]
-  VoiceCampaigns       VoiceCampaign[]
-  VoiceCampaignLeads   VoiceCampaignLead[]
+  Campaigns            Campaign[]
+  CampaignLeads        CampaignLead[]
   Pipelines            Pipeline[]
   Stages               Stage[]
   Opportunities        Opportunity[]
@@ -1078,6 +1100,9 @@ model ChatSession {
   status       AGENT_SESSION_STATUS @default(ACTIVE)
   statusReason String?              @db.Text // reason for the status change
 
+  messages     Json? // Message[]
+  currentEvent String? // current event name
+
   // Relations
   agencyId String
   Agency   User   @relation(fields: [agencyId], references: [id], onDelete: Cascade)
@@ -1149,6 +1174,9 @@ enum AGENT_TYPE {
   INTEGRATED // platform managed agents
   N8N // n8n managed agents
   VAPI // vapi managed agents
+  ELEVEN_LABS
+  RETELL
+  ULTRA_VOX
 }
 
 enum AGENT_SESSION_STATUS {
@@ -1224,173 +1252,19 @@ enum CALL_TYPE {
 }
 
 enum CALL_END_REASON {
+  customer_busy
   assistant_not_valid
   assistant_not_provided
-  call_start_error_neither_assistant_nor_server_set
-  assistant_request_failed
-  assistant_request_returned_error
-  assistant_request_returned_unspeakable_error
-  assistant_request_returned_invalid_assistant
-  assistant_request_returned_no_assistant
-  assistant_request_returned_forwarding_phone_number
-  assistant_ended_call
-  assistant_said_end_call_phrase
-  assistant_ended_call_with_hangup_task
-  assistant_forwarded_call
-  assistant_join_timed_out
-  customer_busy
   customer_ended_call
   customer_did_not_answer
-  customer_did_not_give_microphone_permission
-  assistant_said_message_with_end_call_enabled
-  exceeded_max_duration
-  manually_canceled
-  phone_call_provider_closed_websocket
+  assistant_ended_call
   db_error
+  exceeded_max_duration
   assistant_not_found
-  license_check_failed
-  pipeline_error_openai_voice_failed
-  pipeline_error_cartesia_voice_failed
-  pipeline_error_deepgram_voice_failed
-  pipeline_error_eleven_labs_voice_failed
-  pipeline_error_playht_voice_failed
-  pipeline_error_lmnt_voice_failed
-  pipeline_error_azure_voice_failed
-  pipeline_error_rime_ai_voice_failed
-  pipeline_error_neets_voice_failed
-  pipeline_error_smallest_ai_voice_failed
-  pipeline_error_neuphonic_voice_failed
-  pipeline_error_deepgram_transcriber_failed
-  pipeline_error_gladia_transcriber_failed
-  pipeline_error_speechmatics_transcriber_failed
-  pipeline_error_assembly_ai_transcriber_failed
-  pipeline_error_talkscriber_transcriber_failed
-  pipeline_error_azure_speech_transcriber_failed
-  pipeline_error_vapi_llm_failed
-  pipeline_error_vapi_400_bad_request_validation_failed
-  pipeline_error_vapi_401_unauthorized
-  pipeline_error_vapi_403_model_access_denied
-  pipeline_error_vapi_429_exceeded_quota
-  pipeline_error_vapi_500_server_error
-  pipeline_no_available_model
+  assistant_said_end_call_phrase
+  voicemail
   worker_shutdown
   unknown_error
-  vonage_disconnected
-  vonage_failed_to_connect_call
-  phone_call_provider_bypass_enabled_but_no_call_received
-  vapifault_phone_call_worker_setup_socket_error
-  vapifault_phone_call_worker_worker_setup_socket_timeout
-  vapifault_phone_call_worker_could_not_find_call
-  vapifault_transport_never_connected
-  vapifault_web_call_worker_setup_failed
-  vapifault_transport_connected_but_call_not_active
-  vapifault_call_started_but_connection_to_transport_missing
-  pipeline_error_openai_llm_failed
-  pipeline_error_azure_openai_llm_failed
-  pipeline_error_groq_llm_failed
-  pipeline_error_google_llm_failed
-  pipeline_error_xai_llm_failed
-  pipeline_error_mistral_llm_failed
-  pipeline_error_inflection_ai_llm_failed
-  pipeline_error_cerebras_llm_failed
-  pipeline_error_deep_seek_llm_failed
-  pipeline_error_openai_400_bad_request_validation_failed
-  pipeline_error_openai_401_unauthorized
-  pipeline_error_openai_403_model_access_denied
-  pipeline_error_openai_429_exceeded_quota
-  pipeline_error_openai_500_server_error
-  pipeline_error_google_400_bad_request_validation_failed
-  pipeline_error_google_401_unauthorized
-  pipeline_error_google_403_model_access_denied
-  pipeline_error_google_429_exceeded_quota
-  pipeline_error_google_500_server_error
-  pipeline_error_xai_400_bad_request_validation_failed
-  pipeline_error_xai_401_unauthorized
-  pipeline_error_xai_403_model_access_denied
-  pipeline_error_xai_429_exceeded_quota
-  pipeline_error_xai_500_server_error
-  pipeline_error_mistral_400_bad_request_validation_failed
-  pipeline_error_mistral_401_unauthorized
-  pipeline_error_mistral_403_model_access_denied
-  pipeline_error_mistral_429_exceeded_quota
-  pipeline_error_mistral_500_server_error
-  pipeline_error_inflection_ai_400_bad_request_validation_failed
-  pipeline_error_inflection_ai_401_unauthorized
-  pipeline_error_inflection_ai_403_model_access_denied
-  pipeline_error_inflection_ai_429_exceeded_quota
-  pipeline_error_inflection_ai_500_server_error
-  pipeline_error_deep_seek_400_bad_request_validation_failed
-  pipeline_error_deep_seek_401_unauthorized
-  pipeline_error_deep_seek_403_model_access_denied
-  pipeline_error_deep_seek_429_exceeded_quota
-  pipeline_error_deep_seek_500_server_error
-  pipeline_error_azure_openai_400_bad_request_validation_failed
-  pipeline_error_azure_openai_401_unauthorized
-  pipeline_error_azure_openai_403_model_access_denied
-  pipeline_error_azure_openai_429_exceeded_quota
-  pipeline_error_azure_openai_500_server_error
-  pipeline_error_groq_400_bad_request_validation_failed
-  pipeline_error_groq_401_unauthorized
-  pipeline_error_groq_403_model_access_denied
-  pipeline_error_groq_429_exceeded_quota
-  pipeline_error_groq_500_server_error
-  pipeline_error_cerebras_400_bad_request_validation_failed
-  pipeline_error_cerebras_401_unauthorized
-  pipeline_error_cerebras_403_model_access_denied
-  pipeline_error_cerebras_429_exceeded_quota
-  pipeline_error_cerebras_500_server_error
-  pipeline_error_anthropic_400_bad_request_validation_failed
-  pipeline_error_anthropic_401_unauthorized
-  pipeline_error_anthropic_403_model_access_denied
-  pipeline_error_anthropic_429_exceeded_quota
-  pipeline_error_anthropic_500_server_error
-  pipeline_error_anthropic_llm_failed
-  pipeline_error_together_ai_400_bad_request_validation_failed
-  pipeline_error_together_ai_401_unauthorized
-  pipeline_error_together_ai_403_model_access_denied
-  pipeline_error_together_ai_429_exceeded_quota
-  pipeline_error_together_ai_500_server_error
-  pipeline_error_together_ai_llm_failed
-  pipeline_error_anyscale_400_bad_request_validation_failed
-  pipeline_error_anyscale_401_unauthorized
-  pipeline_error_anyscale_403_model_access_denied
-  pipeline_error_anyscale_429_exceeded_quota
-  pipeline_error_anyscale_500_server_error
-  pipeline_error_anyscale_llm_failed
-  pipeline_error_openrouter_400_bad_request_validation_failed
-  pipeline_error_openrouter_401_unauthorized
-  pipeline_error_openrouter_403_model_access_denied
-  pipeline_error_openrouter_429_exceeded_quota
-  pipeline_error_openrouter_500_server_error
-  pipeline_error_openrouter_llm_failed
-  pipeline_error_perplexity_ai_400_bad_request_validation_failed
-  pipeline_error_perplexity_ai_401_unauthorized
-  pipeline_error_perplexity_ai_403_model_access_denied
-  pipeline_error_perplexity_ai_429_exceeded_quota
-  pipeline_error_perplexity_ai_500_server_error
-  pipeline_error_perplexity_ai_llm_failed
-  pipeline_error_deepinfra_400_bad_request_validation_failed
-  pipeline_error_deepinfra_401_unauthorized
-  pipeline_error_deepinfra_403_model_access_denied
-  pipeline_error_deepinfra_429_exceeded_quota
-  pipeline_error_deepinfra_500_server_error
-  pipeline_error_deepinfra_llm_failed
-  pipeline_error_runpod_400_bad_request_validation_failed
-  pipeline_error_runpod_401_unauthorized
-  pipeline_error_runpod_403_model_access_denied
-  pipeline_error_runpod_429_exceeded_quota
-  pipeline_error_runpod_500_server_error
-  pipeline_error_runpod_llm_failed
-  pipeline_error_custom_llm_400_bad_request_validation_failed
-  pipeline_error_custom_llm_401_unauthorized
-  pipeline_error_custom_llm_403_model_access_denied
-  pipeline_error_custom_llm_429_exceeded_quota
-  pipeline_error_custom_llm_500_server_error
-  pipeline_error_custom_llm_llm_failed
-  pipeline_error_custom_voice_failed
-  pipeline_error_twilio_failed_to_connect_call
-  pipeline_error_twilio_reported_customer_misdialed
-  voicemail
 }
 
 enum CALL_RESULT {
@@ -1398,7 +1272,7 @@ enum CALL_RESULT {
   FAILURE
 }
 
-enum VOICE_CAMPAIGN_STATUS {
+enum CAMPAIGN_STATUS {
   DRAFT
   TESTING
   ACTIVE
@@ -1407,7 +1281,7 @@ enum VOICE_CAMPAIGN_STATUS {
   FAILED
 }
 
-enum VOICE_CAMPAIGN_LEAD_STATUS {
+enum CAMPAIGN_LEAD_STATUS {
   PENDING
   RETRYING
   IN_PROGRESS
@@ -1415,20 +1289,27 @@ enum VOICE_CAMPAIGN_LEAD_STATUS {
   FAILED
 }
 
-enum VOICE_CAMPAIGN_LEAD_QUALITY {
+enum CAMPAIGN_LEAD_QUALITY {
   LOW
   MEDIUM
   HIGH
 }
 
-enum VOICE_CAMPAIGN_LEAD_RESULT {
+enum CAMPAIGN_LEAD_RESULT {
   SUCCESS
   FAILURE
 }
 
 enum LEAD_CALL_TYPE {
   GLOBAL
-  VOICE_CAMPAIGN
+  CAMPAIGN
+}
+
+enum CALL_SOURCE {
+  RECALLSYNC
+  VAPI
+  RETELL
+  ELEVENLABS
 }
 
 // Pipeline Enums
@@ -1483,25 +1364,25 @@ enum AUTOMATION_EVENT {
   MEETING_DELETED
   MEETING_STATUS_CHANGED
 
-  //  VOICE CAMPAIGN EVENTS
+  //  CAMPAIGN EVENTS
 
-  // Voice campaign lead events 
-  VOICE_CAMPAIGN_LEAD_CREATED
-  VOICE_CAMPAIGN_LEAD_UPDATED
-  VOICE_CAMPAIGN_LEAD_DELETED
+  // Campaign lead events 
+  CAMPAIGN_LEAD_CREATED
+  CAMPAIGN_LEAD_UPDATED
+  CAMPAIGN_LEAD_DELETED
 
-  // Voice campaign events 
-  VOICE_CAMPAIGN_EVENTS
-  VOICE_CAMPAIGN_CREATED
-  VOICE_CAMPAIGN_UPDATED
-  VOICE_CAMPAIGN_DELETED
-  VOICE_CAMPAIGN_STATUS_CHANGED
+  // Campaign events 
+  CAMPAIGN_EVENTS
+  CAMPAIGN_CREATED
+  CAMPAIGN_UPDATED
+  CAMPAIGN_DELETED
+  CAMPAIGN_STATUS_CHANGED
 
-  // Voice campaign call events 
-  VOICE_CAMPAIGN_CALL_CREATED
-  VOICE_CAMPAIGN_CALL_UPDATED
-  VOICE_CAMPAIGN_CALL_DELETED
-  VOICE_CAMPAIGN_CALL_STATUS_CHANGED
+  // Campaign call events 
+  CAMPAIGN_CALL_CREATED
+  CAMPAIGN_CALL_UPDATED
+  CAMPAIGN_CALL_DELETED
+  CAMPAIGN_CALL_STATUS_CHANGED
 
   // FOLLOWUP EVENTS
   FOLLOWUP_EVENTS
@@ -1552,6 +1433,9 @@ enum PROVIDER {
   HUBSPOT
   N8N
   LLM
+  ELEVEN_LABS
+  RETELL
+  ULTRA_VOX
 }
 
 enum MESSAGE_ITEM_TYPE {
@@ -1638,7 +1522,6 @@ enum CHANNEL {
   FACEBOOK
   INSTAGRAM
   LIVE_CHAT
-
   VOICE_CALL
 }
 

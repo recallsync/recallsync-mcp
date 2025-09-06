@@ -1,7 +1,8 @@
 import { z } from "zod";
 
 export const checkAvailabilitySchema = z.object({
-  startDate: z.string().min(1, "key 'startDate' is required in arguments"),
+  startDate: z.string().optional(),
+  date: z.string().optional(),
   timezone: z.string().min(1, "key 'timezone' is required in arguments"),
   leadId: z.string().min(1, "key 'leadId' is required in the arguments"),
 });

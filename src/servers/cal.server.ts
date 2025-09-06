@@ -51,6 +51,7 @@ calServer.setRequestHandler(CallToolRequestSchema, async (request) => {
   try {
     switch (name) {
       case "check_availability":
+        console.log("check_availability", { request });
         return await executeToolWithTimeout(
           () => handleCheckAvailability(request),
           name,

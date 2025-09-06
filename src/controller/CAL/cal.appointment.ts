@@ -49,11 +49,15 @@ export const checkAvailability = async ({
 }: CheckAvailabilityInput) => {
   if (!lead) return;
   const { id, agencyId, businessId } = lead;
-  const { startDate, timezone } = args;
+  const { startDate, date, timezone } = args;
   const { calEventId, calApiKey } = calendar;
   const GAP = 1; // 1 day gap between start and end
+  const dateToUse = startDate || date || "";
+  if (!dateToUse) {
+    return "Provide a date to check availability";
+  }
 
-  let start = format(new Date(startDate), "yyyy-MM-dd");
+  let start = format(new Date(dateToUse), "yyyy-MM-dd");
   let end = format(addDays(new Date(start), GAP), "yyyy-MM-dd");
 
   let availability: CompactAvailability = {};
@@ -233,6 +237,7 @@ export const bookAppointment = async ({
     );
 
     const data = res.data; // for @db
+    console.log("booking data", { data });
     const startInTimezone = format(
       new Date(appointmentDate),
       "dd MMM yyyy, hh:mm a"
