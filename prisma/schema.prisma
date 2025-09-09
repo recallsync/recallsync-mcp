@@ -574,8 +574,9 @@ model Agent {
   type    AGENT_TYPE @default(INTEGRATED)
 
   // integrated channel config 
-  flow         Json? @default("{\"nodes\":[{\"id\":\"start-1\",\"type\":\"start\",\"position\":{\"x\":100,\"y\":200},\"data\":{\"label\":\"Start\",\"description\":\"Conversation starts here\"}}],\"edges\":[]}") // react flow json 
-  flowSettings Json? @default("{}") // react flow settings json 
+  flow           Json?            @default("{\"nodes\":[{\"id\":\"start-1\",\"type\":\"start\",\"position\":{\"x\":100,\"y\":200},\"data\":{\"label\":\"Start\",\"description\":\"Conversation starts here\"}}],\"edges\":[]}") // react flow json 
+  flowSettings   Json?            @default("{}") // react flow settings json 
+  voiceAgentType VOICE_AGENT_TYPE @default(CONVERSATION_PATHWAY)
 
   // VAPI
   vapiPhoneNumberId String?
@@ -605,12 +606,25 @@ model Agent {
   useN8N Boolean @default(false)
 
   // Metadata
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
+  AgentTools AgentTool[]
 
   @@index([businessId])
   @@index([agencyId])
   @@index([primaryAgentId])
+}
+
+model AgentTool {
+  id String @id @default(uuid())
+
+  definition Json
+
+  Agents Agent[]
+
+  // Metadata
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model Meeting {
@@ -1179,6 +1193,11 @@ enum AGENT_TYPE {
   ULTRA_VOX
 }
 
+enum VOICE_AGENT_TYPE {
+  CONVERSATION_PATHWAY
+  SINGLE_PROMPT
+}
+
 enum AGENT_SESSION_STATUS {
   ACTIVE
   TERMINATED
@@ -1434,6 +1453,7 @@ enum PROVIDER {
   N8N
   LLM
   ELEVEN_LABS
+  CARTESIA
   RETELL
   ULTRA_VOX
 }
