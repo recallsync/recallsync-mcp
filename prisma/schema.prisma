@@ -42,6 +42,15 @@ model User {
   stripeSubscriptionTerm     PLAN_TERM?
   planIsActive               Boolean    @default(false)
 
+  //razorpay
+  razorpayCustomerId           String?    @unique
+  razorpaySubscriptionEndDate  DateTime?
+  razorpaySubscriptionCancelAt DateTime?
+  razorpayPlanPriceId          String?
+  razorpayPlanPeriod           PLAN_TERM?
+  razorpaySubscriptionId       String?    @unique
+  razorpaySubscriptionStatus   String?
+
   // Metadata
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -80,7 +89,7 @@ model User {
   Pipelines            Pipeline[]
   Opportunities        Opportunity[]
   Stages               Stage[]
-  Automations          Automation[]
+  Events               Event[]
   AgentFollowUps       FollowUp[]            @relation("SalesAgentToFollowUp")
   AgencyFollowUps      FollowUp[]            @relation("AgencyToFollowUp")
   ConversationMessages ConversationMessage[]
@@ -91,6 +100,7 @@ model User {
   Agents               Agent[]
   PrimaryAgents        PrimaryAgent[]
   ChatSessions         ChatSession[]
+  Automations          Automation[]
 
   @@index([agencyId])
   @@index([businessId])
@@ -326,6 +336,7 @@ model Lead {
   salesAgentId String?
   SalesAgent   User?   @relation("SalesAgentToLead", fields: [salesAgentId], references: [id], onDelete: SetNull)
 
+  isTestLead     Boolean @default(false)
   linkedLeadId   String? // soft-link to "main" profile if this is a secondary lead
   linkedLead     Lead?   @relation("LinkedLeads", fields: [linkedLeadId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   duplicateLeads Lead[]  @relation("LinkedLeads")
@@ -344,7 +355,7 @@ model Lead {
   Conversation         Conversation?
   ConversationMessages ConversationMessage[]
   ChatSessions         ChatSession[]
-  isTestLead           Boolean               @default(false)
+  AutomationSessions   AutomationSession[]
 
   @@index([agencyId])
   @@index([salesAgentId])
@@ -436,6 +447,7 @@ model ConversationMessage {
 
   channel  CHANNEL           @default(EMAIL)
   itemType MESSAGE_ITEM_TYPE @default(MESSAGE)
+  source   MESSAGE_SOURCE    @default(RECALLSYNC)
 
   // SYSTEM EVENTS (tool_calls etc)
   systemEvent       SYSTEM_EVENT?
@@ -462,6 +474,9 @@ model ConversationMessage {
   conversationId String
   Conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
 
+  agentId String?
+  Agent   Agent?  @relation(fields: [agentId], references: [id], onDelete: Cascade)
+
   // Metadata
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -471,6 +486,7 @@ model ConversationMessage {
   @@index([callId])
   @@index([agencyId])
   @@index([businessId])
+  @@index([agentId])
 }
 
 model PrimaryAgent {
@@ -508,14 +524,17 @@ model PrimaryAgent {
   NextPrimaryAgent   PrimaryAgent?  @relation("NextPrimaryAgents", fields: [nextPrimaryAgentId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   NextPrimaryAgents  PrimaryAgent[] @relation("NextPrimaryAgents")
 
-  // Metadata
-  createdAt          DateTime            @default(now())
-  updatedAt          DateTime            @updatedAt
   Agents             Agent[]
   Conversations      Conversation[]
   PrimaryAgentAssets PrimaryAgentAsset[]
   ChatSessions       ChatSession[]
   Campaigns          Campaign[]
+  AutomationSessions AutomationSession[]
+  Automations        Automation[]
+
+  // Metadata
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([businessId])
   @@index([agencyId])
@@ -606,9 +625,10 @@ model Agent {
   useN8N Boolean @default(false)
 
   // Metadata
-  createdAt  DateTime    @default(now())
-  updatedAt  DateTime    @updatedAt
-  AgentTools AgentTool[]
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  AgentTools           AgentTool[]
+  ConversationMessages ConversationMessage[]
 
   @@index([businessId])
   @@index([agencyId])
@@ -677,7 +697,7 @@ model LeadCall {
   callSource CALL_SOURCE    @default(VAPI)
 
   callDuration  Float @default(0)
-  costVAPI      Float @default(0) // total voiceAi cost
+  costVoice     Float @default(0) // total voiceAi cost
   costTelephony Float @default(0) // total telephony cost
   totalCost     Float @default(0) // total call cost
 
@@ -889,7 +909,7 @@ model Preference {
 }
 
 // Automation
-model Automation {
+model Event {
   id String @id @default(uuid())
 
   name        String
@@ -898,7 +918,7 @@ model Automation {
   token       String
   isActive    Boolean @default(false)
 
-  event AUTOMATION_EVENT @default(OPPORTUNITY_EVENT)
+  event EVENT @default(OPPORTUNITY_EVENT)
 
   // Relations
   agencyId String
@@ -959,9 +979,20 @@ model Business {
   id      String  @id @default(uuid())
   name    String
   image   String  @default("")
-  email   String  @unique
+  email   String
   phone   String
   address String? @db.Text
+
+  // bizz razorpay
+  planIsActive                 Boolean    @default(false)
+  plan                         PLAN       @default(FREE)
+  razorpayCustomerId           String?    @unique
+  razorpaySubscriptionEndDate  DateTime?
+  razorpaySubscriptionCancelAt DateTime?
+  razorpayPlanPriceId          String?
+  razorpayPlanPeriod           PLAN_TERM?
+  razorpaySubscriptionId       String?    @unique
+  razorpaySubscriptionStatus   String?
 
   // Twilio
   twilioAccountSid String @default("")
@@ -989,6 +1020,11 @@ model Business {
   // Business Owners 
   BusinessOwners User[] @relation("BusinessOwner")
 
+  // Rebilling fields
+  lastMessagesChargedAt DateTime @default(now())
+  lastVoiceChargedAt    DateTime @default(now())
+  chargeConfig          Json? // prices set by agency for messages and voice
+
   // Metadata Fields
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1009,7 +1045,7 @@ model Business {
   Stages               Stage[]
   Opportunities        Opportunity[]
   Preference           Preference?
-  Automations          Automation[]
+  Events               Event[]
   FollowUps            FollowUp[]
   LeadCalls            LeadCall[]
   BusinessConfig       BusinessConfig?
@@ -1019,18 +1055,20 @@ model Business {
   n8nIntegrations      N8NIntegration[]
   ChatSessions         ChatSession[]
   Providers            Provider[]
+  VoiceChargeLogs      VoiceChargeLog[]
+  MessageChargeLogs    MessageChargeLog[]
+  Automations          Automation[]
 
   @@index([agencyId])
 }
 
 model BusinessManager {
-  id String @id @default(uuid())
-
-  businessId String
-  Business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
-
-  managerId String
-  Manager   User   @relation(fields: [managerId], references: [id], onDelete: Cascade)
+  id           String        @id @default(uuid())
+  businessId   String
+  Business     Business      @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  businessRole BUSINESS_ROLE @default(BUSINESS_OWNER)
+  managerId    String
+  Manager      User          @relation(fields: [managerId], references: [id], onDelete: Cascade)
 
   @@index([businessId])
   @@index([managerId])
@@ -1146,6 +1184,58 @@ model ChatSession {
   @@index([agentId])
 }
 
+model Automation {
+  id String @id @default(uuid())
+
+  name        String
+  description String?           @db.Text
+  status      AUTOMATION_STATUS @default(DRAFT)
+
+  flow         Json? // react flow json 
+  flowSettings Json? // react flow settings json 
+
+  // Relations 
+  businessId String
+  Business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  agencyId String
+  Agency   User   @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+
+  primaryAgentId String
+  PrimaryAgent   PrimaryAgent @relation(fields: [primaryAgentId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([businessId])
+  @@index([agencyId])
+  @@index([primaryAgentId])
+}
+
+model AutomationSession {
+  id String @id @default(uuid())
+
+  rsRunId   String // restack run id 
+  rsAgentId String // restack agent id 
+
+  status       AGENT_SESSION_STATUS @default(ACTIVE)
+  statusReason String?              @db.Text // reason for the status change
+
+  primaryAgentId String
+  PrimaryAgent   PrimaryAgent @relation(fields: [primaryAgentId], references: [id], onDelete: Cascade)
+
+  leadId String
+  Lead   Lead   @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([leadId])
+  @@index([primaryAgentId])
+  @@index([rsAgentId])
+  @@index([rsRunId])
+}
+
 model Provider {
   id       String   @id @default(uuid())
   provider PROVIDER
@@ -1184,6 +1274,40 @@ model AgentChannelConfig {
   @@index([agentId])
 }
 
+// The log for voice call charged to business
+model VoiceChargeLog {
+  id String @id @default(uuid())
+
+  totalCost  Float
+  totalCalls Int
+
+  businessId String
+  Business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([createdAt])
+  @@index([businessId])
+}
+
+// The log for message cost charged to business
+model MessageChargeLog {
+  id String @id @default(uuid())
+
+  totalCost  Float
+  totalCalls Int
+
+  businessId String
+  Business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([createdAt])
+  @@index([businessId])
+}
+
 enum AGENT_TYPE {
   INTEGRATED // platform managed agents
   N8N // n8n managed agents
@@ -1200,6 +1324,15 @@ enum VOICE_AGENT_TYPE {
 
 enum AGENT_SESSION_STATUS {
   ACTIVE
+  TERMINATED
+  COMPLETED
+  FAILED
+}
+
+enum AUTOMATION_STATUS {
+  DRAFT
+  ACTIVE
+  PAUSED
   TERMINATED
   COMPLETED
   FAILED
@@ -1224,7 +1357,9 @@ enum ACCESS {
 }
 
 enum PLAN {
-  AGENCY
+  FREE
+  BUSINESS_BASIC
+  BUSINESS_ADVANCE
 }
 
 enum PLAN_TERM {
@@ -1340,7 +1475,7 @@ enum OPPORTUNITY_STATUS {
 }
 
 // Automation Enums
-enum AUTOMATION_EVENT {
+enum EVENT {
   // PIPELINE EVENTS 
   OPPORTUNITY_EVENT
   STAGE_EVENT
@@ -1474,6 +1609,11 @@ enum SYSTEM_EVENT {
   AGENT_TERMINATED
 }
 
+enum MESSAGE_SOURCE {
+  RECALLSYNC
+  N8N
+}
+
 enum SYSTEM_EVENT_STATUS {
   SUCCESS
   FAILED
@@ -1554,4 +1694,9 @@ enum CALENDAR_TYPE {
 enum MEETING_SOURCE {
   PLATFORM
   OUTSIDE
+}
+
+enum BUSINESS_ROLE {
+  BUSINESS_OWNER
+  BUSINESS_MANAGER
 }

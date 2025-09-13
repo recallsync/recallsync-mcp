@@ -1,12 +1,11 @@
 import {
-  AUTOMATION_EVENT,
+  EVENT,
   CALENDAR_TYPE,
   CalenderIntegration,
   Lead,
   MEETING_SOURCE,
   MESSAGE_SENDER,
   SYSTEM_EVENT,
-  SYSTEM_EVENT_STATUS,
 } from "../../generated/client/index.js";
 import {
   BookAppointmentRequest,
@@ -30,10 +29,7 @@ import {
   createDateTimeWithTimezone,
 } from "../../utils/cal.utils.js";
 import { bookMeeting, updateMeeting } from "../../utils/meeting-book.js";
-import {
-  LeadWithBizz,
-  triggerAutomation,
-} from "../../utils/integration.util.js";
+import { LeadWithBizz, triggerEvent } from "../../utils/integration.util.js";
 import { prisma } from "../../lib/prisma.js";
 import { formatInTimeZone, toZonedTime } from "date-fns-tz";
 
@@ -187,7 +183,7 @@ export const bookAppointment = async ({
     id,
     agencyId,
     businessId,
-    Business: { Automations },
+    Business: { Events },
   } = lead;
   const conversationId = lead.Conversation?.id;
   try {
@@ -281,7 +277,7 @@ export const bookAppointment = async ({
           meetingSource: MEETING_SOURCE.PLATFORM,
           status: "UPCOMING",
           meetingUrl: data.data.meetingUrl,
-          automations: Automations,
+          events: Events,
           leadFieldsToUpdate: canUpdateFields ? fieldsToUpdate : undefined,
           transaction: tx,
         });
@@ -338,7 +334,7 @@ export const rescheduleAppointment = async ({
     id,
     agencyId,
     businessId,
-    Business: { Automations },
+    Business: { Events },
   } = lead;
   const conversationId = lead.Conversation?.id;
 
@@ -436,14 +432,14 @@ export const rescheduleAppointment = async ({
         }
 
         // send event to automation
-        await triggerAutomation({
-          automations: Automations,
-          event: AUTOMATION_EVENT.MEETING_UPDATED,
+        await triggerEvent({
+          events: Events,
+          event: EVENT.MEETING_UPDATED,
           data: { meeting: existingMeeting, updatedMeeting },
         });
-        await triggerAutomation({
-          automations: Automations,
-          event: AUTOMATION_EVENT.MEETING_EVENTS,
+        await triggerEvent({
+          events: Events,
+          event: EVENT.MEETING_EVENTS,
           data: { meeting: existingMeeting, updatedMeeting },
         });
       });
@@ -495,7 +491,7 @@ export const cancelAppointment = async ({
     id,
     agencyId,
     businessId,
-    Business: { Automations },
+    Business: { Events },
   } = lead;
   const conversationId = lead.Conversation?.id;
   try {
@@ -574,14 +570,14 @@ export const cancelAppointment = async ({
           });
         }
         // send event to automation
-        await triggerAutomation({
-          automations: Automations,
-          event: AUTOMATION_EVENT.MEETING_UPDATED,
+        await triggerEvent({
+          events: Events,
+          event: EVENT.MEETING_UPDATED,
           data: { meeting: existingMeeting, updatedMeeting },
         });
-        await triggerAutomation({
-          automations: Automations,
-          event: AUTOMATION_EVENT.MEETING_EVENTS,
+        await triggerEvent({
+          events: Events,
+          event: EVENT.MEETING_EVENTS,
           data: { meeting: existingMeeting, updatedMeeting },
         });
       });

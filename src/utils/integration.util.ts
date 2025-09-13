@@ -1,5 +1,5 @@
 import axios from "axios";
-import { Automation, AUTOMATION_EVENT } from "../generated/client/index.js";
+import { Event, EVENT } from "../generated/client/index.js";
 import { prisma } from "../lib/prisma.js";
 
 export const getLeadById = async (id: string) => {
@@ -10,7 +10,7 @@ export const getLeadById = async (id: string) => {
     include: {
       Business: {
         include: {
-          Automations: true,
+          Events: true,
           Providers: true,
         },
       },
@@ -58,38 +58,36 @@ export const getPrimaryAgent = async (id: string) => {
   return primaryAgent;
 };
 
-type TriggerAutomationInput = {
-  automations: Automation[];
-  event: AUTOMATION_EVENT;
+type TriggerEventInput = {
+  events: Event[];
+  event: EVENT;
   data: any;
 };
-export const triggerAutomation = async ({
-  automations,
+export const triggerEvent = async ({
+  events,
   event,
   data,
-}: TriggerAutomationInput) => {
-  const automation = automations.find(
-    (automation) => automation.event === event
-  );
-  if (!automation) return;
-  await sendEventToAutomation(automation, event, data);
+}: TriggerEventInput) => {
+  const item = events.find((e) => e.event === event);
+  if (!item) return;
+  await sendEventToEvent(item, event, data);
 };
 
-export const sendEventToAutomation = async (
-  automation: Automation | null | undefined,
-  type: AUTOMATION_EVENT,
+export const sendEventToEvent = async (
+  eventItem: Event | null | undefined,
+  type: EVENT,
   data: any
 ) => {
-  if (!automation) return;
+  if (!eventItem) return;
   const event = {
     type,
     data: data,
   };
-  if (!automation.isActive) return;
+  if (!eventItem.isActive) return;
   try {
-    await axios.post(automation.url, event, {
+    await axios.post(eventItem.url, event, {
       headers: {
-        Authorization: `${automation.token}`,
+        Authorization: `${eventItem.token}`,
       },
     });
   } catch (err: any) {

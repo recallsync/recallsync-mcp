@@ -12,7 +12,7 @@ import {
 import { chunkConsecutiveSlots } from "../../utils/ghl.js";
 import { formatInTimeZone, fromZonedTime, toZonedTime } from "date-fns-tz";
 import {
-  AUTOMATION_EVENT,
+  EVENT,
   CALENDAR_TYPE,
   MEETING_SOURCE,
   MESSAGE_SENDER,
@@ -23,10 +23,7 @@ import {
 } from "../../generated/client/index.js";
 import { bookMeeting, updateMeeting } from "../../utils/meeting-book.js";
 import { prisma } from "../../lib/prisma.js";
-import {
-  LeadWithBizz,
-  triggerAutomation,
-} from "../../utils/integration.util.js";
+import { LeadWithBizz, triggerEvent } from "../../utils/integration.util.js";
 import { DefaultArgs } from "../../generated/client/runtime/library.js";
 
 type GHLRequestConstructor = {
@@ -300,7 +297,7 @@ export const bookAppointment = async ({
     const {
       businessId,
       agencyId,
-      Business: { Automations },
+      Business: { Events },
     } = lead;
     const { dateTime: startTime, leadId, timezone } = input;
     let path = `/calendars/events/appointments`;
@@ -390,7 +387,7 @@ export const bookAppointment = async ({
           status: "UPCOMING",
           meetingUrl: appointmentData.address,
           transaction: tx,
-          automations: Automations,
+          events: Events,
           leadFieldsToUpdate: diffTimezone
             ? {
                 ianaTimezone: timezone,
@@ -441,7 +438,7 @@ export const updateAppointment = async (props: UpdateGHLAppointment) => {
       id,
       businessId,
       agencyId,
-      Business: { Automations },
+      Business: { Events },
     } = props.lead;
     const path = `/calendars/events/appointments/${props.rescheduleOrCancelId}`;
     // Build update body based on what's provided
@@ -534,14 +531,14 @@ export const updateAppointment = async (props: UpdateGHLAppointment) => {
         }
 
         // send event to automation
-        await triggerAutomation({
-          automations: Automations,
-          event: AUTOMATION_EVENT.MEETING_UPDATED,
+        await triggerEvent({
+          events: Events,
+          event: EVENT.MEETING_UPDATED,
           data: { meeting: existingMeeting, updatedMeeting },
         });
-        await triggerAutomation({
-          automations: Automations,
-          event: AUTOMATION_EVENT.MEETING_EVENTS,
+        await triggerEvent({
+          events: Events,
+          event: EVENT.MEETING_EVENTS,
           data: { meeting: existingMeeting, updatedMeeting },
         });
       });
@@ -585,7 +582,7 @@ export const updateContact = async ({
       id,
       businessId,
       agencyId,
-      Business: { Automations },
+      Business: { Events },
     } = lead;
     const path = `/contacts/${contactId}`;
     const updateBody: Record<string, any> = {

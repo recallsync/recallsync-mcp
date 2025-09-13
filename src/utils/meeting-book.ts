@@ -1,14 +1,12 @@
-import { AUTOMATION_EVENT, Lead } from "../generated/client/index.js";
+import { EVENT, Lead } from "../generated/client/index.js";
 import {
-  Automation,
+  Event,
   CALENDAR_TYPE,
   MEETING_SOURCE,
   MEETING_STATUS,
 } from "../generated/client/index.js";
 import { prisma } from "../lib/prisma.js";
-import { triggerAutomation } from "./integration.util.js";
-import { BookAppointmentResponse } from "../types/cal.types.js";
-import { GHLAppointment } from "../types/ghl.types.js";
+import { triggerEvent } from "./integration.util.js";
 
 interface BookMeetingInput {
   businessId?: string;
@@ -20,7 +18,7 @@ interface BookMeetingInput {
   meetingSource: MEETING_SOURCE;
   status: MEETING_STATUS;
   meetingUrl?: string;
-  automations: Automation[];
+  events: Event[];
   transaction?: any;
   leadFieldsToUpdate?: Partial<Record<keyof Lead, string>>;
   createdAt?: Date;
@@ -37,7 +35,7 @@ export const bookMeeting = async ({
   meetingSource,
   status,
   meetingUrl,
-  automations,
+  events,
   transaction = prisma,
   leadFieldsToUpdate,
   createdAt,
@@ -71,14 +69,14 @@ export const bookMeeting = async ({
     }
 
     // send event to automation
-    await triggerAutomation({
-      automations,
-      event: AUTOMATION_EVENT.MEETING_CREATED,
+    await triggerEvent({
+      events,
+      event: EVENT.MEETING_CREATED,
       data: { meeting: data },
     });
-    await triggerAutomation({
-      automations,
-      event: AUTOMATION_EVENT.MEETING_EVENTS,
+    await triggerEvent({
+      events,
+      event: EVENT.MEETING_EVENTS,
       data: { meeting: data },
     });
     return {
