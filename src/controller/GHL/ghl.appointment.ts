@@ -2,7 +2,6 @@ import { addDays, format, parse } from "date-fns";
 import {
   BookAppointmentRequest,
   CheckAvailabilityRequest,
-  GetAppointmentsRequest,
 } from "../../schema/GHL/appointment.schema.js";
 import {
   GetGHLAppointmentsResponse,
@@ -179,6 +178,7 @@ interface CheckAvailabilityInput {
   input: CheckAvailabilityRequest;
   ghlAccessToken: string;
   ghlCalendarId: string;
+  lead: NonNullable<LeadWithBizz>;
 }
 
 export const checkAvailability = async ({
@@ -266,6 +266,35 @@ export const getAvailableChunkedSlots = async (
 ) => {
   const slots = await checkAvailability(props);
   const chunkedSlots = chunkConsecutiveSlots(slots);
+
+  // create a system message
+  const conversationId = props.lead?.Conversation?.id;
+  if (conversationId) {
+    if (conversationId && props.lead) {
+      await prisma.conversationMessage.create({
+        data: {
+          content: "Checked availability",
+          sender: MESSAGE_SENDER.SYSTEM,
+          businessId: props.lead.businessId,
+          agencyId: props.lead.agencyId,
+          leadId: props.lead.id,
+          conversationId,
+          // system fields
+          systemEvent: SYSTEM_EVENT.AVAILABILITY_CHECK,
+          systemDescription: `Here are the available slots`,
+          systemData: {
+            input: {
+              ...props.input,
+            },
+            output: {
+              compact: JSON.parse(JSON.stringify(chunkedSlots)),
+              raw: slots,
+            },
+          },
+        },
+      });
+    }
+  }
   return chunkedSlots;
 };
 type BookGHLAppointment = {

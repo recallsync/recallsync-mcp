@@ -200,6 +200,7 @@ export async function handleCheckAvailability(request: CallToolRequest) {
       input: args,
       ghlAccessToken,
       ghlCalendarId,
+      lead,
     });
 
     return {
