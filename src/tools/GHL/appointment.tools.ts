@@ -182,10 +182,17 @@ export async function handleCheckAvailability(request: CallToolRequest) {
     const ghlProvider = lead?.Business.Providers.find(
       (p) => p.provider === "GHL"
     );
+    console.log(`ghl provider exists:`, ghlProvider?.id);
     const config = ghlProvider?.config as GHLProviderConfig | null;
     const ghlAccessToken = config?.ghlAccessToken;
     const ghlContactId = lead?.ghlContactId;
     const ghlCalendarId = lead?.Conversation?.ActiveAgent?.ghlCalendarId;
+    console.log(`ghl details exists:`, {
+      ghlAccessToken,
+      ghlContactId,
+      ghlCalendarId,
+    });
+
     if (!ghlAccessToken || !ghlContactId || !ghlCalendarId) {
       return {
         content: [
@@ -196,13 +203,14 @@ export async function handleCheckAvailability(request: CallToolRequest) {
         ],
       };
     }
+    console.log(`checking availability`);
     const slots = await getAvailableChunkedSlots({
       input: args,
       ghlAccessToken,
       ghlCalendarId,
       lead,
     });
-
+    console.log(`availability checked`, slots);
     return {
       content: slots.map((slot) => ({
         type: "text",

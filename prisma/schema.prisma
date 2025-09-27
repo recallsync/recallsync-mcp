@@ -336,14 +336,13 @@ model Lead {
   salesAgentId String?
   SalesAgent   User?   @relation("SalesAgentToLead", fields: [salesAgentId], references: [id], onDelete: SetNull)
 
-  isTestLead     Boolean @default(false)
+  isTestLead     Boolean  @default(false)
   linkedLeadId   String? // soft-link to "main" profile if this is a secondary lead
-  linkedLead     Lead?   @relation("LinkedLeads", fields: [linkedLeadId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  duplicateLeads Lead[]  @relation("LinkedLeads")
-
+  linkedLead     Lead?    @relation("LinkedLeads", fields: [linkedLeadId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  duplicateLeads Lead[]   @relation("LinkedLeads")
   // Metadata Fields
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
   Meeting              Meeting[]
   LeadCalls            LeadCall[]
@@ -356,6 +355,7 @@ model Lead {
   ConversationMessages ConversationMessage[]
   ChatSessions         ChatSession[]
   AutomationSessions   AutomationSession[]
+  CustomFieldValue     CustomFieldValue[]
 
   @@index([agencyId])
   @@index([salesAgentId])
@@ -383,6 +383,7 @@ model LeadTag {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  @@unique([name, businessId])
   @@index([businessId])
 }
 
@@ -457,6 +458,8 @@ model ConversationMessage {
 
   ghlMessageId String?
 
+  rsRunId String?
+
   // Call Message Items
   callId String?
   Call   LeadCall? @relation(fields: [callId], references: [id], onDelete: Cascade)
@@ -487,6 +490,7 @@ model ConversationMessage {
   @@index([agencyId])
   @@index([businessId])
   @@index([agentId])
+  @@index([rsRunId])
 }
 
 model PrimaryAgent {
@@ -517,6 +521,7 @@ model PrimaryAgent {
 
   ghlCalendarId         String?
   calenderIntegrationId String?
+  calendarType          CALENDAR_TYPE        @default(CAL)
   CalenderIntegration   CalenderIntegration? @relation(fields: [calenderIntegrationId], references: [id], onDelete: SetNull)
 
   // nextPrimaryAgent
@@ -579,7 +584,8 @@ model Agent {
 
   // agent settings
   settings Json
-  isActive Boolean @default(false)
+  isActive Boolean   @default(false)
+  provider PROVIDER?
 
   // sequence config
   sequenceActive Boolean @default(false)
@@ -609,9 +615,11 @@ model Agent {
   retellAgentId     String?
   retellPhoneNumber String?
 
+  //TWILIO
+  twilioPhoneNumber String?
   // Relations
-  businessId String
-  Business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  businessId        String
+  Business          Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
 
   agencyId String
   Agency   User   @relation(fields: [agencyId], references: [id], onDelete: Cascade)
@@ -619,8 +627,6 @@ model Agent {
   primaryAgentId String
   PrimaryAgent   PrimaryAgent  @relation(fields: [primaryAgentId], references: [id], onDelete: Cascade)
   ChatSessions   ChatSession[]
-
-  AgentChannelConfig AgentChannelConfig?
 
   useN8N Boolean @default(false)
 
@@ -683,18 +689,20 @@ model Meeting {
 }
 
 model LeadCall {
-  id          String          @id @default(uuid())
-  callId      String          @default("")
-  type        CALL_TYPE       @default(OUTBOUND)
-  endedReason CALL_END_REASON @default(unknown_error)
-  result      CALL_RESULT     @default(SUCCESS)
-  notes       String?         @db.Text
-  summary     String?         @db.Text
-  transcript  Json?
-  audioUrl    String          @default("")
+  id         String  @id @default(uuid())
+  callId     String  @default("")
+  notes      String? @db.Text
+  summary    String? @db.Text
+  transcript Json?
+  audioUrl   String  @default("")
 
-  callType   LEAD_CALL_TYPE @default(GLOBAL)
-  callSource CALL_SOURCE    @default(VAPI)
+  type          CALL_TYPE            @default(OUTBOUND)
+  endedReason   CALL_END_REASON      @default(unknown_error)
+  callStat      CALL_STAT            @default(NOT_PICKED)
+  userReplyStat CALL_USER_REPLY_STAT @default(NO_ANSWER)
+  result        CALL_RESULT          @default(SUCCESS)
+  callType      LEAD_CALL_TYPE       @default(GLOBAL)
+  callSource    CALL_SOURCE          @default(VAPI)
 
   callDuration  Float @default(0)
   costVoice     Float @default(0) // total voiceAi cost
@@ -1058,6 +1066,7 @@ model Business {
   VoiceChargeLogs      VoiceChargeLog[]
   MessageChargeLogs    MessageChargeLog[]
   Automations          Automation[]
+  CustomField          CustomField[]
 
   @@index([agencyId])
 }
@@ -1099,7 +1108,7 @@ model BusinessIntegration {
 model CalenderIntegration {
   id String @id @default(uuid())
 
-  type CALENDER_TYPE @default(CAL)
+  type CALENDAR_TYPE @default(CAL)
 
   calEventId  String
   calUsername String
@@ -1244,34 +1253,12 @@ model Provider {
   config     Json?
   businessId String
 
-  AgentChannelConfig AgentChannelConfig[] // provider is connected with multiple channel configs
-
   Business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([businessId])
-}
-
-model AgentChannelConfig {
-  id String @id @default(uuid())
-
-  isActive Boolean @default(true)
-
-  provider PROVIDER
-
-  agentId String @unique
-  Agent   Agent  @relation(fields: [agentId], references: [id], onDelete: Cascade)
-
-  providerId String?
-  Provider   Provider? @relation(fields: [providerId], references: [id], onDelete: Cascade)
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@index([providerId])
-  @@index([agentId])
 }
 
 // The log for voice call charged to business
@@ -1308,6 +1295,42 @@ model MessageChargeLog {
   @@index([businessId])
 }
 
+model CustomField {
+  id         String             @id @default(uuid())
+  key        String             @db.VarChar(255)
+  label      String             @db.VarChar(255)
+  type       String             @default("")
+  values     CustomFieldValue[]
+  ghlFieldId String?
+  source     FIELD_SOURCE       @default(MANUAL)
+  businessId String
+  business   Business           @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  options    Json?
+  createdAt  DateTime           @default(now())
+  updatedAt  DateTime           @updatedAt
+
+  @@unique([businessId, key])
+  @@index([businessId])
+}
+
+model CustomFieldValue {
+  id         String       @id @default(uuid())
+  value      String?      @db.Text
+  leadId     String
+  fieldDefId String
+  source     FIELD_SOURCE @default(MANUAL)
+
+  lead        Lead        @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  customField CustomField @relation(fields: [fieldDefId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([leadId, fieldDefId])
+  @@index([leadId])
+  @@index([fieldDefId])
+}
+
 enum AGENT_TYPE {
   INTEGRATED // platform managed agents
   N8N // n8n managed agents
@@ -1338,11 +1361,6 @@ enum AUTOMATION_STATUS {
   FAILED
 }
 
-enum CALENDER_TYPE {
-  CAL
-  CALENDLY
-}
-
 enum ROLE {
   ADMIN
   AGENCY // agency 
@@ -1360,6 +1378,9 @@ enum PLAN {
   FREE
   BUSINESS_BASIC
   BUSINESS_ADVANCE
+
+  AGENCY_BASIC
+  AGENCY_ADVANCE
 }
 
 enum PLAN_TERM {
@@ -1421,6 +1442,19 @@ enum CALL_END_REASON {
   unknown_error
 }
 
+// TRACK CALL PICKED/NOT_PICKED STAT -> Weather if call was picked by the user
+enum CALL_STAT {
+  PICKED
+  NOT_PICKED
+}
+
+// TRACK USER REPLY STAT - Weather if user replied to the call
+enum CALL_USER_REPLY_STAT {
+  ANSWERED
+  NO_ANSWER
+}
+
+// TRACK CALL RESULT -> SUCCESS/FAILURE -> Weather if call was successful or not
 enum CALL_RESULT {
   SUCCESS
   FAILURE
@@ -1612,6 +1646,7 @@ enum SYSTEM_EVENT {
 enum MESSAGE_SOURCE {
   RECALLSYNC
   N8N
+  GHL
 }
 
 enum SYSTEM_EVENT_STATUS {
@@ -1670,11 +1705,6 @@ enum SOURCE {
   SALESFORCE
 }
 
-enum CALENDAR {
-  CAL
-  GOHIGHLEVEL
-}
-
 enum CHANNEL {
   EMAIL
   SMS
@@ -1699,4 +1729,9 @@ enum MEETING_SOURCE {
 enum BUSINESS_ROLE {
   BUSINESS_OWNER
   BUSINESS_MANAGER
+}
+
+enum FIELD_SOURCE {
+  MANUAL
+  GHL
 }
