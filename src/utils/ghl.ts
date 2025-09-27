@@ -44,8 +44,12 @@ export const getPrimaryAgent = async (primaryAgentId: string) => {
   });
   return primaryAgent;
 };
+import { formatInTimeZone, toZonedTime } from "date-fns-tz";
+import { format } from "date-fns";
+
 export const chunkConsecutiveSlots = (
-  slots: string[]
+  slots: string[],
+  timezone: string
 ): Array<{
   date: string;
   startTime: string;
@@ -68,47 +72,56 @@ export const chunkConsecutiveSlots = (
 
   let currentChunk: string[] = [sortedSlots[0]];
 
+  const formatTimeInZone = (date: Date): string => {
+    return formatInTimeZone(date, timezone, "h:mm a");
+  };
+
+  const formatDateInZone = (date: Date): string => {
+    return formatInTimeZone(date, timezone, "EEE, MMM d");
+  };
+
   for (let i = 1; i < sortedSlots.length; i++) {
-    const currentSlot = new Date(sortedSlots[i]);
-    const lastSlot = new Date(currentChunk[currentChunk.length - 1]);
+    const currentSlot = toZonedTime(new Date(sortedSlots[i]), timezone);
+    const lastSlot = toZonedTime(
+      new Date(currentChunk[currentChunk.length - 1]),
+      timezone
+    );
 
     // Check if current slot is consecutive (30 minutes after the last one)
     const timeDiff = currentSlot.getTime() - lastSlot.getTime();
     const isConsecutive = timeDiff === 30 * 60 * 1000; // 30 minutes in milliseconds
-    const isSameDay = currentSlot.toDateString() === lastSlot.toDateString();
+    const isSameDay =
+      format(currentSlot, "yyyy-MM-dd") === format(lastSlot, "yyyy-MM-dd");
 
     if (isConsecutive && isSameDay) {
       currentChunk.push(sortedSlots[i]);
     } else {
       // Process current chunk
       if (currentChunk.length > 0) {
-        const chunkStart = new Date(currentChunk[0]);
-        const chunkEnd = new Date(currentChunk[currentChunk.length - 1]);
+        const chunkStart = toZonedTime(new Date(currentChunk[0]), timezone);
+        const chunkEnd = toZonedTime(
+          new Date(currentChunk[currentChunk.length - 1]),
+          timezone
+        );
         // Add 30 minutes to the end time to represent the end of the slot
         chunkEnd.setMinutes(chunkEnd.getMinutes() + 30);
 
-        const date = chunkStart.toLocaleDateString("en-US", {
-          weekday: "short",
-          month: "short",
-          day: "numeric",
-        });
-
-        const startTimeFormatted = chunkStart.toLocaleTimeString("en-US", {
-          hour: "numeric",
-          minute: chunkStart.getMinutes() === 0 ? undefined : "2-digit",
-          hour12: true,
-        });
-
-        const endTimeFormatted = chunkEnd.toLocaleTimeString("en-US", {
-          hour: "numeric",
-          minute: chunkEnd.getMinutes() === 0 ? undefined : "2-digit",
-          hour12: true,
-        });
+        const date = formatDateInZone(chunkStart);
+        const startTimeFormatted = formatTimeInZone(chunkStart);
+        const endTimeFormatted = formatTimeInZone(chunkEnd);
 
         chunks.push({
           date: date,
-          startTime: chunkStart.toISOString(),
-          endTime: chunkEnd.toISOString(),
+          startTime: formatInTimeZone(
+            chunkStart,
+            timezone,
+            "yyyy-MM-dd'T'HH:mm:ssXXX"
+          ),
+          endTime: formatInTimeZone(
+            chunkEnd,
+            timezone,
+            "yyyy-MM-dd'T'HH:mm:ssXXX"
+          ),
           formattedRange:
             currentChunk.length === 1
               ? `${date} at ${startTimeFormatted}`
@@ -123,32 +136,25 @@ export const chunkConsecutiveSlots = (
 
   // Process the last chunk
   if (currentChunk.length > 0) {
-    const chunkStart = new Date(currentChunk[0]);
-    const chunkEnd = new Date(currentChunk[currentChunk.length - 1]);
+    const chunkStart = toZonedTime(new Date(currentChunk[0]), timezone);
+    const chunkEnd = toZonedTime(
+      new Date(currentChunk[currentChunk.length - 1]),
+      timezone
+    );
     chunkEnd.setMinutes(chunkEnd.getMinutes() + 30);
 
-    const date = chunkStart.toLocaleDateString("en-US", {
-      weekday: "short",
-      month: "short",
-      day: "numeric",
-    });
-
-    const startTimeFormatted = chunkStart.toLocaleTimeString("en-US", {
-      hour: "numeric",
-      minute: chunkStart.getMinutes() === 0 ? undefined : "2-digit",
-      hour12: true,
-    });
-
-    const endTimeFormatted = chunkEnd.toLocaleTimeString("en-US", {
-      hour: "numeric",
-      minute: chunkEnd.getMinutes() === 0 ? undefined : "2-digit",
-      hour12: true,
-    });
+    const date = formatDateInZone(chunkStart);
+    const startTimeFormatted = formatTimeInZone(chunkStart);
+    const endTimeFormatted = formatTimeInZone(chunkEnd);
 
     chunks.push({
       date: date,
-      startTime: chunkStart.toISOString(),
-      endTime: chunkEnd.toISOString(),
+      startTime: formatInTimeZone(
+        chunkStart,
+        timezone,
+        "yyyy-MM-dd'T'HH:mm:ssXXX"
+      ),
+      endTime: formatInTimeZone(chunkEnd, timezone, "yyyy-MM-dd'T'HH:mm:ssXXX"),
       formattedRange:
         currentChunk.length === 1
           ? `${date} at ${startTimeFormatted}`

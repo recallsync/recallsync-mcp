@@ -265,7 +265,7 @@ export const getAvailableChunkedSlots = async (
   props: CheckAvailabilityInput
 ) => {
   const slots = await checkAvailability(props);
-  const chunkedSlots = chunkConsecutiveSlots(slots);
+  const chunkedSlots = chunkConsecutiveSlots(slots, props.input.timezone);
 
   // create a system message
   const conversationId = props.lead?.Conversation?.id;
