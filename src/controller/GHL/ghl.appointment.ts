@@ -330,7 +330,14 @@ export const bookAppointment = async ({
     } = lead;
     const { dateTime: startTime, leadId, timezone } = input;
     let path = `/calendars/events/appointments`;
-    const startTimeUTC = new Date(startTime).toISOString();
+
+    // Convert the startTime from the user's timezone to UTC
+    // startTime is assumed to be in the user's specified timezone
+    const startTimeInUserTz = new Date(startTime);
+    const startTimeUTC = fromZonedTime(
+      startTimeInUserTz,
+      timezone
+    ).toISOString();
     console.log({
       startTimeUTC,
       startTime,
