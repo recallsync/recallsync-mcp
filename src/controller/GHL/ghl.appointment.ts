@@ -331,9 +331,14 @@ export const bookAppointment = async ({
     const { dateTime: startTime, leadId, timezone } = input;
     let path = `/calendars/events/appointments`;
 
+    // Normalize: strip timezone offset from startTime if present
+    // Converts "2025-10-02T10:00:00-07:00" to "2025-10-02T10:00:00"
+    const normalizedStartTime = startTime.replace(/([+-]\d{2}:\d{2}|Z)$/, "");
+    console.log({ normalizedStartTime });
+
     // Convert the startTime from the user's timezone to UTC
     // startTime is assumed to be in the user's specified timezone
-    const startTimeInUserTz = new Date(startTime);
+    const startTimeInUserTz = new Date(normalizedStartTime);
     const startTimeUTC = fromZonedTime(
       startTimeInUserTz,
       timezone
@@ -433,7 +438,7 @@ export const bookAppointment = async ({
       });
     }
     return {
-      success: true,
+      success: false,
       data: appointmentData,
     };
   } catch (err) {
