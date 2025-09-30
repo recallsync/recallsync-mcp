@@ -343,16 +343,7 @@ export const bookAppointment = async ({
       startTimeInUserTz,
       timezone
     ).toISOString();
-    console.log({
-      startTimeUTC,
-      startTime,
-      timezone,
-      previousTimezone,
-      ghlCalendarId,
-      ghlContactId,
-      ghlLocationId,
-      ghlAccessToken,
-    });
+
     const request = ghlRequestContructor({
       apiKey: ghlAccessToken,
       method: "POST",
@@ -368,7 +359,7 @@ export const bookAppointment = async ({
     console.log("response", response);
     const appointmentData = (await response.json()) as GHLAppointment;
     const conversationId = lead.Conversation?.id;
-    if (response.ok) {
+    if (response.status === 200 || response.status === 201) {
       const diffTimezone = timezone !== previousTimezone;
       // Use transaction for database operations
       await prisma.$transaction(async (tx) => {
@@ -436,6 +427,11 @@ export const bookAppointment = async ({
             : undefined,
         });
       });
+
+      return {
+        success: true,
+        data: appointmentData,
+      };
     }
     return {
       success: false,
