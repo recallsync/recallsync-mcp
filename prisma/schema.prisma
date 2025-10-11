@@ -426,8 +426,9 @@ model Conversation {
   ActiveAgent   PrimaryAgent? @relation(fields: [activeAgentId], references: [id], onDelete: SetNull)
 
   // Metadata
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  lastMessageAt DateTime @default(now())
 
   // Relationships
   ConversationMessages ConversationMessage[]
@@ -628,7 +629,9 @@ model Agent {
   PrimaryAgent   PrimaryAgent  @relation(fields: [primaryAgentId], references: [id], onDelete: Cascade)
   ChatSessions   ChatSession[]
 
-  useN8N Boolean @default(false)
+  useN8N       Boolean @default(false)
+  // Smart Trigger - auto-create / chat session without a dedicated agent trigger
+  smartTrigger Boolean @default(false)
 
   // Metadata
   createdAt            DateTime              @default(now())
