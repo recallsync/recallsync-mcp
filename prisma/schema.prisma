@@ -356,6 +356,7 @@ model Lead {
   ChatSessions         ChatSession[]
   AutomationSessions   AutomationSession[]
   CustomFieldValue     CustomFieldValue[]
+  ChatLogs             ChatLog[]
 
   @@index([agencyId])
   @@index([salesAgentId])
@@ -651,9 +652,14 @@ model AgentTool {
 
   Agents Agent[]
 
+  businessId String
+  Business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
   // Metadata
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@index([businessId])
 }
 
 model Meeting {
@@ -1070,6 +1076,8 @@ model Business {
   MessageChargeLogs    MessageChargeLog[]
   Automations          Automation[]
   CustomField          CustomField[]
+  AgentTools           AgentTool[]
+  SipTrunks            SipTrunk[]
 
   @@index([agencyId])
 }
@@ -1194,6 +1202,32 @@ model ChatSession {
   @@index([agencyId])
   @@index([primaryAgentId])
   @@index([agentId])
+}
+
+model ChatLog {
+  id String @id @default(uuid())
+
+  type    CHAT_LOG_TYPE @default(SUCCESS)
+  logType LOG_TYPE      @default(EVENT)
+
+  title       String
+  description String? @db.Text // description of the log
+  data        Json? // data of the log
+
+  chatAgentId   String?
+  chatAgentName String  @default("")
+
+  leadId String
+  Lead   Lead   @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  endReason     String  @default("")
+  chatSessionId String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([leadId])
+  @@index([chatAgentId])
 }
 
 model Automation {
@@ -1334,6 +1368,34 @@ model CustomFieldValue {
   @@index([fieldDefId])
 }
 
+model SipTrunk {
+  id       String             @id @default(uuid())
+  provider SIP_TRUNK_PROVIDER @default(TWILIO)
+  status   SIP_TRUNK_STATUS   @default(ACTIVE)
+
+  config Json? // SIP trunk configuration 
+
+  businessId String
+  Business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  // Metadata
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([businessId])
+  @@index([createdAt])
+  @@index([updatedAt])
+}
+
+enum SIP_TRUNK_PROVIDER {
+  TWILIO
+}
+
+enum SIP_TRUNK_STATUS {
+  ACTIVE
+  INACTIVE
+}
+
 enum AGENT_TYPE {
   INTEGRATED // platform managed agents
   N8N // n8n managed agents
@@ -1346,6 +1408,21 @@ enum AGENT_TYPE {
 enum VOICE_AGENT_TYPE {
   CONVERSATION_PATHWAY
   SINGLE_PROMPT
+}
+
+enum CHAT_LOG_TYPE {
+  SUCCESS
+  ERROR
+  INFO
+  WARNING
+}
+
+enum LOG_TYPE {
+  EVENT
+  ACTION
+  CHECK
+  MESSAGE
+  APPOINTMENT
 }
 
 enum AGENT_SESSION_STATUS {
@@ -1645,6 +1722,10 @@ enum SYSTEM_EVENT {
   UPDATE_CONTACT
   AGENT_TRIGGERED
   AGENT_TERMINATED
+
+  AUTOMATION_TRIGGERED
+  AUTOMATION_TERMINATED
+  AUTOMATION_MESSAGE_SENT
 }
 
 enum MESSAGE_SOURCE {
