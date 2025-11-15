@@ -25,15 +25,6 @@ export const calServer = new Server(
       prompts: {},
       resources: {},
       tools: {},
-      operations: {
-        "list-prompts": {},
-        "get-prompt": {},
-        "list-resources": {},
-        "get-resource": {},
-        "list-tools": {},
-        "get-tool": {},
-        "execute-tool": {},
-      },
     },
   }
 );
