@@ -101,6 +101,7 @@ model User {
   PrimaryAgents        PrimaryAgent[]
   ChatSessions         ChatSession[]
   Automations          Automation[]
+  Knowledgebases       Knowledgebase[]
 
   @@index([agencyId])
   @@index([businessId])
@@ -413,6 +414,10 @@ model Conversation {
 
   replyMode REPLY_MODE @default(AUTO)
 
+  // Follow-up configuration
+  followUpActive      Boolean @default(false)
+  activeFollowUpIndex Int     @default(0)
+
   // Relations
   leadId String @unique
   Lead   Lead   @relation(fields: [leadId], references: [id], onDelete: Cascade)
@@ -538,6 +543,7 @@ model PrimaryAgent {
   Campaigns          Campaign[]
   AutomationSessions AutomationSession[]
   Automations        Automation[]
+  Knowledgebases     Knowledgebase[]
 
   // Metadata
   createdAt DateTime @default(now())
@@ -1078,6 +1084,7 @@ model Business {
   CustomField          CustomField[]
   AgentTools           AgentTool[]
   SipTrunks            SipTrunk[]
+  Knowledgebases       Knowledgebase[]
 
   @@index([agencyId])
 }
@@ -1819,4 +1826,38 @@ enum BUSINESS_ROLE {
 enum FIELD_SOURCE {
   MANUAL
   GHL
+}
+
+// Knowledgebase Model
+model Knowledgebase {
+  id          String  @id @default(uuid())
+  name        String
+  description String? @db.Text
+
+  // Knowledgebase content stored as JSON
+  // files: Array of {fileName: string, fileType: "pdf" | "txt", fileBody: string}
+  files Json? @default("[]")
+
+  // text: Single text content for free-form text input
+  text String? @db.LongText
+
+  // faqs: Array of {question: string, answer: string}
+  faqs Json? @default("[]")
+
+  // Relations
+  businessId String
+  Business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  agencyId String
+  Agency   User   @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+
+  // Many-to-many relation with PrimaryAgent
+  PrimaryAgents PrimaryAgent[]
+
+  // Metadata
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([businessId])
+  @@index([agencyId])
 }
