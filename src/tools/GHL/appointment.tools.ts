@@ -187,6 +187,7 @@ export async function handleCheckAvailability(request: CallToolRequest) {
     const ghlAccessToken = config?.ghlAccessToken;
     const ghlContactId = lead?.ghlContactId;
     const ghlCalendarId = lead?.Conversation?.ActiveAgent?.ghlCalendarId;
+    console.log({ leadActiveAgent: lead?.Conversation?.ActiveAgent });
     console.log(`ghl details exists:`, {
       ghlAccessToken,
       ghlContactId,
@@ -210,7 +211,7 @@ export async function handleCheckAvailability(request: CallToolRequest) {
       ghlCalendarId,
       lead,
     });
-    console.log(`availability checked`, slots);
+    console.log(`GHL:availability checked`, slots);
     return {
       content: slots.map((slot) => ({
         type: "text",

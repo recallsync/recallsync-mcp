@@ -9,6 +9,8 @@ import {
   GHLAppointment,
 } from "../../types/ghl.types.js";
 import { chunkConsecutiveSlots } from "../../utils/ghl.js";
+import { refreshGHLToken } from "../../utils/ghl-token.js";
+import { GHLProviderConfig } from "../../schema/recall.schema.js";
 import { formatInTimeZone, fromZonedTime, toZonedTime } from "date-fns-tz";
 import {
   EVENT,
@@ -52,6 +54,8 @@ export const ghlRequestContructor = ({
 
   return request;
 };
+
+
 
 type GetGHLAppointments = {
   ghlContactId: string;
@@ -344,20 +348,53 @@ export const bookAppointment = async ({
       timezone
     ).toISOString();
 
-    const request = ghlRequestContructor({
-      apiKey: ghlAccessToken,
+    const requestBody = {
+      calendarId: ghlCalendarId,
+      locationId: ghlLocationId,
+      contactId: ghlContactId,
+      startTime: startTimeUTC,
+    };
+
+    let activeToken = ghlAccessToken;
+    let response = await ghlRequestContructor({
+      apiKey: activeToken,
       method: "POST",
       path,
-      body: {
-        calendarId: ghlCalendarId,
-        locationId: ghlLocationId,
-        contactId: ghlContactId,
-        startTime: startTimeUTC,
-      },
+      body: requestBody,
     });
-    const response = await request;
-    console.log("response", response);
+
+    // If token expired, refresh once and retry
+    if (response.status === 401) {
+      console.log("GHL booking 401 — attempting token refresh and retry");
+      const ghlProvider = lead.Business.Providers.find(
+        (p) => p.provider === "GHL"
+      );
+      const providerConfig = ghlProvider?.config as GHLProviderConfig | null;
+
+      if (ghlProvider && providerConfig?.ghlRefreshToken) {
+        try {
+          console.log("GHL:refreshing token");
+          activeToken = await refreshGHLToken({
+            providerId: ghlProvider.id,
+            refreshToken: providerConfig.ghlRefreshToken,
+            currentConfig: providerConfig,
+          });
+          console.log("GHL:token refreshed", activeToken);
+          response = await ghlRequestContructor({
+            apiKey: activeToken,
+            method: "POST",
+            path,
+            body: requestBody,
+          });
+          console.log("GHL:token refreshed and request retried", response);
+        } catch (refreshErr) {
+          console.error("GHL token refresh failed", refreshErr);
+        }
+      }
+    }
+
     const appointmentData = (await response.json()) as GHLAppointment;
+    console.log({ appointmentData });
     const conversationId = lead.Conversation?.id;
     if (response.status === 200 || response.status === 201) {
       const diffTimezone = timezone !== previousTimezone;
@@ -488,14 +525,39 @@ export const updateAppointment = async (props: UpdateGHLAppointment) => {
       updateBody.appointmentStatus = "cancelled";
     }
 
-    const request = ghlRequestContructor({
-      apiKey: props.ghlAccessToken,
+    let activeToken = props.ghlAccessToken;
+    let response = await ghlRequestContructor({
+      apiKey: activeToken,
       method: "PUT",
       path,
       body: updateBody,
     });
 
-    const response = await request;
+    if (response.status === 401) {
+      console.log("GHL updateAppointment 401 — attempting token refresh and retry");
+      const ghlProvider = props.lead.Business.Providers.find(
+        (p) => p.provider === "GHL"
+      );
+      const providerConfig = ghlProvider?.config as GHLProviderConfig | null;
+      if (ghlProvider && providerConfig?.ghlRefreshToken) {
+        try {
+          activeToken = await refreshGHLToken({
+            providerId: ghlProvider.id,
+            refreshToken: providerConfig.ghlRefreshToken,
+            currentConfig: providerConfig,
+          });
+          response = await ghlRequestContructor({
+            apiKey: activeToken,
+            method: "PUT",
+            path,
+            body: updateBody,
+          });
+        } catch (refreshErr) {
+          console.error("GHL token refresh failed", refreshErr);
+        }
+      }
+    }
+
     const appointmentData = await response.json();
     const conversationId = props.lead.Conversation?.id;
     if (response.ok) {
@@ -625,14 +687,39 @@ export const updateContact = async ({
     const updateBody: Record<string, any> = {
       timezone: timezone,
     };
-    const request = ghlRequestContructor({
-      apiKey: ghlAccessToken,
+    let activeToken = ghlAccessToken;
+    let response = await ghlRequestContructor({
+      apiKey: activeToken,
       method: "PUT",
       path,
       body: updateBody,
     });
 
-    const response = await request;
+    if (response.status === 401) {
+      console.log("GHL updateContact 401 — attempting token refresh and retry");
+      const ghlProvider = lead.Business.Providers.find(
+        (p) => p.provider === "GHL"
+      );
+      const providerConfig = ghlProvider?.config as GHLProviderConfig | null;
+      if (ghlProvider && providerConfig?.ghlRefreshToken) {
+        try {
+          activeToken = await refreshGHLToken({
+            providerId: ghlProvider.id,
+            refreshToken: providerConfig.ghlRefreshToken,
+            currentConfig: providerConfig,
+          });
+          response = await ghlRequestContructor({
+            apiKey: activeToken,
+            method: "PUT",
+            path,
+            body: updateBody,
+          });
+        } catch (refreshErr) {
+          console.error("GHL token refresh failed", refreshErr);
+        }
+      }
+    }
+
     const appointmentData = await response.json();
     const conversationId = lead.Conversation?.id;
     if (response.ok) {

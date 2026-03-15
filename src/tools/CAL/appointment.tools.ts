@@ -219,7 +219,7 @@ export async function handleCheckAvailability(request: CallToolRequest) {
       calendar: calenderIntegration,
       lead,
     });
-    console.log("availability checked", response);
+    console.log("CAL:availability checked", response);
     return {
       content: [
         {
