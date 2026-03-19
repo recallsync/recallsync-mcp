@@ -143,6 +143,7 @@ export const appointmentTools = [
 ];
 
 export async function handleCheckAvailability(request: CallToolRequest) {
+  const tStart = Date.now();
   try {
     const rawArgs = request.params.arguments as any;
     console.log({ checkAvailabilityRawArgs: rawArgs });
@@ -178,7 +179,9 @@ export async function handleCheckAvailability(request: CallToolRequest) {
     }
     const args = result.data;
     console.log({ parsedArgs: args });
+    const tLead = Date.now();
     const lead = await getLeadById(args.leadId);
+    console.log(`[GHL timing] check_availability: getLeadById ${Date.now() - tLead}ms`);
     const ghlProvider = lead?.Business.Providers.find(
       (p) => p.provider === "GHL"
     );
@@ -204,6 +207,7 @@ export async function handleCheckAvailability(request: CallToolRequest) {
         ],
       };
     }
+    const tGhl = Date.now();
     console.log(`checking availability`);
     const slots = await getAvailableChunkedSlots({
       input: args,
@@ -211,7 +215,9 @@ export async function handleCheckAvailability(request: CallToolRequest) {
       ghlCalendarId,
       lead,
     });
+    console.log(`[GHL timing] check_availability: getAvailableChunkedSlots ${Date.now() - tGhl}ms`);
     console.log(`GHL:availability checked`, slots);
+    console.log(`[GHL timing] check_availability: total ${Date.now() - tStart}ms (started: ${new Date(tStart).toISOString()}, ended: ${new Date().toISOString()})`);
     return {
       content: slots.map((slot) => ({
         type: "text",
@@ -234,6 +240,7 @@ export async function handleCheckAvailability(request: CallToolRequest) {
 }
 
 export async function handleBookAppointment(request: CallToolRequest) {
+  const tStart = Date.now();
   try {
     const rawArgs = request.params.arguments as any;
 
@@ -270,7 +277,9 @@ export async function handleBookAppointment(request: CallToolRequest) {
     }
     const args = result.data;
     console.log({ parsedMeetingBookArgs: args });
+    const tLead = Date.now();
     const lead = await getLeadById(args.leadId);
+    console.log(`[GHL timing] book_appointment: getLeadById ${Date.now() - tLead}ms`);
     const ghlProvider = lead?.Business.Providers.find(
       (p) => p.provider === "GHL"
     );
@@ -290,6 +299,7 @@ export async function handleBookAppointment(request: CallToolRequest) {
       };
     }
 
+    const tBook = Date.now();
     const resultBook = await bookAppointment({
       input: args,
       ghlCalendarId,
@@ -301,6 +311,8 @@ export async function handleBookAppointment(request: CallToolRequest) {
       leadId: args.leadId,
       lead,
     });
+    console.log(`[GHL timing] book_appointment: bookAppointment ${Date.now() - tBook}ms`);
+    console.log(`[GHL timing] book_appointment: total ${Date.now() - tStart}ms (started: ${new Date(tStart).toISOString()}, ended: ${new Date().toISOString()})`);
     if (resultBook.success) {
       return {
         content: [
@@ -337,6 +349,7 @@ export async function handleBookAppointment(request: CallToolRequest) {
 }
 
 export async function handleRescheduleAppointment(request: CallToolRequest) {
+  const tStart = Date.now();
   try {
     const rawArgs = request.params.arguments as any;
     console.log({ rescheduleRawArgs: rawArgs });
@@ -373,7 +386,9 @@ export async function handleRescheduleAppointment(request: CallToolRequest) {
     }
     const args = result.data;
     console.log({ parsedArgs: args });
+    const tLead = Date.now();
     const lead = await getLeadById(args.leadId);
+    console.log(`[GHL timing] reschedule_appointment: getLeadById ${Date.now() - tLead}ms`);
     const ghlProvider = lead?.Business.Providers.find(
       (p) => p.provider === "GHL"
     );
@@ -393,6 +408,7 @@ export async function handleRescheduleAppointment(request: CallToolRequest) {
       };
     }
 
+    const tUpdate = Date.now();
     const response = await updateAppointment({
       rescheduleOrCancelId: args.rescheduleOrCancelId,
       type: "reschedule",
@@ -402,6 +418,8 @@ export async function handleRescheduleAppointment(request: CallToolRequest) {
       leadId: args.leadId,
       lead,
     });
+    console.log(`[GHL timing] reschedule_appointment: updateAppointment ${Date.now() - tUpdate}ms`);
+    console.log(`[GHL timing] reschedule_appointment: total ${Date.now() - tStart}ms (started: ${new Date(tStart).toISOString()}, ended: ${new Date().toISOString()})`);
     if (response.success) {
       return {
         content: [
@@ -437,6 +455,7 @@ export async function handleRescheduleAppointment(request: CallToolRequest) {
   }
 }
 export async function handleCancelAppointment(request: CallToolRequest) {
+  const tStart = Date.now();
   try {
     const args = request.params.arguments as any;
     // Validate input using Zod schema
@@ -455,7 +474,9 @@ export async function handleCancelAppointment(request: CallToolRequest) {
       };
     }
     const validArgs = result.data;
+    const tLead = Date.now();
     const lead = await getLeadById(validArgs.leadId);
+    console.log(`[GHL timing] cancel_appointment: getLeadById ${Date.now() - tLead}ms`);
     const ghlProvider = lead?.Business.Providers.find(
       (p) => p.provider === "GHL"
     );
@@ -471,6 +492,7 @@ export async function handleCancelAppointment(request: CallToolRequest) {
         ],
       };
     }
+    const tUpdate = Date.now();
     const response = await updateAppointment({
       rescheduleOrCancelId: validArgs.rescheduleOrCancelId,
       type: "cancel",
@@ -478,6 +500,8 @@ export async function handleCancelAppointment(request: CallToolRequest) {
       leadId: validArgs.leadId,
       lead,
     });
+    console.log(`[GHL timing] cancel_appointment: updateAppointment ${Date.now() - tUpdate}ms`);
+    console.log(`[GHL timing] cancel_appointment: total ${Date.now() - tStart}ms (started: ${new Date(tStart).toISOString()}, ended: ${new Date().toISOString()})`);
     if (response.success) {
       return {
         content: [
@@ -513,6 +537,7 @@ export async function handleCancelAppointment(request: CallToolRequest) {
   }
 }
 export async function handleGetAppointments(request: CallToolRequest) {
+  const tStart = Date.now();
   try {
     const rawArgs = request.params.arguments as any;
 
@@ -547,7 +572,9 @@ export async function handleGetAppointments(request: CallToolRequest) {
       };
     }
     const args = result.data;
+    const tLead = Date.now();
     const lead = await getLeadById(args.leadId);
+    console.log(`[GHL timing] get_appointments: getLeadById ${Date.now() - tLead}ms`);
     const ghlProvider = lead?.Business.Providers.find(
       (p) => p.provider === "GHL"
     );
@@ -571,12 +598,14 @@ export async function handleGetAppointments(request: CallToolRequest) {
       };
     }
 
+    const tGhl = Date.now();
     const appointments = await getAppointments({
       ghlContactId,
       ghlAccessToken: ghlAccessToken,
       timezone: lead.ianaTimezone,
       locationId: config.ghlLocationId || "",
     });
+    console.log(`[GHL timing] get_appointments: getAppointments ${Date.now() - tGhl}ms`);
 
     await prisma.conversationMessage.create({
       data: {
@@ -598,6 +627,7 @@ export async function handleGetAppointments(request: CallToolRequest) {
         },
       },
     });
+    console.log(`[GHL timing] get_appointments: total ${Date.now() - tStart}ms (started: ${new Date(tStart).toISOString()}, ended: ${new Date().toISOString()})`);
     if (appointments.success) {
       return {
         content: [

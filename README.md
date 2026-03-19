@@ -33,3 +33,5 @@ docker-compose up --build
 - The server is written in TypeScript
 - Uses node-fetch for HTTP requests
 - Built with the Model Context Protocol SDK
+
+ngrok sk18000: npx ngrok http --domain=deservedly-underaccommodated-maryrose.ngrok-free.dev 3008

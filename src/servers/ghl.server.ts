@@ -37,21 +37,38 @@ ghlServer.setRequestHandler(ListToolsRequestSchema, async () => {
 
 // Handle tool execution
 ghlServer.setRequestHandler(CallToolRequestSchema, async (request) => {
-  switch (request.params.name) {
+  const toolName = request.params.name;
+  const startTime = Date.now();
+  const startIso = new Date().toISOString();
+
+  let result;
+  switch (toolName) {
     case "check_availability":
-      return handleCheckAvailability(request);
+      result = await handleCheckAvailability(request);
+      break;
     case "book_appointment":
-      return handleBookAppointment(request);
+      result = await handleBookAppointment(request);
+      break;
     case "cancel_appointment":
-      return handleCancelAppointment(request);
+      result = await handleCancelAppointment(request);
+      break;
     case "reschedule_appointment":
-      return handleRescheduleAppointment(request);
+      result = await handleRescheduleAppointment(request);
+      break;
     case "get_appointments":
-      return handleGetAppointments(request);
+      result = await handleGetAppointments(request);
+      break;
     default:
       console.log({ error: "Got here - unknown tool call" });
       throw new Error("Unknown tool");
   }
+
+  const endTime = Date.now();
+  const endIso = new Date().toISOString();
+  const durationMs = endTime - startTime;
+  console.log(`[GHL] ${toolName} started: ${startIso} | ended: ${endIso} | duration: ${durationMs}ms`);
+
+  return result;
 });
 
 // Keep the existing prompt handlers
