@@ -25,7 +25,6 @@ import {
 import { bookMeeting, updateMeeting } from "../../utils/meeting-book.js";
 import { prisma } from "../../lib/prisma.js";
 import { LeadWithBizz, triggerEvent } from "../../utils/integration.util.js";
-import { DefaultArgs } from "../../generated/client/runtime/library.js";
 
 type GHLRequestConstructor = {
   apiKey: string;
