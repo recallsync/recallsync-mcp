@@ -12,14 +12,8 @@ RUN npm install
 COPY . .
 RUN echo "Building TypeScript files..." && \
     npm run build && \
-    echo "Copying generated client to dist..." && \
-    cp -r src/generated dist/src/ && \
-    echo "Build complete. Contents of dist directory:" && \
-    ls -la dist/ && \
-    echo "Contents of dist/src/generated:" && \
-    ls -la dist/src/generated/ && \
-    echo "Contents of root directory:" && \
-    ls -la
+    echo "Build complete. Contents of dist/src/generated:" && \
+    ls -la dist/src/generated/
 
 FROM node:20-slim
 
