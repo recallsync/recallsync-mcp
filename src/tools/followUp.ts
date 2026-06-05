@@ -1,5 +1,6 @@
 import { CallToolRequest } from "@modelcontextprotocol/sdk/types.js";
 import { API_ENDPOINTS } from "../constants/tool.js";
+import { getApiKey } from "../utils/auth.util.js";
 import {
   CreateFollowUpSchema,
   CreateFollowUpRequest,
@@ -226,7 +227,7 @@ export async function handleCreateFollowUp(request: CallToolRequest) {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${process.env.API_TOKEN}`,
+          Authorization: `Bearer ${getApiKey(request)}`,
         },
         body: JSON.stringify(requestBody),
       }
@@ -305,7 +306,7 @@ export async function handleGetFollowUp(request: CallToolRequest) {
         method: "GET",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${process.env.API_TOKEN}`,
+          Authorization: `Bearer ${getApiKey(request)}`,
         },
       }
     );
@@ -394,7 +395,7 @@ export async function handleGetAllFollowUps(request: CallToolRequest) {
       method: "GET",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${process.env.API_TOKEN}`,
+        Authorization: `Bearer ${getApiKey(request)}`,
       },
     });
 
@@ -486,7 +487,7 @@ export async function handleUpdateFollowUp(request: CallToolRequest) {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${process.env.API_TOKEN}`,
+          Authorization: `Bearer ${getApiKey(request)}`,
         },
         body: JSON.stringify({
           status,
@@ -572,7 +573,7 @@ export async function handleDeleteFollowUp(request: CallToolRequest) {
       method: "DELETE",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${process.env.API_TOKEN}`,
+        Authorization: `Bearer ${getApiKey(request)}`,
       },
     });
 

@@ -1,5 +1,6 @@
 import { CallToolRequest } from "@modelcontextprotocol/sdk/types.js";
 import { API_ENDPOINTS } from "../constants/tool.js";
+import { getApiKey } from "../utils/auth.util.js";
 import {
   CreateNoteSchema,
   CreateNoteRequest,
@@ -170,7 +171,7 @@ export async function handleCreateNote(request: CallToolRequest) {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${process.env.API_TOKEN}`,
+        Authorization: `Bearer ${getApiKey(request)}`,
       },
       body: JSON.stringify({ note }),
     });
@@ -257,7 +258,7 @@ export async function handleGetNote(request: CallToolRequest) {
     const response = await fetch(url, {
       method: "GET",
       headers: {
-        Authorization: `Bearer ${process.env.API_TOKEN}`,
+        Authorization: `Bearer ${getApiKey(request)}`,
       },
     });
 
@@ -328,7 +329,7 @@ export async function handleGetAllNotes(request: CallToolRequest) {
       method: "GET",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${process.env.API_TOKEN}`,
+        Authorization: `Bearer ${getApiKey(request)}`,
       },
     });
 
@@ -436,7 +437,7 @@ export async function handleUpdateNote(request: CallToolRequest) {
       method: "PUT",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${process.env.API_TOKEN}`,
+        Authorization: `Bearer ${getApiKey(request)}`,
       },
       body: JSON.stringify({ note }),
     });
@@ -507,7 +508,7 @@ export async function handleDeleteNote(request: CallToolRequest) {
     const response = await fetch(url, {
       method: "DELETE",
       headers: {
-        Authorization: `Bearer ${process.env.API_TOKEN}`,
+        Authorization: `Bearer ${getApiKey(request)}`,
       },
     });
 
@@ -585,7 +586,7 @@ export async function handleGetNoteById(request: CallToolRequest) {
       method: "GET",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${process.env.API_TOKEN}`,
+        Authorization: `Bearer ${getApiKey(request)}`,
       },
     });
 

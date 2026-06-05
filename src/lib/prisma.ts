@@ -1,17 +1,18 @@
+import { PrismaPlanetScale } from "@prisma/adapter-planetscale";
 import { PrismaClient } from "../generated/client/index.js";
 
 const globalForPrisma = globalThis as unknown as {
   prisma?: PrismaClient;
 };
 
+// Prisma 7 uses the "client" engine, which requires a driver adapter instead of
+// the legacy `datasources` option.
+const adapter = new PrismaPlanetScale({ url: process.env.DATABASE_URL });
+
 export const prisma =
   globalForPrisma.prisma ??
   new PrismaClient({
-    datasources: {
-      db: {
-        url: process.env.DATABASE_URL,
-      },
-    },
+    adapter,
     transactionOptions: {
       maxWait: 15000, // 15 seconds
       timeout: 10000, // 10 seconds

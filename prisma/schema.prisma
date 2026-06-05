@@ -5,7 +5,6 @@ generator client {
 
 datasource db {
   provider     = "mysql"
-  url          = env("DATABASE_URL")
   relationMode = "prisma"
 }
 
@@ -94,14 +93,17 @@ model User {
   AgencyFollowUps      FollowUp[]            @relation("AgencyToFollowUp")
   ConversationMessages ConversationMessage[]
   Conversations        Conversation[]
+  BaseAgentSessions    BaseAgentSession[]
   AgencyBusinesses     Business[]            @relation("BusinessAgency")
   ManagerBusinesses    BusinessManager[]
   preferenceId         String?
   Agents               Agent[]
   PrimaryAgents        PrimaryAgent[]
   ChatSessions         ChatSession[]
+  VoiceSessions        VoiceSession[]
   Automations          Automation[]
   Knowledgebases       Knowledgebase[]
+  BaseAgentsAsAgency   BaseAgent[]
 
   @@index([agencyId])
   @@index([businessId])
@@ -289,7 +291,9 @@ model Lead {
   address      String? @db.Text // address of the lead
 
   // additional info 
-  company        String  @default("")
+  company         String  @default("") // company name of the lead
+  companyShortName String @default("") // company short name of the lead
+
   companyAddress String? @db.Text
   industry       String  @default("") // ex: Real Estate, Marketing etc.
   website        String  @default("")
@@ -297,6 +301,8 @@ model Lead {
   channel        CHANNEL @default(EMAIL) // lead source channel
   note           String? @db.Text // note about the lead by agency/agent
   fields         Json? // custom fields
+
+  customData Json? // custom data (variables)
 
   // DND (Do Not Disturb)
   emailDND    Boolean @default(false)
@@ -323,6 +329,15 @@ model Lead {
   status     LEAD_STATUS      @default(NEW)
   statusType LEAD_STATUS_TYPE @default(COLD)
   quality    LEAD_QUALITY     @default(UNQUALIFIED)
+
+  /// Where the lead was first created (e.g. Insta OS automation vs other flows).
+  leadSource LEAD_SOURCE @default(UNKNOWN)
+
+  /// First contact sub-source for Insta OS (comment vs DM). Set only on create; see LEAD_SUB_SOURCE.
+  leadSubSource LEAD_SUB_SOURCE @default(UNKNOWN)
+
+  /// MiniApp billing period end for the last DM-agent assignment slot this lead consumed (matches MiniAppSubscription.nextLimitResetAt at that time). Null until first counted; new period allows another slot.
+  instaOsDmAgentQuotaPeriodEndAt DateTime?
 
   // other fields
   ghlContactId String?
@@ -355,9 +370,14 @@ model Lead {
   Conversation         Conversation?
   ConversationMessages ConversationMessage[]
   ChatSessions         ChatSession[]
+  VoiceSessions        VoiceSession[]
+  BaseAgentSessions    BaseAgentSession[]
   AutomationSessions   AutomationSession[]
   CustomFieldValue     CustomFieldValue[]
   ChatLogs             ChatLog[]
+  InstaOsEvents         InstaOsEvent[]
+  InstaOsDmOutboxes     InstaOsDmOutbox[]
+  LeadJourneyEvents     LeadJourneyEvent[]
 
   @@index([agencyId])
   @@index([salesAgentId])
@@ -367,6 +387,8 @@ model Lead {
   @@index([email])
   @@index([ghlContactId])
   @@index([linkedLeadId])
+  @@index([businessId, leadSource])
+  @@index([businessId, leadSubSource])
 }
 
 model LeadTag {
@@ -406,6 +428,31 @@ model LeadNote {
   @@index([leadId])
 }
 
+/// Append-only lead journey (global; not Insta-OS–only). Written only via createLeadJourneyEvent().
+model LeadJourneyEvent {
+  id         String            @id @default(uuid())
+  text       String            @db.Text
+  actor      LEAD_JOURNEY_ACTOR
+  metadata   Json?
+
+  leadId     String
+  Lead       Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  businessId String
+  Business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  createdAt  DateTime @default(now())
+
+  @@index([leadId, createdAt])
+  @@index([businessId, leadId])
+}
+
+enum LEAD_JOURNEY_ACTOR {
+  SYSTEM
+  USER
+  AUTOMATION
+}
+
 model Conversation {
   id String @id @default(uuid())
 
@@ -431,6 +478,26 @@ model Conversation {
   activeAgentId String?
   ActiveAgent   PrimaryAgent? @relation(fields: [activeAgentId], references: [id], onDelete: SetNull)
 
+  /// Insta OS Base Agent handling DM chat for this thread (separate from Recall PrimaryAgent).
+  activeBaseAgentId String?
+  ActiveBaseAgent   BaseAgent? @relation("ConversationActiveBaseAgent", fields: [activeBaseAgentId], references: [id], onDelete: SetNull)
+
+  /// Instagram account this DM thread belongs to (token + sender IGSID for Graph).
+  instagramAccountId String?
+  InstagramAccount   InstagramAccount? @relation(fields: [instagramAccountId], references: [id], onDelete: SetNull)
+
+  /// WhatsApp account this thread belongs to (Cloud API phone_number_id).
+  whatsAppAccountId String?
+  WhatsAppAccount   WhatsAppAccount? @relation(fields: [whatsAppAccountId], references: [id], onDelete: SetNull)
+
+  /// WhatsApp free-form messaging service window. Reset by the lead's inbound
+  /// WhatsApp message, intentionally buffered before Meta's 24h cutoff.
+  whatsAppServiceWindowExpiresAt DateTime?
+
+  /// Instagram standard-messaging service window. Reset by the lead's inbound
+  /// IG DM, intentionally buffered before Meta's 24h cutoff.
+  instagramServiceWindowExpiresAt DateTime?
+
   // Metadata
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
@@ -438,11 +505,16 @@ model Conversation {
 
   // Relationships
   ConversationMessages ConversationMessage[]
+  BaseAgentSessions    BaseAgentSession[]
 
   @@index([leadId])
   @@index([agencyId])
   @@index([businessId])
   @@index([activeAgentId])
+  @@index([activeBaseAgentId])
+  @@index([instagramAccountId])
+  @@index([id, createdAt])
+  @@index([whatsAppAccountId])
 }
 
 model ConversationMessage {
@@ -464,6 +536,9 @@ model ConversationMessage {
   systemDescription String?              @db.Text // ex: Appointment booked for 10:00 AM on 10th July 2025
 
   ghlMessageId String?
+
+  /// Set for LEAD inbound from GHL recall-high webhook; @@unique skips duplicate webhook/worker retries.
+  sourceInboundDedupKey String? @db.VarChar(512)
 
   rsRunId String?
 
@@ -498,10 +573,36 @@ model ConversationMessage {
   @@index([businessId])
   @@index([agentId])
   @@index([rsRunId])
+  @@unique([sourceInboundDedupKey])
+}
+
+/// One row per claimed GHL InboundMessage delivery (dedup across webhook/QStash/worker retries).
+model GhlInboundWebhookDelivery {
+  dedupKey            String    @id @db.VarChar(512)
+  claimedAt           DateTime  @default(now())
+  enqueuedAt          DateTime?
+  processingStartedAt DateTime?
+  completedAt         DateTime?
+  lastError           String?   @db.Text
+  payloadJson         String    @db.Text
+
+  @@index([completedAt])
+  @@index([claimedAt])
+}
+
+enum PRIMARY_AGENT_TYPE {
+  // Agency-level primary, selectable in the Recall agent picker.
+  RECALL
+  // Per-business auto-managed primary owned by the IgThreadly mini-app.
+  // One per business; created on demand when the first STANDARD/FLOW
+  // BaseAgent is created inside IgThreadly. Not selectable in the Recall picker.
+  IGTHREADLY
 }
 
 model PrimaryAgent {
   id String @id @default(uuid())
+
+  type PRIMARY_AGENT_TYPE @default(RECALL)
 
   name         String
   internalName String  @default("")
@@ -518,6 +619,9 @@ model PrimaryAgent {
   // {url}/delete -> delete vector indexes
   n8nTrainingUrl   String @default("")
   n8nTrainingToken String @default("")
+
+  // e.g. { "enabled": true, "triggers": [{ "type": "RESTART_SESSION", "value": "/restart" }] }
+  actionTriggers Json?
 
   // Relations
   businessId String
@@ -540,16 +644,19 @@ model PrimaryAgent {
   Conversations      Conversation[]
   PrimaryAgentAssets PrimaryAgentAsset[]
   ChatSessions       ChatSession[]
+  VoiceSessions      VoiceSession[]
   Campaigns          Campaign[]
   AutomationSessions AutomationSession[]
   Automations        Automation[]
   Knowledgebases     Knowledgebase[]
+  BaseAgents  BaseAgent[] @relation("PrimaryAgentBaseAgents")
 
   // Metadata
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([businessId])
+  @@index([businessId, type])
   @@index([agencyId])
   @@index([calenderIntegrationId])
   @@index([nextPrimaryAgentId])
@@ -609,6 +716,9 @@ model Agent {
   // integrated channel config 
   flow           Json?            @default("{\"nodes\":[{\"id\":\"start-1\",\"type\":\"start\",\"position\":{\"x\":100,\"y\":200},\"data\":{\"label\":\"Start\",\"description\":\"Conversation starts here\"}}],\"edges\":[]}") // react flow json 
   flowSettings   Json?            @default("{}") // react flow settings json 
+  /// Draft builder state (Save draft); Publish copies into flow/flowSettings
+  currentFlow         Json? @default("{\"nodes\":[{\"id\":\"start-1\",\"type\":\"start\",\"position\":{\"x\":100,\"y\":200},\"data\":{\"label\":\"Start\",\"description\":\"Conversation starts here\"}}],\"edges\":[]}") // react flow draft json
+  currentFlowSettings Json?
   voiceAgentType VOICE_AGENT_TYPE @default(CONVERSATION_PATHWAY)
 
   // VAPI
@@ -635,10 +745,31 @@ model Agent {
   primaryAgentId String
   PrimaryAgent   PrimaryAgent  @relation(fields: [primaryAgentId], references: [id], onDelete: Cascade)
   ChatSessions   ChatSession[]
+  VoiceSessions  VoiceSession[]
 
   useN8N       Boolean @default(false)
   // Smart Trigger - auto-create / chat session without a dedicated agent trigger
   smartTrigger Boolean @default(false)
+
+  /// Auto-attach primary agent and run on inbound DM (WhatsApp / Instagram direct channels).
+  autoConnect Boolean @default(false)
+
+  /// Native Instagram: scoped inbox when provider is INSTAGRAM (required). Null for GHL/N8N.
+  instagramAccountId String?
+  InstagramAccount   InstagramAccount? @relation("InstagramAccountWorkflowAgents", fields: [instagramAccountId], references: [id], onDelete: SetNull)
+
+  /// Native WhatsApp / WP_VOICE_CALL: scoped line when provider is WHATSAPP or channel WP_VOICE_CALL (required). Null for GHL/N8N.
+  whatsAppAccountId String?
+  WhatsAppAccount   WhatsAppAccount? @relation("WhatsAppAccountWorkflowAgents", fields: [whatsAppAccountId], references: [id], onDelete: SetNull)
+
+  // Structured outputs for VOICE_CALL agents (all providers)
+  structuredOutputs Json? @default("[]")
+
+  // Field mapping for GHL custom fields
+  fieldMapping Json? @default("[]")
+
+  /// Website voice embed: { UI: { title, description, startButtonLabel, endButtonLabel }, ... }
+  widgetSettings Json?
 
   // Metadata
   createdAt            DateTime              @default(now())
@@ -649,6 +780,10 @@ model Agent {
   @@index([businessId])
   @@index([agencyId])
   @@index([primaryAgentId])
+  @@index([createdAt])
+  @@index([businessId, autoConnect, channel])
+  @@index([instagramAccountId])
+  @@index([whatsAppAccountId])
 }
 
 model AgentTool {
@@ -656,7 +791,8 @@ model AgentTool {
 
   definition Json
 
-  Agents Agent[]
+  Agents      Agent[]
+  BaseAgents  BaseAgent[]
 
   businessId String
   Business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
@@ -708,6 +844,9 @@ model LeadCall {
   callId     String  @default("")
   notes      String? @db.Text
   summary    String? @db.Text
+
+  structuredOutput Json? @default("{}")
+
   transcript Json?
   audioUrl   String  @default("")
 
@@ -744,6 +883,7 @@ model LeadCall {
   createdAt            DateTime              @default(now())
   updatedAt            DateTime              @updatedAt
   ConversationMessages ConversationMessage[]
+  VoiceSessions      VoiceSession[]
 
   @@index([agencyId])
   @@index([salesAgentId])
@@ -777,6 +917,10 @@ model Campaign {
   retryInterval     Int?    @default(2)
   retryIntervalType String? @default("hour") // "hour" | "day"
   weeklySchedule    Json? // Weekly schedule with time slots per day
+
+  // Channels the campaign's primary agent should contact on (passed to triggerAgent).
+  // JSON array of CHANNEL strings + NONE for no channels. Empty = all of the agent's channels.
+  channels Json?
 
   // Relations
   agencyId String
@@ -1033,6 +1177,17 @@ model Business {
 
   setupCompleted Boolean @default(false)
 
+  // Onboarding progress tracking
+  onboardingProgress Json? // Stores onboarding step completion status
+
+  // Mini-app source tracking
+  miniAppSource MINI_APP_SOURCE?
+
+  /// Hard cap on total Lead rows for this business (anti-abuse, not plan-based).
+  /// Enforced at lead creation across every source (Recall, API, mini-apps).
+  /// Configurable per business; default 100k. Lead creation is skipped/blocked at/over this.
+  leadHardCap Int @default(100000)
+
   // Relations
   agencyId String
   Agency   User   @relation("BusinessAgency", fields: [agencyId], references: [id], onDelete: Cascade)
@@ -1077,6 +1232,7 @@ model Business {
   calenderIntegrations CalenderIntegration[]
   n8nIntegrations      N8NIntegration[]
   ChatSessions         ChatSession[]
+  VoiceSessions        VoiceSession[]
   Providers            Provider[]
   VoiceChargeLogs      VoiceChargeLog[]
   MessageChargeLogs    MessageChargeLog[]
@@ -1085,9 +1241,410 @@ model Business {
   AgentTools           AgentTool[]
   SipTrunks            SipTrunk[]
   Knowledgebases       Knowledgebase[]
+  InstagramAccounts    InstagramAccount[]
+  WhatsAppAccounts     WhatsAppAccount[]
+  InstaOsAutomation    InstaOsAutomation[]
+  DmTemplates          DmTemplate[]
+  InstaOsEvents         InstaOsEvent[]
+  InstaOsDmOutboxes     InstaOsDmOutbox[]
+  LeadJourneyEvents     LeadJourneyEvent[]
+  BaseAgents     BaseAgent[] @relation("BusinessBaseAgents")
+  BaseAgentSessions     BaseAgentSession[]
+  MiniAppSubscriptions  MiniAppSubscription[]
 
   @@index([agencyId])
 }
+
+/// Per–mini-app billing and usage (Recall core subscription stays on `Business`).
+model MiniAppSubscription {
+  id         String   @id @default(uuid())
+  businessId String
+  Business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  miniAppSource MINI_APP_SOURCE
+
+  plan         MINI_APP_SUBSCRIPTION_PLAN @default(FREE)
+  planIsActive Boolean @default(true)
+
+  /// Distinct leads that received an automated Instagram DM this billing period (automation + base agent). Lead rows are unlimited.
+  newLeadsThisPeriod Int @default(0)
+  nextLimitResetAt   DateTime?
+
+  razorpaySubscriptionId       String?    @unique
+  razorpayPlanPriceId          String?
+  razorpayPlanPeriod           PLAN_TERM?
+  razorpaySubscriptionEndDate  DateTime?
+  razorpaySubscriptionCancelAt DateTime?
+  razorpaySubscriptionStatus   String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([businessId, miniAppSource])
+  @@index([businessId])
+}
+
+model InstagramAccount {
+  id              String    @id @default(uuid())
+  /// Graph API IG User id from GET /me → `id`. Use in paths like `/{instagramUserId}/messages`.
+  instagramUserId String    @unique
+  /// From GET /me → `user_id` when it differs from `id`. Matches webhook `entry.id` / DM `recipient.id`.
+  instagramProfessionalId String? @unique
+  username        String
+  name            String    @default("")
+  profilePicture  String?   @db.Text
+  accessToken     String    @db.Text
+  tokenExpiresAt  DateTime?
+  isConnected     Boolean   @default(true)
+  /// Within plan slot: webhooks, automations, and outbound use this account. Others stay linked but paused.
+  isProcessingEnabled Boolean @default(true)
+
+  businessId String
+  Business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  InstaOsAutomations InstaOsAutomation[]
+  Conversations      Conversation[]
+  BaseAgentsScoped      BaseAgent[] @relation("InstagramAccountBaseAgents")
+  WorkflowAgentsScoped  Agent[]     @relation("InstagramAccountWorkflowAgents")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([businessId])
+  @@index([businessId, createdAt])
+}
+
+model WhatsAppAccount {
+  id                 String    @id @default(uuid())
+  businessId         String
+  Business           Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  agencyId           String
+
+  metaBusinessId     String
+  wabaId             String
+  phoneNumberId      String    @unique
+  displayPhoneNumber String
+  verifiedName       String    @default("")
+
+  accessToken        String    @db.Text
+  tokenExpiresAt     DateTime?
+
+  webhookSubscribed  Boolean   @default(false)
+  isConnected        Boolean   @default(true)
+  connectedAt        DateTime  @default(now())
+  disconnectedAt     DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  BaseAgents         BaseAgent[] @relation("WhatsAppAccountBaseAgents")
+  WorkflowAgents     Agent[]     @relation("WhatsAppAccountWorkflowAgents")
+  Conversations      Conversation[]
+
+  @@unique([businessId, phoneNumberId])
+  @@index([businessId])
+  @@index([wabaId])
+}
+
+// ─── Insta OS Models ────────────────────────────────────────────────────────
+
+model InstaOsAutomation {
+  id         String           @id @default(uuid())
+  businessId String
+  instagramAccountId String
+  name       String           @default("Instagram Comment Automation")
+  isActive   Boolean          @default(false)
+  postScope  InstaOsPostScope @default(ALL_POSTS)
+  version    Int              @default(1)
+
+  Business Business            @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  InstagramAccount InstagramAccount @relation(fields: [instagramAccountId], references: [id], onDelete: Cascade)
+
+  nodes         InstaOsNode[]
+  instaOsEvents  InstaOsEvent[]
+  instaOsDmOutboxes InstaOsDmOutbox[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([businessId])
+  @@index([instagramAccountId])
+  @@index([businessId, instagramAccountId])
+}
+
+/// Paced outbound: DM and/or public comment reply share one QStash flow key per sender IG (`ig.{id}`) — one Graph call per job (Meta ~200/h combined for messages + comment replies).
+model InstaOsDmOutbox {
+  id     String @id @default(uuid())
+  businessId   String
+  automationId String
+  leadId       String
+  /// Instagram comment / trigger id (for sendInstagramDm recipient.comment_id)
+  commentId    String
+  /// Webhook `parent_id` for thread replies; `POST /replies` must target a top-level id (use this for Graph, not `commentId`).
+  publicReplyTargetCommentId String?
+  /// Sending business IGSID — use for QStash FlowControl key `ig.{senderInstagramUserId}` (Meta pool is per account).
+  senderInstagramUserId String
+  /// Rendered DM body; null if automation only posts a public reply.
+  messageText  String?  @db.Text
+  /// Public comment reply text; null if DM-only.
+  replyText     String?  @db.Text
+  /// True after `POST /messages` succeeds (or when there is no DM to send).
+  dmDelivered  Boolean  @default(false)
+  /// True after `POST /{commentId}/replies` succeeds (or when there is no public reply to post).
+  commentReplyDelivered Boolean @default(false)
+  templateId   String?
+  templateName String?
+  routingPath  String?
+  mediaId         String?
+  commentText     String? @db.Text
+  senderIgUserId  String?
+  senderUsername  String?
+  instaOsEventId  String  @unique
+
+  status       InstaOsDmOutboxStatus @default(PENDING)
+  attemptCount Int     @default(0)
+  lastError    String? @db.Text
+  nextRetryAt  DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  Business   Business         @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  Lead       Lead             @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  automation InstaOsAutomation @relation(fields: [automationId], references: [id], onDelete: Cascade)
+  instaOsEvent InstaOsEvent  @relation(fields: [instaOsEventId], references: [id], onDelete: Cascade)
+
+  @@unique([automationId, commentId])
+  @@index([status, nextRetryAt])
+  @@index([senderInstagramUserId, status])
+  @@index([businessId])
+  @@index([leadId])
+}
+
+model InstaOsNode {
+  id           String          @id @default(uuid())
+  automationId String
+  type         InstaOsNodeType
+  sortOrder    Int
+  enabled      Boolean         @default(true)
+  config       Json
+
+  automation InstaOsAutomation @relation(fields: [automationId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([automationId, type])
+  @@index([automationId])
+  @@index([automationId, sortOrder])
+}
+
+/// Per-channel: OFF = no message; STATIC = body / replyVariations; AI = LLM (classifier path only; keyword is always static).
+enum DmTemplateChannel {
+  OFF
+  STATIC
+  AI
+}
+
+model DmTemplate {
+  id               String  @id @default(uuid())
+  businessId       String
+  name             String
+  slug             String
+  body             String  @db.Text
+  // 3–10 comment reply variations when publicChannel=STATIC, validated at application layer.
+  replyVariations  Json?
+  isPublic         Boolean @default(false)
+  category         String?
+  tags             Json?
+  dmChannel     DmTemplateChannel @default(STATIC)
+  publicChannel DmTemplateChannel @default(STATIC)
+  aiCommentInstructions String?        @db.Text
+  aiDmInstructions      String?        @db.Text
+
+  Business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([businessId, slug])
+  @@index([businessId])
+}
+
+// ─── Insta OS Enums ──────────────────────────────────────────────────────────
+
+model InstaOsEvent {
+  id             String             @id @default(uuid())
+  businessId     String
+  automationId   String
+  leadId         String
+  commentId      String             // Instagram comment ID (used for dedup key)
+  mediaId        String?            // Post/reel that received the comment
+  senderIgUserId String?            // Who commented
+  senderUsername String?
+  commentText    String             @db.Text
+  routingPath    String?            // KEYWORD_MATCH | AI_MATCH | AI_NO_MATCH | NO_RULES
+  templateId     String?
+  templateName   String?
+  status         InstaOsEventStatus @default(PENDING)
+  errorMessage   String?            @db.Text
+  createdAt      DateTime           @default(now())
+
+  Business   Business            @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  automation InstaOsAutomation   @relation(fields: [automationId], references: [id], onDelete: Cascade)
+  Lead       Lead                @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  InstaOsDmOutbox InstaOsDmOutbox?
+
+  @@index([businessId])
+  @@index([businessId, createdAt])
+  @@index([businessId, leadId])
+  @@index([automationId])
+  @@index([commentId])
+  @@index([createdAt])
+  @@index([leadId])
+}
+
+/// DM outbox — terminal states SENT/FAILED. PENDING = not yet sent via Graph.
+enum InstaOsDmOutboxStatus {
+  PENDING
+  SENT
+  FAILED
+}
+
+enum InstaOsEventStatus {
+  PENDING
+  /// Insta OS: DM is queued; Graph send is handled by the DM worker.
+  DM_QUEUED
+  SENT
+  SKIPPED_DEDUP
+  ROUTING_FAILED
+  ERROR
+}
+
+enum InstaOsPostScope {
+  ALL_POSTS
+  SELECTED_POSTS
+}
+
+enum InstaOsNodeType {
+  TRIGGER
+  KEYWORD_ROUTER
+  AI_CLASSIFIER
+  // ACTION removed — reply variations now live inside DmTemplate.
+  // Templates are the execution unit: they control both the DM body
+  // and the comment reply variations. No separate action node needed.
+}
+
+enum BaseAgentType {
+  STANDARD
+  RECALL
+  FLOW
+}
+
+model BaseAgent {
+  id String @id @default(uuid())
+
+  name   String
+  description String? @db.Text
+
+  prompt String @db.Text
+  tools  Json   @default("[]")
+
+  channel       CHANNEL @default(INSTAGRAM)
+  baseAgentType BaseAgentType   @default(STANDARD)
+
+  type    AGENT_TYPE @default(INTEGRATED)
+
+  /// Published FLOW graph (mini-app chat agent). Draft lives in `currentFlow`.
+  flow           Json?
+  currentFlow    Json?
+  flowSettings   Json?
+  currentFlowSettings Json?
+
+  /// When false, runtime skips this agent: webhooks/auto-connect/scheduled work treat it as paused.
+  /// Mirrors the legacy `Agent.isActive` switch from the AI agent upsert form.
+  isActive Boolean @default(true)
+
+  /// At most one auto-connect agent per scoped account when true; enforced in base-agent router.
+  autoConnect Boolean @default(false)
+
+  /// When set with autoConnect, this agent auto-attaches only for DMs on this Instagram account.
+  instagramAccountId String?
+  InstagramAccount   InstagramAccount? @relation("InstagramAccountBaseAgents", fields: [instagramAccountId], references: [id], onDelete: SetNull)
+
+  /// Delivery surface for this base agent (GHL vs native channel APIs).
+  provider PROVIDER @default(INSTAGRAM)
+
+  // n8n workflow id
+  n8nWorkflowId String?
+
+  /// When set with autoConnect, scopes to this WhatsApp account. Null = all connected accounts.
+  whatsAppAccountId String?
+  WhatsAppAccount   WhatsAppAccount? @relation("WhatsAppAccountBaseAgents", fields: [whatsAppAccountId], references: [id], onDelete: SetNull)
+
+  businessId String
+  Business   Business @relation("BusinessBaseAgents", fields: [businessId], references: [id], onDelete: Cascade)
+
+  agencyId String
+  Agency   User   @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+
+  recallPrimaryAgentId String?
+  RecallPrimaryAgent   PrimaryAgent? @relation("PrimaryAgentBaseAgents", fields: [recallPrimaryAgentId], references: [id], onDelete: SetNull)
+
+  ConversationsWithActiveAgent Conversation[] @relation("ConversationActiveBaseAgent")
+  BaseAgentSessions             BaseAgentSession[]
+  AgentTools                    AgentTool[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([businessId])
+  @@index([agencyId])
+  @@index([recallPrimaryAgentId])
+  @@index([businessId, autoConnect])
+  @@index([instagramAccountId])
+  @@index([whatsAppAccountId])
+  @@index([businessId, channel, autoConnect])
+}
+
+/// Per-lead FLOW session: DB-backed `currentEvent` (ChatSession analogue for BaseAgent FLOW).
+model BaseAgentSession {
+  id String @id @default(uuid())
+
+  conversationId String
+  Conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  baseAgentId String
+  BaseAgent   BaseAgent @relation(fields: [baseAgentId], references: [id], onDelete: Cascade)
+
+  leadId String
+  Lead   Lead @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  businessId String
+  Business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  agencyId String
+  Agency   User   @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+
+  /// Flow node id (matches JSON `nodes[].id`).
+  currentEvent String?
+
+  /// Optional runner scratchpad; canonical IG thread history is `ConversationMessage`.
+  messages Json?
+
+  flowEndedAt   DateTime?
+  flowEndReason String?   @db.Text
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([conversationId, baseAgentId])
+  @@index([leadId])
+  @@index([businessId])
+  @@index([baseAgentId])
+  @@index([agencyId])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 model BusinessManager {
   id           String        @id @default(uuid())
@@ -1169,6 +1726,12 @@ model N8NIntegration {
   @@index([businessIntegrationId])
 }
 
+enum RESTACK_SERVICE {
+  PRIMARY
+  SECONDARY
+  TERTIARY
+}
+
 // Agentic Layer Tables
 model ChatSession {
   id String @id @default(uuid())
@@ -1178,6 +1741,11 @@ model ChatSession {
 
   status       AGENT_SESSION_STATUS @default(ACTIVE)
   statusReason String?              @db.Text // reason for the status change
+
+  /// Which Restack deployment owns this run (standalone stacks; failover = new session + DB replay).
+  restackService RESTACK_SERVICE @default(PRIMARY)
+  /// Throttles attempts to move a SECONDARY session back to PRIMARY (see PRIMARY_FAILBACK_COOLDOWN_MS).
+  lastPrimaryFailbackAttemptAt DateTime?
 
   messages     Json? // Message[]
   currentEvent String? // current event name
@@ -1209,6 +1777,58 @@ model ChatSession {
   @@index([agencyId])
   @@index([primaryAgentId])
   @@index([agentId])
+  /// Inbound GHL/chat hot path: find ACTIVE session for lead + channel agent (process-inbound-ghl-message).
+  @@index([leadId, agentId, status])
+}
+
+model VoiceSession {
+  id String @id @default(uuid())
+
+  rsRunId   String? // restack run id (set after agent starts)
+  rsAgentId String? // restack agent id
+
+  /// Browser/widget test sessions (no PSTN). Used for LiveKit join + token minting.
+  isWebTest        Boolean @default(false)
+  livekitRoomName  String?
+
+  /// WhatsApp Business Calling API session id (wacid.*).
+  whatsappCallId     String? @unique
+  whatsAppAccountId  String?
+  voiceChannel       CHANNEL?
+
+  status       VOICE_SESSION_STATUS @default(CALLING)
+  statusReason String?              @db.Text
+  errorMessage String?              @db.Text
+
+  // Relations
+  agencyId String
+  Agency   User   @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+
+  businessId String
+  Business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  leadId String
+  Lead   Lead   @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  primaryAgentId String
+  PrimaryAgent   PrimaryAgent @relation(fields: [primaryAgentId], references: [id], onDelete: Cascade)
+
+  agentId String
+  Agent   Agent  @relation(fields: [agentId], references: [id], onDelete: Cascade)
+
+  leadCallId String? 
+  LeadCall   LeadCall? @relation(fields: [leadCallId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([businessId])
+  @@index([leadId])
+  @@index([agencyId])
+  @@index([primaryAgentId])
+  @@index([agentId])
+  @@index([status])
+  @@index([leadCallId])
 }
 
 model ChatLog {
@@ -1235,6 +1855,8 @@ model ChatLog {
 
   @@index([leadId])
   @@index([chatAgentId])
+  @@index([createdAt])
+  @@index([leadId, createdAt])
 }
 
 model Automation {
@@ -1439,6 +2061,15 @@ enum AGENT_SESSION_STATUS {
   FAILED
 }
 
+enum VOICE_SESSION_STATUS {
+  ACTIVE
+  TERMINATED
+  COMPLETED
+  FAILED
+  CALLING 
+  QUEUED
+}
+
 enum AUTOMATION_STATUS {
   DRAFT
   ACTIVE
@@ -1468,6 +2099,19 @@ enum PLAN {
 
   AGENCY_BASIC
   AGENCY_ADVANCE
+
+  // Mini-app plans
+  INSTA_OS_FREE
+  INSTA_OS_PRO
+}
+
+enum MINI_APP_SUBSCRIPTION_PLAN {
+  FREE
+  PRO
+}
+
+enum MINI_APP_SOURCE {
+  INSTA_OS
 }
 
 enum PLAN_TERM {
@@ -1496,6 +2140,19 @@ enum LEAD_QUALITY {
   MEDIUM
   HIGH
   PERFECT
+}
+
+enum LEAD_SOURCE {
+  UNKNOWN
+  INSTA_OS
+}
+
+/// Insta OS first-contact channel (use with leadSource = INSTA_OS). Set only on lead create.
+enum LEAD_SUB_SOURCE {
+  UNKNOWN
+  INSTA_COMMENT
+  INSTA_DM
+  WHATSAPP_DM
 }
 
 // Meeting Enums
@@ -1713,6 +2370,8 @@ enum PROVIDER {
   RETELL
   ULTRA_VOX
   DEEPGRAM
+  WHATSAPP
+  INSTAGRAM
 }
 
 enum MESSAGE_ITEM_TYPE {
@@ -1733,6 +2392,11 @@ enum SYSTEM_EVENT {
   AUTOMATION_TRIGGERED
   AUTOMATION_TERMINATED
   AUTOMATION_MESSAGE_SENT
+  CHAT_SESSION_RESTART
+
+  /// Loop guard: too many inbound messages in a short window. The conversation
+  /// is auto-switched to MANUAL reply mode to prevent agent-to-agent loops.
+  AUTO_REPLY_GUARD_TRIPPED
 }
 
 enum MESSAGE_SOURCE {
@@ -1805,6 +2469,7 @@ enum CHANNEL {
   INSTAGRAM
   LIVE_CHAT
   VOICE_CALL
+  WP_VOICE_CALL
 }
 
 enum CALENDAR_TYPE {
@@ -1844,6 +2509,9 @@ model Knowledgebase {
   // faqs: Array of {question: string, answer: string}
   faqs Json? @default("[]")
 
+  // subKnowledgeBases: Array of {id: string, type: string, title: string, content: string}
+  subKnowledgeBases Json? @default("[]")
+
   // Relations
   businessId String
   Business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
@@ -1861,3 +2529,4 @@ model Knowledgebase {
   @@index([businessId])
   @@index([agencyId])
 }
+

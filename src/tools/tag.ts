@@ -3,6 +3,7 @@ import {
   CallToolRequest,
 } from "@modelcontextprotocol/sdk/types.js";
 import { API_ENDPOINTS } from "../constants/tool.js";
+import { getApiKey } from "../utils/auth.util.js";
 import {
   CreateTagSchema,
   CreateTagRequest,
@@ -121,7 +122,7 @@ export async function handleCreateTag(request: CallToolRequest) {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${process.env.API_TOKEN}`,
+        Authorization: `Bearer ${getApiKey(request)}`,
       },
       body: JSON.stringify(body),
     });
@@ -168,7 +169,7 @@ export async function handleGetTags(request: CallToolRequest) {
       method: "GET",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${process.env.API_TOKEN}`,
+        Authorization: `Bearer ${getApiKey(request)}`,
       },
     });
 
@@ -215,7 +216,7 @@ export async function handleGetTag(request: CallToolRequest) {
       method: "GET",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${process.env.API_TOKEN}`,
+        Authorization: `Bearer ${getApiKey(request)}`,
       },
     });
 
@@ -280,7 +281,7 @@ export async function handleUpdateTag(request: CallToolRequest) {
       method: "PUT",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${process.env.API_TOKEN}`,
+        Authorization: `Bearer ${getApiKey(request)}`,
       },
       body: JSON.stringify(body),
     });
@@ -328,7 +329,7 @@ export async function handleDeleteTag(request: CallToolRequest) {
       method: "DELETE",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${process.env.API_TOKEN}`,
+        Authorization: `Bearer ${getApiKey(request)}`,
       },
     });
 

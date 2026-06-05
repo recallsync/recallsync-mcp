@@ -1,9 +1,6 @@
 import { Request, Response, NextFunction } from "express";
-import { PrismaClient } from "../generated/client/index.js";
 import { getAPIKeyBusiness } from "../utils/ghl.js";
 import { GHLProviderConfig } from "../schema/recall.schema.js";
-
-const prisma = new PrismaClient();
 
 export interface GHLTokenRequest extends Request {
   ghlAccessToken?: string;

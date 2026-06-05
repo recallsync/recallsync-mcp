@@ -34,4 +34,4 @@ docker-compose up --build
 - Uses node-fetch for HTTP requests
 - Built with the Model Context Protocol SDK
 
-ngrok sk18000: npx ngrok http --domain=deservedly-underaccommodated-maryrose.ngrok-free.dev 3008
+ngrok sk18000: npx ngrok http --domain=deservedly-underaccommodated-maryrose.ngrok-free.dev 3008 --config ~/.ngrok1.yml

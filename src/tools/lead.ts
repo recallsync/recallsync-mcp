@@ -1,5 +1,6 @@
 import { CallToolRequest } from "@modelcontextprotocol/sdk/types.js";
 import { API_ENDPOINTS } from "../constants/tool.js";
+import { getApiKey } from "../utils/auth.util.js";
 import {
   CreateLeadSchema,
   CreateLeadRequest,
@@ -102,7 +103,7 @@ export const leadTools = [
           description: "Note about the lead by agency/agent",
         },
       },
-      required: ["name", "phone"],
+      required: ["name"],
       additionalProperties: false,
     },
   },
@@ -287,15 +288,17 @@ export async function handleCreateLead(request: CallToolRequest) {
       };
     }
 
-    const { name, phone } = result.data;
     const url = `${process.env.BASE_URL}${API_ENDPOINTS.LEAD.CREATE_LEAD}`;
-    const body = { name, phone };
+    // Forward all provided fields. The backend create schema requires the
+    // `phone` key to be present (empty string is accepted), and validates at
+    // runtime that at least one of email/phone is non-empty.
+    const body = { ...result.data, phone: result.data.phone ?? "" };
 
     const response = await fetch(url, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${process.env.API_TOKEN}`,
+        Authorization: `Bearer ${getApiKey(request)}`,
       },
       body: JSON.stringify(body),
     });
@@ -366,7 +369,7 @@ export async function handleFindLead(request: CallToolRequest) {
       method: "GET",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${process.env.API_TOKEN}`,
+        Authorization: `Bearer ${getApiKey(request)}`,
       },
     });
 
@@ -412,7 +415,7 @@ export async function handleGetLeads(request: CallToolRequest) {
       method: "GET",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${process.env.API_TOKEN}`,
+        Authorization: `Bearer ${getApiKey(request)}`,
       },
     });
     if (!response.ok) {
@@ -507,7 +510,7 @@ export async function handleGetLead(request: CallToolRequest) {
       method: "GET",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${process.env.API_TOKEN}`,
+        Authorization: `Bearer ${getApiKey(request)}`,
       },
     });
 
@@ -572,7 +575,7 @@ export async function handleUpdateLead(request: CallToolRequest) {
       method: "PUT",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${process.env.API_TOKEN}`,
+        Authorization: `Bearer ${getApiKey(request)}`,
       },
       body: JSON.stringify(body),
     });
@@ -620,7 +623,7 @@ export async function handleDeleteLead(request: CallToolRequest) {
       method: "DELETE",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${process.env.API_TOKEN}`,
+        Authorization: `Bearer ${getApiKey(request)}`,
       },
     });
 
@@ -668,7 +671,7 @@ export async function handleGetLeadByName(request: CallToolRequest) {
       method: "GET",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${process.env.API_TOKEN}`,
+        Authorization: `Bearer ${getApiKey(request)}`,
       },
     });
 

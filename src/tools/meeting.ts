@@ -1,5 +1,6 @@
 import { CallToolRequest } from "@modelcontextprotocol/sdk/types.js";
 import { API_ENDPOINTS } from "../constants/tool.js";
+import { getApiKey } from "../utils/auth.util.js";
 import {
   CreateMeetingSchema,
   CreateMeetingRequest,
@@ -246,7 +247,7 @@ export async function handleCreateMeeting(request: CallToolRequest) {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${process.env.API_TOKEN}`,
+        Authorization: `Bearer ${getApiKey(request)}`,
       },
       body: JSON.stringify(result.data),
     });
@@ -301,7 +302,7 @@ export async function handleGetMeetings(request: CallToolRequest) {
       method: "GET",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${process.env.API_TOKEN}`,
+        Authorization: `Bearer ${getApiKey(request)}`,
       },
     });
 
@@ -365,7 +366,7 @@ export async function handleGetMeetingsByLead(request: CallToolRequest) {
       method: "GET",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${process.env.API_TOKEN}`,
+        Authorization: `Bearer ${getApiKey(request)}`,
       },
     });
 
@@ -432,7 +433,7 @@ export async function handleUpdateMeeting(request: CallToolRequest) {
       method: "PUT",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${process.env.API_TOKEN}`,
+        Authorization: `Bearer ${getApiKey(request)}`,
       },
       body: JSON.stringify(updateData),
     });
@@ -501,7 +502,7 @@ export async function handleUpdateMeetingByLead(request: CallToolRequest) {
       method: "PUT",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${process.env.API_TOKEN}`,
+        Authorization: `Bearer ${getApiKey(request)}`,
       },
       body: JSON.stringify({ status }),
     });
@@ -570,7 +571,7 @@ export async function handleUpdateMeetingStatus(request: CallToolRequest) {
       method: "PATCH",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${process.env.API_TOKEN}`,
+        Authorization: `Bearer ${getApiKey(request)}`,
       },
     });
 
@@ -647,7 +648,7 @@ export async function handleUpdateOverdueNoShow(request: CallToolRequest) {
       method: "PUT",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${process.env.API_TOKEN}`,
+        Authorization: `Bearer ${getApiKey(request)}`,
       },
     });
 

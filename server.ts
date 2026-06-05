@@ -103,6 +103,7 @@ app.get("/", (req: Request, res: Response) => {
 app.all("/mcp", async (req: Request, res: Response) => {
   try {
     const sessionId = req.headers["mcp-session-id"] as string | undefined;
+    const api_token = req.headers["api_key"] as string;
     let transport: StreamableHTTPServerTransport;
 
     if (sessionId && transports[sessionId]) {
@@ -146,8 +147,39 @@ app.all("/mcp", async (req: Request, res: Response) => {
       return;
     }
 
+    // Check for API key
+    if (!api_token) {
+      logger.warn(`Unauthorized primary request - missing API key`, {
+        sessionId,
+      });
+      res.status(401).json({
+        jsonrpc: "2.0",
+        error: {
+          code: -32000,
+          message: "Unauthorized: Missing API key",
+        },
+        id: null,
+      });
+      return;
+    }
+
+    // Inject API key into tool call arguments (forwarded to the REST API as Bearer token)
+    let modifiedBody = req.body;
+    if (req.body && req.body.method === "tools/call" && req.body.params) {
+      modifiedBody = {
+        ...req.body,
+        params: {
+          ...req.body.params,
+          arguments: {
+            ...req.body.params.arguments,
+            _apiKey: api_token,
+          },
+        },
+      };
+    }
+
     // Handle the request
-    await transport.handleRequest(req, res, req.body);
+    await transport.handleRequest(req, res, modifiedBody);
   } catch (error) {
     logger.error("Error handling primary MCP request", { error });
     if (!res.headersSent) {

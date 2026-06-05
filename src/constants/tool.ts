@@ -4,6 +4,30 @@ export const API_ENDPOINTS = {
     FIND_LEAD: "/leads/find",
     GET_LEADS: "/leads",
   },
+  AGENT: {
+    GET_PRIMARY_AGENTS: "/primary-agent",
+    CREATE_PRIMARY_AGENT: "/primary-agent",
+    UPDATE_PRIMARY_AGENT: "/primary-agent", // append `/{id}`
+  },
+  INTEGRATION: {
+    LIST_PROVIDERS: "/provider",
+    LIST_N8N_WORKFLOWS: "/n8n-workflow",
+  },
+  CHANNEL_AGENT: {
+    CREATE_CHANNEL_AGENT: "/channel-agent",
+    GET_CHANNEL_AGENT: "/channel-agent", // append `/{id}`
+    UPDATE_CHANNEL_AGENT: "/channel-agent", // append `/{id}`
+    DELETE_CHANNEL_AGENT: "/channel-agent", // DELETE, append `/{id}`
+    SET_CHANNEL_AGENT_TOOLS: "/channel-agent", // append `/{id}/tools`
+    SET_CHANNEL_AGENT_FLOW_DRAFT: "/channel-agent", // append `/{id}/flow-draft`
+    TEST_CHANNEL_AGENT: "/channel-agent/test",
+    CLEAR_TEST_CONVERSATION: "/channel-agent/test/clear",
+    GET_TEST_LEAD: "/test-lead",
+  },
+  CONVERSATION: {
+    GET_MESSAGES: (conversationId: string) =>
+      `/conversation/${conversationId}/message`,
+  },
   TAG: {
     CREATE_TAG: "/leads/tag",
     GET_TAGS: "/leads/tag",
@@ -35,12 +59,22 @@ export const API_ENDPOINTS = {
     UPDATE_FOLLOW_UP: "/follow-up",
     DELETE_FOLLOW_UP: "/follow-up",
   },
-  VOICE_CAMPAIGN: {
-    GET_ALL_CAMPAIGNS: "/campaign/voice",
-    FIND_LEAD: "/campaign/voice/find-lead",
-    ADD_LEAD_TO_CAMPAIGN: "/campaign/voice",
-    GET_LEAD_BY_ID: "/campaign/voice/lead",
-    UPDATE_CAMPAIGN_STATUS: "/campaign/voice",
-    FIND_LEAD_TO_CALL: "/campaign/voice",
+  CAMPAIGN: {
+    GET_ALL_CAMPAIGNS: "/campaign",
+    CREATE_CAMPAIGN: "/campaign",
+    GET_CAMPAIGN_BY_ID: "/campaign", // append `/{id}`
+    UPDATE_CAMPAIGN: "/campaign", // PATCH, append `/{id}`
+    UPDATE_CAMPAIGN_STATUS: "/campaign", // PUT, append `/{id}`
+    CONFIGURE_SETTINGS: "/campaign", // PUT, append `/{id}/settings`
+    FIND_LEAD: "/campaign/find-lead",
+    ADD_LEAD_TO_CAMPAIGN: "/campaign", // append `/{id}/add-lead/{leadId}`
+    GET_LEAD_BY_ID: "/campaign/lead", // append `/{id}`
+    FIND_LEAD_TO_CALL: "/campaign", // append `/{id}/find`
+  },
+  AUTOMATION: {
+    GET_AUTOMATIONS: "/automation",
+    CREATE_AUTOMATION: "/automation",
+    GET_AUTOMATION_BY_ID: "/automation", // GET, append `/{id}`
+    UPDATE_AUTOMATION: "/automation", // PATCH, append `/{id}`
   },
 } as const;
