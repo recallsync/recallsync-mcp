@@ -8,8 +8,16 @@ import {
   AddLeadToCampaignRequest,
   GetCampaignLeadSchema,
   GetCampaignLeadRequest,
+  GetCampaignLeadsSchema,
+  GetCampaignLeadsRequest,
+  RemoveLeadFromCampaignSchema,
+  RemoveLeadFromCampaignRequest,
   UpdateCampaignStatusSchema,
   UpdateCampaignStatusRequest,
+  UpdateCampaignLeadSchema,
+  UpdateCampaignLeadRequest,
+  DeleteCampaignSchema,
+  DeleteCampaignRequest,
   FindLeadToCallSchema,
   FindLeadToCallRequest,
   GetAllCampaignsSchema,
@@ -23,12 +31,20 @@ import {
   ConfigureCampaignSettingsSchema,
   ConfigureCampaignSettingsRequest,
 } from "../schema/tool.js";
+import {
+  listQueryJsonSchemaProperties,
+  paginationSelectJsonSchemaProperties,
+} from "../schema/list-query.js";
+import {
+  appendListQueryToUrl,
+  formatPaginatedListText,
+} from "../utils/list-query.util.js";
 
 export const campaignTools = [
   {
     name: "get-all-campaigns",
     description:
-      "Get all campaigns for the business (optionally filtered by status). The query could be 'get all campaigns'.",
+      "Get paginated campaigns for the business. Default pageSize=10; use 50 or 100 when the user asks for more. Optional status filter. Date filters apply to createdAt. Lean default: id, name, status, primaryAgentId, automationId, settingsUpdated, createdAt, updatedAt.",
     arguments: [],
     inputSchema: {
       type: "object",
@@ -38,6 +54,7 @@ export const campaignTools = [
           enum: ["DRAFT", "TESTING", "ACTIVE", "PAUSED", "COMPLETED", "FAILED"],
           description: "Optional status filter",
         },
+        ...listQueryJsonSchemaProperties,
       },
       required: [],
       additionalProperties: false,
@@ -206,6 +223,42 @@ export const campaignTools = [
     },
   },
   {
+    name: "update-campaign-lead",
+    description:
+      "Update a campaign lead's status. Use the CampaignLead id (not the Lead id).",
+    arguments: [],
+    inputSchema: {
+      type: "object",
+      properties: {
+        campaignLeadId: {
+          type: "string",
+          description: "ID of the CampaignLead row to update",
+        },
+        status: {
+          type: "string",
+          enum: ["PENDING", "RETRYING", "IN_PROGRESS", "COMPLETED", "FAILED"],
+          description: "New campaign-lead status",
+        },
+      },
+      required: ["campaignLeadId", "status"],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: "delete-campaign",
+    description:
+      "Delete a campaign by id. The server refuses deletion if the campaign still has leads.",
+    arguments: [],
+    inputSchema: {
+      type: "object",
+      properties: {
+        campaignId: { type: "string", description: "ID of the campaign" },
+      },
+      required: ["campaignId"],
+      additionalProperties: false,
+    },
+  },
+  {
     name: "find-campaign-lead",
     description: "Find a campaign lead by email or phone number",
     arguments: [],
@@ -243,6 +296,40 @@ export const campaignTools = [
         leadId: { type: "string", description: "ID of the lead to retrieve" },
       },
       required: ["leadId"],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: "get-campaign-leads",
+    description:
+      "Get paginated leads in a campaign. Default pageSize=10; use 50 or 100 when the user asks for more. Lean default includes campaign-lead fields plus lean Lead (id, name, email, phone, status). No date filters (CampaignLead has no createdAt).",
+    arguments: [],
+    inputSchema: {
+      type: "object",
+      properties: {
+        campaignId: { type: "string", description: "ID of the campaign" },
+        withoutWorkingHoursCheck: {
+          type: "boolean",
+          description:
+            "Skip working-hours guard (default true for listing all leads)",
+        },
+        ...paginationSelectJsonSchemaProperties,
+      },
+      required: ["campaignId"],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: "remove-lead-from-campaign",
+    description: "Remove a lead from a campaign (does not delete the lead record)",
+    arguments: [],
+    inputSchema: {
+      type: "object",
+      properties: {
+        campaignId: { type: "string", description: "ID of the campaign" },
+        leadId: { type: "string", description: "ID of the lead to remove" },
+      },
+      required: ["campaignId", "leadId"],
       additionalProperties: false,
     },
   },
@@ -292,12 +379,11 @@ export async function handleGetAllCampaigns(request: CallToolRequest) {
       };
     }
 
-    const queryParams = new URLSearchParams();
-    if (result.data.status) queryParams.append("status", result.data.status);
-    const qs = queryParams.toString();
-    const url = `${process.env.BASE_URL}${API_ENDPOINTS.CAMPAIGN.GET_ALL_CAMPAIGNS}${
-      qs ? `?${qs}` : ""
-    }`;
+    const url = appendListQueryToUrl(
+      `${process.env.BASE_URL}${API_ENDPOINTS.CAMPAIGN.GET_ALL_CAMPAIGNS}`,
+      result.data,
+      { status: result.data.status }
+    );
 
     const response = await fetch(url, {
       method: "GET",
@@ -313,40 +399,18 @@ export async function handleGetAllCampaigns(request: CallToolRequest) {
     }
 
     const data = await response.json();
-    const campaigns = data.campaigns || data;
-
-    if (Array.isArray(campaigns) && campaigns.length > 0) {
-      const formattedCampaigns = campaigns
-        .map((campaign: any) => {
-          return `- ${campaign.name || "Unnamed Campaign"} (ID: ${
-            campaign.id
-          })${campaign.status ? ` - Status: ${campaign.status}` : ""}${
-            campaign.primaryAgentId
-              ? ` - PrimaryAgent: ${campaign.primaryAgentId}`
-              : ""
-          }${campaign.settingsUpdated ? " - configured" : " - NOT configured"}`;
-        })
-        .join("\n");
-
-      return {
-        content: [
-          {
-            type: "text",
-            text: `Found ${campaigns.length} campaigns:\n${formattedCampaigns}`,
-          },
-        ],
-      };
-    } else if (Array.isArray(campaigns) && campaigns.length === 0) {
-      return {
-        content: [{ type: "text", text: "No campaigns found for this business." }],
-      };
-    } else {
-      return {
-        content: [
-          { type: "text", text: `Campaigns: ${JSON.stringify(campaigns)}` },
-        ],
-      };
-    }
+    return {
+      content: [
+        {
+          type: "text",
+          text: formatPaginatedListText(
+            "Campaigns",
+            "campaigns",
+            data as Record<string, unknown>
+          ),
+        },
+      ],
+    };
   } catch (error: any) {
     return {
       content: [
@@ -667,6 +731,127 @@ export async function handleAddLeadToCampaign(request: CallToolRequest) {
   }
 }
 
+export async function handleGetCampaignLeads(request: CallToolRequest) {
+  try {
+    const args = request.params.arguments as unknown as GetCampaignLeadsRequest;
+    const result = GetCampaignLeadsSchema.safeParse(args);
+    if (!result.success) {
+      const errorMessages = result.error.errors
+        .map((err) => `${err.path.join(".")}: ${err.message}`)
+        .join(", ");
+      return {
+        content: [
+          {
+            type: "text",
+            text: `Failed to get campaign leads: ${errorMessages}. Retry again with correct tool parameters and values.`,
+          },
+        ],
+      };
+    }
+
+    const { campaignId, withoutWorkingHoursCheck = true } = result.data;
+    const url = appendListQueryToUrl(
+      `${process.env.BASE_URL}${API_ENDPOINTS.CAMPAIGN.GET_CAMPAIGN_LEADS}/${campaignId}/leads`,
+      result.data,
+      {
+        withoutWorkingHoursCheck: withoutWorkingHoursCheck ? "true" : "false",
+      }
+    );
+
+    const response = await fetch(url, {
+      method: "GET",
+      headers: { Authorization: `Bearer ${getApiKey(request)}` },
+    });
+
+    if (!response.ok) {
+      return {
+        content: [
+          { type: "text", text: await errorText("Failed to get campaign leads", response) },
+        ],
+      };
+    }
+
+    const data = await response.json();
+    return {
+      content: [
+        {
+          type: "text",
+          text: formatPaginatedListText(
+            "Campaign leads",
+            "leads",
+            data as Record<string, unknown>
+          ),
+        },
+      ],
+    };
+  } catch (error: any) {
+    return {
+      content: [
+        { type: "text", text: `Failed to get campaign leads: ${error.message}` },
+      ],
+    };
+  }
+}
+
+export async function handleRemoveLeadFromCampaign(request: CallToolRequest) {
+  try {
+    const args = request.params
+      .arguments as unknown as RemoveLeadFromCampaignRequest;
+    const result = RemoveLeadFromCampaignSchema.safeParse(args);
+    if (!result.success) {
+      const errorMessages = result.error.errors
+        .map((err) => `${err.path.join(".")}: ${err.message}`)
+        .join(", ");
+      return {
+        content: [
+          {
+            type: "text",
+            text: `Failed to remove lead from campaign: ${errorMessages}. Retry again with correct tool parameters and values.`,
+          },
+        ],
+      };
+    }
+
+    const { campaignId, leadId } = result.data;
+    const url = `${process.env.BASE_URL}${API_ENDPOINTS.CAMPAIGN.REMOVE_LEAD_FROM_CAMPAIGN}/${campaignId}/lead/${leadId}`;
+
+    const response = await fetch(url, {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${getApiKey(request)}` },
+    });
+
+    if (!response.ok) {
+      return {
+        content: [
+          {
+            type: "text",
+            text: await errorText("Failed to remove lead from campaign", response),
+          },
+        ],
+      };
+    }
+
+    const data = await response.json();
+    return {
+      content: [
+        {
+          type: "text",
+          text: `Successfully removed lead from campaign: ${JSON.stringify(data)}`,
+        },
+      ],
+    };
+  } catch (error: any) {
+    return {
+      content: [
+        {
+          type: "text",
+          text: `Failed to remove lead from campaign: ${error.message}`,
+        },
+      ],
+    };
+  }
+}
+
 export async function handleGetCampaignLead(request: CallToolRequest) {
   try {
     const args = request.params.arguments as unknown as GetCampaignLeadRequest;
@@ -763,6 +948,124 @@ export async function handleUpdateCampaignStatus(request: CallToolRequest) {
     return {
       content: [
         { type: "text", text: `Failed to update campaign status: ${error.message}` },
+      ],
+    };
+  }
+}
+
+export async function handleUpdateCampaignLead(request: CallToolRequest) {
+  try {
+    const args = request.params
+      .arguments as unknown as UpdateCampaignLeadRequest;
+    const result = UpdateCampaignLeadSchema.safeParse(args);
+    if (!result.success) {
+      const errorMessages = result.error.errors
+        .map((err) => `${err.path.join(".")}: ${err.message}`)
+        .join(", ");
+      return {
+        content: [
+          {
+            type: "text",
+            text: `Failed to update campaign lead: ${errorMessages}. Retry again with correct tool parameters and values.`,
+          },
+        ],
+      };
+    }
+
+    const { campaignLeadId, status } = result.data;
+    const url = `${process.env.BASE_URL}${API_ENDPOINTS.CAMPAIGN.UPDATE_CAMPAIGN_LEAD}/${campaignLeadId}`;
+
+    const response = await fetch(url, {
+      method: "PUT",
+      headers: {
+        Authorization: `Bearer ${getApiKey(request)}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ status }),
+    });
+
+    if (!response.ok) {
+      return {
+        content: [
+          {
+            type: "text",
+            text: await errorText("Failed to update campaign lead", response),
+          },
+        ],
+      };
+    }
+
+    const data = await response.json();
+    return {
+      content: [
+        {
+          type: "text",
+          text: `Successfully updated campaign lead: ${JSON.stringify(data)}`,
+        },
+      ],
+    };
+  } catch (error: any) {
+    return {
+      content: [
+        {
+          type: "text",
+          text: `Failed to update campaign lead: ${error.message}`,
+        },
+      ],
+    };
+  }
+}
+
+export async function handleDeleteCampaign(request: CallToolRequest) {
+  try {
+    const args = request.params.arguments as unknown as DeleteCampaignRequest;
+    const result = DeleteCampaignSchema.safeParse(args);
+    if (!result.success) {
+      const errorMessages = result.error.errors
+        .map((err) => `${err.path.join(".")}: ${err.message}`)
+        .join(", ");
+      return {
+        content: [
+          {
+            type: "text",
+            text: `Failed to delete campaign: ${errorMessages}. Retry again with correct tool parameters and values.`,
+          },
+        ],
+      };
+    }
+
+    const { campaignId } = result.data;
+    const url = `${process.env.BASE_URL}${API_ENDPOINTS.CAMPAIGN.DELETE_CAMPAIGN}/${campaignId}`;
+
+    const response = await fetch(url, {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${getApiKey(request)}` },
+    });
+
+    if (!response.ok) {
+      return {
+        content: [
+          {
+            type: "text",
+            text: await errorText("Failed to delete campaign", response),
+          },
+        ],
+      };
+    }
+
+    const data = await response.json();
+    return {
+      content: [
+        {
+          type: "text",
+          text: `Successfully deleted campaign: ${JSON.stringify(data)}`,
+        },
+      ],
+    };
+  } catch (error: any) {
+    return {
+      content: [
+        { type: "text", text: `Failed to delete campaign: ${error.message}` },
       ],
     };
   }

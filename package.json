@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "start": "node dist/server.js",
-    "dev": "nodemon --watch \"*.ts\" --exec \"node --loader ts-node/esm\" server.ts",
+    "dev": "nodemon --watch server.ts --watch src --ext ts,json --exec \"node --loader ts-node/esm\" server.ts",
     "build": "prisma generate && tsc && rm -rf dist/src/generated && cp -r src/generated dist/src/generated",
     "generate": "prisma generate",
     "test": "echo \"Error: no test specified\" && exit 1"

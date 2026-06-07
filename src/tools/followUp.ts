@@ -11,6 +11,11 @@ import {
   GetAllFollowUpsSchema,
   GetAllFollowUpsRequest,
 } from "../schema/tool.js";
+import { listQueryJsonSchemaProperties } from "../schema/list-query.js";
+import {
+  appendListQueryToUrl,
+  formatPaginatedListText,
+} from "../utils/list-query.util.js";
 
 export const followUpTools = [
   {
@@ -89,7 +94,7 @@ export const followUpTools = [
   {
     name: "get-all-follow-ups",
     description:
-      "Get all follow-ups, optionally filtered by type, status, or priority",
+      "Get paginated follow-ups, optionally filtered by type, status, or priority. Default pageSize=10; use 50 or 100 when the user asks for more. Date filters apply to followUpAt. Lean default omits reason/notes/summary; pass select to widen.",
     arguments: [],
     inputSchema: {
       type: "object",
@@ -121,6 +126,7 @@ export const followUpTools = [
           description: "Optional parameter to get all follow-ups",
           default: true,
         },
+        ...listQueryJsonSchemaProperties,
       },
       required: [],
       additionalProperties: false,
@@ -374,22 +380,11 @@ export async function handleGetAllFollowUps(request: CallToolRequest) {
 
     const { type, status, priority } = result.data;
 
-    let url = `${process.env.BASE_URL}${API_ENDPOINTS.FOLLOW_UP.GET_ALL_FOLLOW_UPS}`;
-    const params = new URLSearchParams();
-
-    if (type) {
-      params.append("type", type);
-    }
-
-    if (status) {
-      params.append("status", status);
-    }
-
-    if (priority) {
-      params.append("priority", priority);
-    }
-
-    const finalUrl = params.toString() ? `${url}?${params.toString()}` : url;
+    const finalUrl = appendListQueryToUrl(
+      `${process.env.BASE_URL}${API_ENDPOINTS.FOLLOW_UP.GET_ALL_FOLLOW_UPS}`,
+      result.data,
+      { type, status, priority }
+    );
 
     const response = await fetch(finalUrl, {
       method: "GET",
@@ -412,17 +407,16 @@ export async function handleGetAllFollowUps(request: CallToolRequest) {
     }
 
     const data = await response.json();
-    const followUps = Array.isArray(data) ? data : [data];
 
     return {
       content: [
         {
           type: "text",
-          text: `Retrieved ${followUps.length} follow-up(s)`,
-        },
-        {
-          type: "text",
-          text: JSON.stringify(followUps, null, 2),
+          text: formatPaginatedListText(
+            "Follow-ups",
+            "followups",
+            data as Record<string, unknown>
+          ),
         },
       ],
     };

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { ListQuerySchema, PaginationSelectSchema } from "./list-query.js";
 
 // Lead related schemas
 export const CreateLeadSchema = z
@@ -78,6 +79,14 @@ export const UpdatePrimaryAgentSchema = z.object({
 
 export type UpdatePrimaryAgentRequest = z.infer<typeof UpdatePrimaryAgentSchema>;
 
+export const GetPrimaryAgentByIdSchema = z.object({
+  id: z.string().min(1, "Primary agent ID is required"),
+});
+
+export type GetPrimaryAgentByIdRequest = z.infer<
+  typeof GetPrimaryAgentByIdSchema
+>;
+
 // Channel agent (BaseAgent) schema. Enums mirror the RecallSync Prisma schema.
 const CHANNEL_VALUES = [
   "EMAIL",
@@ -106,6 +115,8 @@ const PROVIDER_VALUES = [
   "INSTAGRAM",
 ] as const;
 
+export const AGENT_MODE_VALUES = ["AUTO", "DRAFT"] as const;
+
 export const CreateChannelAgentSchema = z
   .object({
     primaryAgentId: z.string().min(1, "Primary agent ID is required"),
@@ -115,6 +126,7 @@ export const CreateChannelAgentSchema = z
     description: z.string().optional(),
     prompt: z.string().optional(),
     baseAgentType: z.enum(["STANDARD", "RECALL", "FLOW"]).optional(),
+    agentMode: z.enum(AGENT_MODE_VALUES).optional(),
     type: z
       .enum(["INTEGRATED", "N8N", "VAPI", "ELEVEN_LABS", "RETELL", "ULTRA_VOX"])
       .optional(),
@@ -140,6 +152,7 @@ export const UpdateChannelAgentSchema = z.object({
   name: z.string().min(1).optional(),
   description: z.string().nullable().optional(),
   isActive: z.boolean().optional(),
+  agentMode: z.enum(AGENT_MODE_VALUES).optional(),
   // STANDARD (single-prompt) system prompt. FLOW prompts live in the flow graph.
   prompt: z.string().min(1).optional(),
 });
@@ -160,6 +173,23 @@ export const TestChannelAgentSchema = z.object({
 });
 
 export type TestChannelAgentRequest = z.infer<typeof TestChannelAgentSchema>;
+
+export const TestN8nWorkflowSchema = z
+  .object({
+    baseAgentId: z.string().optional(),
+    n8nWorkflowId: z.string().optional(),
+    leadId: z.string().optional(),
+    toEmail: z.string().email().optional(),
+    subject: z.string().optional(),
+    content: z.string().optional(),
+    userMessage: z.string().optional(),
+  })
+  .refine((data) => Boolean(data.baseAgentId || data.n8nWorkflowId), {
+    message: "Provide baseAgentId and/or n8nWorkflowId",
+    path: ["baseAgentId"],
+  });
+
+export type TestN8nWorkflowRequest = z.infer<typeof TestN8nWorkflowSchema>;
 
 export const ClearTestConversationSchema = z.object({
   baseAgentId: z.string().min(1).optional(),
@@ -206,12 +236,157 @@ export type SetChannelAgentFlowDraftRequest = z.infer<
   typeof SetChannelAgentFlowDraftSchema
 >;
 
-export const GetConversationMessagesSchema = z.object({
-  conversationId: z.string().min(1, "Conversation id is required"),
-});
+const CONVERSATION_CHANNEL_VALUES = [
+  "EMAIL",
+  "SMS",
+  "WHATSAPP",
+  "FACEBOOK",
+  "INSTAGRAM",
+  "LIVE_CHAT",
+  "VOICE_CALL",
+  "WP_VOICE_CALL",
+] as const;
+
+const MESSAGE_SENDER_VALUES = [
+  "AI_AGENT",
+  "HUMAN_AGENT",
+  "LEAD",
+  "SYSTEM",
+] as const;
+
+const MESSAGE_STATUS_VALUES = [
+  "SENT",
+  "DRAFT",
+  "SCHEDULED",
+  "FAILED",
+  "REJECTED",
+] as const;
+
+export const GetConversationMessagesSchema = z
+  .object({
+    conversationId: z.string().min(1, "Conversation id is required"),
+    status: z.enum(MESSAGE_STATUS_VALUES).optional(),
+    sender: z.enum(MESSAGE_SENDER_VALUES).optional(),
+    channel: z.enum(CONVERSATION_CHANNEL_VALUES).optional(),
+  })
+  .merge(ListQuerySchema);
 
 export type GetConversationMessagesRequest = z.infer<
   typeof GetConversationMessagesSchema
+>;
+
+export const GetConversationSchema = z
+  .object({
+    leadId: z.string().optional(),
+    conversationId: z.string().optional(),
+    channel: z
+      .enum([
+        "EMAIL",
+        "SMS",
+        "WHATSAPP",
+        "FACEBOOK",
+        "INSTAGRAM",
+        "LIVE_CHAT",
+        "VOICE_CALL",
+        "WP_VOICE_CALL",
+      ])
+      .optional(),
+  })
+  .refine((data) => data.leadId || data.conversationId, {
+    message: "Either leadId or conversationId is required",
+    path: ["leadId", "conversationId"],
+  });
+
+export type GetConversationRequest = z.infer<typeof GetConversationSchema>;
+
+export const SearchConversationsSchema = z.object({
+  leadId: z.string().optional(),
+  conversationId: z.string().optional(),
+});
+
+export type SearchConversationsRequest = z.infer<
+  typeof SearchConversationsSchema
+>;
+
+export const ApproveDraftMessageSchema = z.object({
+  messageId: z.string().min(1, "Message id is required"),
+  content: z.string().optional(),
+  subject: z.string().optional(),
+});
+
+export type ApproveDraftMessageRequest = z.infer<
+  typeof ApproveDraftMessageSchema
+>;
+
+export const RejectDraftMessageSchema = z.object({
+  messageId: z.string().min(1, "Message id is required"),
+});
+
+export type RejectDraftMessageRequest = z.infer<
+  typeof RejectDraftMessageSchema
+>;
+
+export const SendMessageSchema = z.object({
+  conversationId: z.string().min(1, "Conversation id is required"),
+  content: z.string().min(1, "Content is required"),
+  subject: z.string().optional(),
+  baseAgentId: z.string().optional(),
+});
+
+export type SendMessageRequest = z.infer<typeof SendMessageSchema>;
+
+const MESSAGE_ITEM_TYPE_VALUES = ["MESSAGE", "CALL"] as const;
+
+export const UpdateConversationSchema = z.object({
+  conversationId: z.string().min(1, "Conversation id is required"),
+  starred: z.boolean().optional(),
+  killed: z.boolean().optional(),
+  replyMode: z.enum(["AUTO", "MANUAL"]).optional(),
+  activeAgentId: z.string().nullable().optional(),
+});
+
+export type UpdateConversationRequest = z.infer<
+  typeof UpdateConversationSchema
+>;
+
+export const CreateConversationMessageSchema = z.object({
+  conversationId: z.string().min(1, "Conversation id is required"),
+  leadId: z.string().min(1, "Lead id is required"),
+  content: z.string().min(1, "Content is required"),
+  sender: z.enum(MESSAGE_SENDER_VALUES).optional(),
+  status: z.enum(MESSAGE_STATUS_VALUES).optional(),
+  channel: z.enum(CONVERSATION_CHANNEL_VALUES).optional(),
+  snippet: z.string().optional(),
+  itemType: z.enum(MESSAGE_ITEM_TYPE_VALUES).optional(),
+  callId: z.string().optional(),
+});
+
+export type CreateConversationMessageRequest = z.infer<
+  typeof CreateConversationMessageSchema
+>;
+
+export const UpdateConversationMessageSchema = z.object({
+  conversationId: z.string().min(1, "Conversation id is required"),
+  id: z.string().min(1, "Message id is required"),
+  content: z.string().optional(),
+  sender: z.enum(MESSAGE_SENDER_VALUES).optional(),
+  status: z.enum(MESSAGE_STATUS_VALUES).optional(),
+  channel: z.enum(CONVERSATION_CHANNEL_VALUES).optional(),
+  snippet: z.string().optional(),
+  itemType: z.enum(MESSAGE_ITEM_TYPE_VALUES).optional(),
+});
+
+export type UpdateConversationMessageRequest = z.infer<
+  typeof UpdateConversationMessageSchema
+>;
+
+export const DeleteConversationMessageSchema = z.object({
+  conversationId: z.string().min(1, "Conversation id is required"),
+  id: z.string().min(1, "Message id is required"),
+});
+
+export type DeleteConversationMessageRequest = z.infer<
+  typeof DeleteConversationMessageSchema
 >;
 
 export const CreateTagSchema = z.object({
@@ -227,10 +402,36 @@ export const UpdateTagSchema = z.object({
 
 export type UpdateTagRequest = z.infer<typeof UpdateTagSchema>;
 
-export const UpdateLeadSchema = z.object({
-  id: z.string().min(1, "Lead ID is required"),
-  status: z.string().min(1, "Status is required"),
-});
+export const UpdateLeadSchema = z
+  .object({
+    id: z.string().min(1, "Lead ID is required"),
+    status: z.enum(["NEW", "CONTACTED", "RETRYING", "JUNK", "BOOKED"]).optional(),
+    statusType: z.enum(["HOT", "WARM", "COLD"]).optional(),
+    quality: z
+      .enum(["UNQUALIFIED", "LOW", "MEDIUM", "HIGH", "PERFECT"])
+      .optional(),
+    firstName: z.string().optional(),
+    lastName: z.string().optional(),
+    email: z.string().optional(),
+    bestEmail: z.string().optional(),
+    bestPhone: z.string().optional(),
+    phone: z.string().optional(),
+    company: z.string().optional(),
+    companyShortName: z.string().optional(),
+    industry: z.string().optional(),
+    website: z.string().optional(),
+    note: z.string().optional(),
+    message: z.string().optional(),
+    /** Merged into automation {{var}} substitution (e.g. personalizationHighlight). */
+    customData: z.record(z.string(), z.string()).optional(),
+  })
+  .refine(
+    (data) =>
+      Object.keys(data).some(
+        (key) => key !== "id" && data[key as keyof typeof data] !== undefined
+      ),
+    { message: "Provide at least one field to update besides id" }
+  );
 
 export type UpdateLeadRequest = z.infer<typeof UpdateLeadSchema>;
 
@@ -280,6 +481,14 @@ export const UpdateOverdueNoShowSchema = z.object({
 
 export type UpdateOverdueNoShowRequest = z.infer<
   typeof UpdateOverdueNoShowSchema
+>;
+
+export const GetUpcomingMeetingsByLeadSchema = z.object({
+  leadId: z.string().min(1, "Lead ID is required"),
+});
+
+export type GetUpcomingMeetingsByLeadRequest = z.infer<
+  typeof GetUpcomingMeetingsByLeadSchema
 >;
 
 // Note related schemas
@@ -356,20 +565,22 @@ export const GetFollowUpSchema = z.object({
 
 export type GetFollowUpRequest = z.infer<typeof GetFollowUpSchema>;
 
-export const GetAllFollowUpsSchema = z.object({
-  type: z.enum(["HUMAN_AGENT", "AI_AGENT"]).optional(),
-  status: z
-    .enum([
-      "PENDING",
-      "COMPLETED",
-      "RESCHEDULED",
-      "NO_SHOW",
-      "NOT_INTERESTED",
-      "DROPPED",
-    ])
-    .optional(),
-  priority: z.enum(["LOW", "MEDIUM", "HIGH"]).optional(),
-});
+export const GetAllFollowUpsSchema = z
+  .object({
+    type: z.enum(["HUMAN_AGENT", "AI_AGENT"]).optional(),
+    status: z
+      .enum([
+        "PENDING",
+        "COMPLETED",
+        "RESCHEDULED",
+        "NO_SHOW",
+        "NOT_INTERESTED",
+        "DROPPED",
+      ])
+      .optional(),
+    priority: z.enum(["LOW", "MEDIUM", "HIGH"]).optional(),
+  })
+  .merge(ListQuerySchema);
 
 export type GetAllFollowUpsRequest = z.infer<typeof GetAllFollowUpsSchema>;
 
@@ -383,9 +594,19 @@ const CAMPAIGN_STATUS_VALUES = [
   "FAILED",
 ] as const;
 
-export const GetAllCampaignsSchema = z.object({
-  status: z.enum(CAMPAIGN_STATUS_VALUES).optional(),
-});
+const CAMPAIGN_LEAD_STATUS_VALUES = [
+  "PENDING",
+  "RETRYING",
+  "IN_PROGRESS",
+  "COMPLETED",
+  "FAILED",
+] as const;
+
+export const GetAllCampaignsSchema = z
+  .object({
+    status: z.enum(CAMPAIGN_STATUS_VALUES).optional(),
+  })
+  .merge(ListQuerySchema);
 
 export type GetAllCampaignsRequest = z.infer<typeof GetAllCampaignsSchema>;
 
@@ -477,6 +698,24 @@ export const AddLeadToCampaignSchema = z.object({
 
 export type AddLeadToCampaignRequest = z.infer<typeof AddLeadToCampaignSchema>;
 
+export const GetCampaignLeadsSchema = z
+  .object({
+    campaignId: z.string().min(1, "Campaign ID is required"),
+    withoutWorkingHoursCheck: z.boolean().optional(),
+  })
+  .merge(PaginationSelectSchema);
+
+export type GetCampaignLeadsRequest = z.infer<typeof GetCampaignLeadsSchema>;
+
+export const RemoveLeadFromCampaignSchema = z.object({
+  campaignId: z.string().min(1, "Campaign ID is required"),
+  leadId: z.string().min(1, "Lead ID is required"),
+});
+
+export type RemoveLeadFromCampaignRequest = z.infer<
+  typeof RemoveLeadFromCampaignSchema
+>;
+
 export const GetCampaignLeadSchema = z.object({
   leadId: z.string().min(1, "Lead ID is required"),
 });
@@ -491,6 +730,21 @@ export const UpdateCampaignStatusSchema = z.object({
 export type UpdateCampaignStatusRequest = z.infer<
   typeof UpdateCampaignStatusSchema
 >;
+
+export const UpdateCampaignLeadSchema = z.object({
+  campaignLeadId: z.string().min(1, "Campaign lead ID is required"),
+  status: z.enum(CAMPAIGN_LEAD_STATUS_VALUES),
+});
+
+export type UpdateCampaignLeadRequest = z.infer<
+  typeof UpdateCampaignLeadSchema
+>;
+
+export const DeleteCampaignSchema = z.object({
+  campaignId: z.string().min(1, "Campaign ID is required"),
+});
+
+export type DeleteCampaignRequest = z.infer<typeof DeleteCampaignSchema>;
 
 export const FindLeadToCallSchema = z.object({
   campaignId: z.string().min(1, "Campaign ID is required"),
@@ -515,9 +769,11 @@ const AutomationFlowSchema = z.object({
   edges: z.array(z.any()),
 });
 
-export const GetAutomationsSchema = z.object({
-  status: z.enum(AUTOMATION_STATUS_VALUES).optional(),
-});
+export const GetAutomationsSchema = z
+  .object({
+    status: z.enum(AUTOMATION_STATUS_VALUES).optional(),
+  })
+  .merge(ListQuerySchema);
 
 export type GetAutomationsRequest = z.infer<typeof GetAutomationsSchema>;
 
@@ -549,3 +805,193 @@ export const UpdateAutomationSchema = z.object({
 });
 
 export type UpdateAutomationRequest = z.infer<typeof UpdateAutomationSchema>;
+
+export const TriggerAutomationSchema = z.object({
+  automationId: z.string().min(1, "Automation ID is required"),
+  leadId: z.string().min(1, "Lead ID is required"),
+});
+
+export type TriggerAutomationRequest = z.infer<typeof TriggerAutomationSchema>;
+
+export const StopAutomationSchema = z.object({
+  automationId: z.string().min(1, "Automation ID is required"),
+  leadId: z.string().min(1, "Lead ID is required"),
+});
+
+export type StopAutomationRequest = z.infer<typeof StopAutomationSchema>;
+
+const AGENT_SESSION_STATUS_VALUES = [
+  "ACTIVE",
+  "TERMINATED",
+  "COMPLETED",
+  "FAILED",
+] as const;
+
+export const GetLeadAutomationSessionsSchema = z
+  .object({
+    leadId: z.string().min(1, "Lead ID is required"),
+    status: z.enum(AGENT_SESSION_STATUS_VALUES).optional(),
+  })
+  .merge(ListQuerySchema);
+
+export type GetLeadAutomationSessionsRequest = z.infer<
+  typeof GetLeadAutomationSessionsSchema
+>;
+
+// Pipeline schemas
+export const GetPipelinesSchema = z.object({}).merge(ListQuerySchema);
+export type GetPipelinesRequest = z.infer<typeof GetPipelinesSchema>;
+
+export const GetPipelineByIdSchema = z.object({
+  id: z.string().min(1, "Pipeline ID is required"),
+});
+export type GetPipelineByIdRequest = z.infer<typeof GetPipelineByIdSchema>;
+
+export const CreatePipelineSchema = z.object({
+  name: z.string().min(1, "Pipeline name is required"),
+});
+export type CreatePipelineRequest = z.infer<typeof CreatePipelineSchema>;
+
+export const UpdatePipelineSchema = z.object({
+  id: z.string().min(1, "Pipeline ID is required"),
+  name: z.string().min(1, "Pipeline name is required"),
+});
+export type UpdatePipelineRequest = z.infer<typeof UpdatePipelineSchema>;
+
+export const DeletePipelineSchema = z.object({
+  id: z.string().min(1, "Pipeline ID is required"),
+});
+export type DeletePipelineRequest = z.infer<typeof DeletePipelineSchema>;
+
+// Stage schemas
+export const GetStagesSchema = z
+  .object({
+    pipelineId: z.string().min(1, "Pipeline ID is required"),
+  })
+  .merge(ListQuerySchema);
+export type GetStagesRequest = z.infer<typeof GetStagesSchema>;
+
+export const GetStageByIdSchema = z.object({
+  id: z.string().min(1, "Stage ID is required"),
+});
+export type GetStageByIdRequest = z.infer<typeof GetStageByIdSchema>;
+
+export const CreateStageSchema = z.object({
+  name: z.string().min(1, "Stage name is required"),
+  pipelineId: z.string().min(1, "Pipeline ID is required"),
+});
+export type CreateStageRequest = z.infer<typeof CreateStageSchema>;
+
+export const UpdateStageSchema = z.object({
+  id: z.string().min(1, "Stage ID is required"),
+  name: z.string().min(1, "Stage name is required"),
+});
+export type UpdateStageRequest = z.infer<typeof UpdateStageSchema>;
+
+export const DeleteStageSchema = z.object({
+  id: z.string().min(1, "Stage ID is required"),
+});
+export type DeleteStageRequest = z.infer<typeof DeleteStageSchema>;
+
+// Opportunity schemas
+const OPPORTUNITY_STATUS_VALUES = ["OPEN", "LOST", "WON", "ABANDONED"] as const;
+
+export const GetOpportunitiesSchema = z
+  .object({
+    pipelineId: z.string().optional(),
+    stageId: z.string().optional(),
+    leadId: z.string().optional(),
+  })
+  .merge(ListQuerySchema);
+export type GetOpportunitiesRequest = z.infer<typeof GetOpportunitiesSchema>;
+
+export const GetOpportunityByIdSchema = z.object({
+  id: z.string().min(1, "Opportunity ID is required"),
+});
+export type GetOpportunityByIdRequest = z.infer<
+  typeof GetOpportunityByIdSchema
+>;
+
+export const CreateOpportunitySchema = z.object({
+  name: z.string().min(1, "Opportunity name is required"),
+  description: z.string().optional(),
+  value: z.number().optional(),
+  stageId: z.string().min(1, "Stage ID is required"),
+  leadId: z.string().min(1, "Lead ID is required"),
+  pipelineId: z.string().min(1, "Pipeline ID is required"),
+});
+export type CreateOpportunityRequest = z.infer<typeof CreateOpportunitySchema>;
+
+export const UpdateOpportunitySchema = z.object({
+  id: z.string().min(1, "Opportunity ID is required"),
+  name: z.string().min(1).optional(),
+  description: z.string().optional(),
+  value: z.number().optional(),
+  status: z.enum(OPPORTUNITY_STATUS_VALUES).optional(),
+  source: z.string().optional(),
+  businessName: z.string().optional(),
+  stageId: z.string().optional(),
+  leadId: z.string().optional(),
+  pipelineId: z.string().optional(),
+});
+export type UpdateOpportunityRequest = z.infer<typeof UpdateOpportunitySchema>;
+
+export const DeleteOpportunitySchema = z.object({
+  id: z.string().min(1, "Opportunity ID is required"),
+});
+export type DeleteOpportunityRequest = z.infer<typeof DeleteOpportunitySchema>;
+
+// Call (LeadCall) schemas
+const CALL_TYPE_VALUES = ["INBOUND", "OUTBOUND", "WEB"] as const;
+const LEAD_CALL_TYPE_VALUES = ["GLOBAL", "CAMPAIGN"] as const;
+
+export const GetCallsSchema = z
+  .object({
+    leadId: z.string().optional(),
+    campaignId: z.string().optional(),
+  })
+  .merge(ListQuerySchema);
+export type GetCallsRequest = z.infer<typeof GetCallsSchema>;
+
+export const GetCallByIdSchema = z.object({
+  id: z.string().min(1, "Call ID is required"),
+});
+export type GetCallByIdRequest = z.infer<typeof GetCallByIdSchema>;
+
+export const CreateCallSchema = z.object({
+  leadId: z.string().min(1, "Lead ID is required"),
+  type: z.enum(CALL_TYPE_VALUES),
+  callId: z.string().min(1, "Provider call ID is required"),
+  endedReason: z.string().min(1, "Ended reason is required"),
+  result: z.string().min(1, "Result is required"),
+  transcript: z.any().optional(),
+  summary: z.string().optional(),
+  notes: z.string().optional(),
+  audioUrl: z.string().optional(),
+  callType: z.enum(LEAD_CALL_TYPE_VALUES).optional(),
+  callDuration: z.number().optional(),
+  costVoiceAi: z.number().optional(),
+  costTelephony: z.number().optional(),
+  totalCost: z.number().optional(),
+  campaignId: z.string().optional(),
+});
+export type CreateCallRequest = z.infer<typeof CreateCallSchema>;
+
+export const UpdateCallSchema = z.object({
+  id: z.string().min(1, "Call ID is required"),
+  type: z.enum(CALL_TYPE_VALUES).optional(),
+  callId: z.string().optional(),
+  endedReason: z.string().optional(),
+  result: z.string().optional(),
+  transcript: z.any().optional(),
+  summary: z.string().optional(),
+  notes: z.string().optional(),
+  audioUrl: z.string().optional(),
+  callType: z.enum(LEAD_CALL_TYPE_VALUES).optional(),
+  callDuration: z.number().optional(),
+  costVoiceAi: z.number().optional(),
+  costTelephony: z.number().optional(),
+  totalCost: z.number().optional(),
+  campaignId: z.string().optional(),
+});
+export type UpdateCallRequest = z.infer<typeof UpdateCallSchema>;

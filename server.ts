@@ -86,6 +86,107 @@ const cleanupTransport = (
   }
 };
 
+type McpServerLike = {
+  connect: (transport: StreamableHTTPServerTransport) => Promise<void>;
+};
+
+/**
+ * Create a Streamable HTTP transport and connect it to an MCP server instance.
+ * When `recoverStale` is true we mark the transport initialized immediately so
+ * Cursor can keep using its existing session id after a dev hot-reload/restart.
+ */
+async function createStreamableTransport(options: {
+  transportMap: Record<string, StreamableHTTPServerTransport>;
+  mcpServer: McpServerLike;
+  label: string;
+  pinnedSessionId?: string;
+  recoverStale?: boolean;
+}): Promise<StreamableHTTPServerTransport> {
+  const transport = new StreamableHTTPServerTransport({
+    sessionIdGenerator: options.pinnedSessionId
+      ? () => options.pinnedSessionId!
+      : () => randomUUID(),
+    onsessioninitialized: (sessionId) => {
+      options.transportMap[sessionId] = transport;
+      logger.info(`${options.label} MCP session initialized`, { sessionId });
+    },
+  });
+
+  transport.onclose = () => {
+    if (transport.sessionId) {
+      delete options.transportMap[transport.sessionId];
+      logger.info(`${options.label} MCP transport closed`, {
+        sessionId: transport.sessionId,
+      });
+    }
+  };
+
+  await options.mcpServer.connect(transport);
+
+  if (options.pinnedSessionId && options.recoverStale) {
+    transport.sessionId = options.pinnedSessionId;
+    (transport as unknown as { _initialized: boolean })._initialized = true;
+    options.transportMap[options.pinnedSessionId] = transport;
+    logger.info(`${options.label} MCP stale session recovered`, {
+      sessionId: options.pinnedSessionId,
+    });
+  }
+
+  return transport;
+}
+
+async function resolveStreamableTransport(options: {
+  sessionId: string | undefined;
+  body: unknown;
+  transportMap: Record<string, StreamableHTTPServerTransport>;
+  mcpServer: McpServerLike;
+  label: string;
+}): Promise<StreamableHTTPServerTransport | null> {
+  const { sessionId, body, transportMap, mcpServer, label } = options;
+
+  if (sessionId && transportMap[sessionId]) {
+    logger.debug(`Reusing existing ${label} transport`, { sessionId });
+    return transportMap[sessionId];
+  }
+
+  if (isInitializeRequest(body)) {
+    logger.info(`Creating new ${label} MCP transport`, { sessionId });
+    return createStreamableTransport({
+      transportMap,
+      mcpServer,
+      label,
+      pinnedSessionId:
+        sessionId && !transportMap[sessionId] ? sessionId : undefined,
+    });
+  }
+
+  if (sessionId && !transportMap[sessionId]) {
+    // Dev hot-reload: the process restarted but Cursor still sends the old
+    // mcp-session-id. Re-bind transparently instead of returning 400/404.
+    return createStreamableTransport({
+      transportMap,
+      mcpServer,
+      label,
+      pinnedSessionId: sessionId,
+      recoverStale: true,
+    });
+  }
+
+  return null;
+}
+
+function invalidSessionResponse(res: Response, label: string) {
+  logger.warn(`Invalid ${label} MCP request - no valid session ID provided`);
+  res.status(400).json({
+    jsonrpc: "2.0",
+    error: {
+      code: -32000,
+      message: "Bad Request: No valid session ID provided",
+    },
+    id: null,
+  });
+}
+
 // Root Endpoint (status)
 app.get("/", (req: Request, res: Response) => {
   const port = process.env.PORT || 3001;
@@ -104,46 +205,17 @@ app.all("/mcp", async (req: Request, res: Response) => {
   try {
     const sessionId = req.headers["mcp-session-id"] as string | undefined;
     const api_token = req.headers["api_key"] as string;
-    let transport: StreamableHTTPServerTransport;
 
-    if (sessionId && transports[sessionId]) {
-      // Reuse existing transport
-      transport = transports[sessionId];
-      logger.debug(`Reusing existing primary transport`, { sessionId });
-    } else if (!sessionId && isInitializeRequest(req.body)) {
-      // New initialization request
-      logger.info(`Creating new primary MCP transport`);
-      transport = new StreamableHTTPServerTransport({
-        sessionIdGenerator: () => randomUUID(),
-        onsessioninitialized: (sessionId) => {
-          transports[sessionId] = transport;
-          logger.info(`Primary MCP session initialized`, { sessionId });
-        },
-      });
+    const transport = await resolveStreamableTransport({
+      sessionId,
+      body: req.body,
+      transportMap: transports,
+      mcpServer: primaryServer,
+      label: "Primary",
+    });
 
-      // Clean up transport when closed
-      transport.onclose = () => {
-        if (transport.sessionId) {
-          delete transports[transport.sessionId];
-          logger.info(`Primary MCP transport closed`, {
-            sessionId: transport.sessionId,
-          });
-        }
-      };
-
-      // Connect to the MCP server
-      await primaryServer.connect(transport);
-    } else {
-      // Invalid request
-      logger.warn(`Invalid primary MCP request - no valid session ID provided`);
-      res.status(400).json({
-        jsonrpc: "2.0",
-        error: {
-          code: -32000,
-          message: "Bad Request: No valid session ID provided",
-        },
-        id: null,
-      });
+    if (!transport) {
+      invalidSessionResponse(res, "Primary");
       return;
     }
 
@@ -200,57 +272,16 @@ app.all("/mcp-ghl", async (req: Request, res: Response) => {
   try {
     const sessionId = req.headers["mcp-session-id"] as string | undefined;
     const api_token = req.headers["api_key"] as string;
-    let transport: StreamableHTTPServerTransport;
-
-    // Add detailed request logging for debugging
-    logger.info(`GHL MCP Request Details`, {
-      method: req.method,
-      url: req.url,
+    const transport = await resolveStreamableTransport({
       sessionId,
-      hasApiKey: !!api_token,
-      bodyMethod: req.body?.method,
-      bodyParams: req.body?.params,
-      headers: Object.keys(req.headers),
+      body: req.body,
+      transportMap: ghlTransports,
+      mcpServer: ghlServer,
+      label: "GHL",
     });
 
-    if (sessionId && ghlTransports[sessionId]) {
-      // Reuse existing transport
-      transport = ghlTransports[sessionId];
-      logger.debug(`Reusing existing GHL transport`, { sessionId });
-    } else if (!sessionId && isInitializeRequest(req.body)) {
-      // New initialization request
-      logger.info(`Creating new GHL MCP transport`);
-      transport = new StreamableHTTPServerTransport({
-        sessionIdGenerator: () => randomUUID(),
-        onsessioninitialized: (sessionId) => {
-          ghlTransports[sessionId] = transport;
-          logger.info(`GHL MCP session initialized`, { sessionId });
-        },
-      });
-
-      // Clean up transport when closed
-      transport.onclose = () => {
-        if (transport.sessionId) {
-          delete ghlTransports[transport.sessionId];
-          logger.info(`GHL MCP transport closed`, {
-            sessionId: transport.sessionId,
-          });
-        }
-      };
-
-      // Connect to the GHL server
-      await ghlServer.connect(transport);
-    } else {
-      // Invalid request
-      logger.warn(`Invalid GHL MCP request - no valid session ID provided`);
-      res.status(400).json({
-        jsonrpc: "2.0",
-        error: {
-          code: -32000,
-          message: "Bad Request: No valid session ID provided",
-        },
-        id: null,
-      });
+    if (!transport) {
+      invalidSessionResponse(res, "GHL");
       return;
     }
 
@@ -325,49 +356,24 @@ app.all("/mcp-cal", async (req: Request, res: Response) => {
     const sessionId = req.headers["mcp-session-id"] as string | undefined;
     const api_key = req.headers["api_key"] as string;
 
-    let transport: StreamableHTTPServerTransport;
-
-    // Check if this is a tool call and we have a valid session
     const isToolCall = req.body && req.body.method === "tools/call";
 
-    if (sessionId && calTransports[sessionId]) {
-      // Reuse existing transport
-      transport = calTransports[sessionId];
-    } else if (!sessionId && isInitializeRequest(req.body)) {
-      // New initialization request
-      transport = new StreamableHTTPServerTransport({
-        sessionIdGenerator: () => randomUUID(),
-        onsessioninitialized: (sessionId) => {
-          calTransports[sessionId] = transport;
-        },
-      });
+    let transport = await resolveStreamableTransport({
+      sessionId,
+      body: req.body,
+      transportMap: calTransports,
+      mcpServer: calServer,
+      label: "Cal",
+    });
 
-      // Clean up transport when closed
-      transport.onclose = () => {
-        if (transport.sessionId) {
-          cleanupTransport(calTransports, transport.sessionId, "Cal MCP");
-        }
-      };
+    if (!transport && isToolCall && Object.keys(calTransports).length > 0) {
+      const availableSessionId = Object.keys(calTransports)[0];
+      transport = calTransports[availableSessionId];
+    }
 
-      // Connect to the Cal server
-      await calServer.connect(transport);
-    } else {
-      // Invalid request - but for n8n, let's be more lenient
-      if (isToolCall && Object.keys(calTransports).length > 0) {
-        // If it's a tool call and we have any active session, use the first one
-        const availableSessionId = Object.keys(calTransports)[0];
-        transport = calTransports[availableSessionId];
-      } else {
-        res.status(400).json({
-          jsonrpc: "2.0",
-          error: {
-            code: -32000,
-            message: "Bad Request: No valid session ID provided",
-          },
-          id: null,
-        });
-        return;
-      }
+    if (!transport) {
+      invalidSessionResponse(res, "Cal");
+      return;
     }
 
     // Check for API key

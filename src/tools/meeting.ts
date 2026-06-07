@@ -12,7 +12,13 @@ import {
   UpdateMeetingStatusRequest,
   UpdateOverdueNoShowSchema,
   UpdateOverdueNoShowRequest,
+  GetUpcomingMeetingsByLeadSchema,
 } from "../schema/tool.js";
+import { listQueryJsonSchemaProperties } from "../schema/list-query.js";
+import {
+  appendListQueryToUrl,
+  formatPaginatedListText,
+} from "../utils/list-query.util.js";
 
 export const meetingTools = [
   {
@@ -61,7 +67,7 @@ export const meetingTools = [
   {
     name: "get-meetings",
     description:
-      "Get all meetings with optional filters. You can filter by leadId and/or status. Available status values: UPCOMING (scheduled meetings), SUCCESS (completed meetings), NO_SHOW (lead didn't attend), CANCELLED (cancelled meetings), RESCHEDULED (meetings that were rescheduled)",
+      "Get paginated meetings with optional filters. Default pageSize=10; use 50 or 100 when the user asks for more. Pass select for specific fields. Date filters apply to startTime.",
     arguments: [],
     inputSchema: {
       type: "object",
@@ -81,6 +87,7 @@ export const meetingTools = [
           description: "Optional parameter to get all meetings",
           default: true,
         },
+        ...listQueryJsonSchemaProperties,
       },
       required: [],
       additionalProperties: false,
@@ -218,6 +225,35 @@ export const meetingTools = [
       additionalProperties: false,
     },
   },
+  {
+    name: "get-upcoming-meetings-by-lead",
+    description:
+      "Get only the UPCOMING meetings for a specific lead. Returns { meetings, hasMeeting }. Use this to check whether a lead currently has a meeting booked.",
+    arguments: [],
+    inputSchema: {
+      type: "object",
+      properties: {
+        leadId: {
+          type: "string",
+          description: "ID of the lead to get upcoming meetings for",
+        },
+      },
+      required: ["leadId"],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: "set-all-overdue-no-show",
+    description:
+      "Bulk-mark every UPCOMING meeting whose start time is more than 1 day overdue as NO_SHOW (business-wide). Takes no parameters. For a custom window or to also cool leads, use update-overdue-no-show instead.",
+    arguments: [],
+    inputSchema: {
+      type: "object",
+      properties: {},
+      required: [],
+      additionalProperties: false,
+    },
+  },
 ];
 
 export async function handleCreateMeeting(request: CallToolRequest) {
@@ -288,17 +324,18 @@ export async function handleCreateMeeting(request: CallToolRequest) {
 
 export async function handleGetMeetings(request: CallToolRequest) {
   try {
-    const args = request.params.arguments as {
-      leadId?: string;
-      status?: string;
-    };
+    const args = (request.params.arguments ?? {}) as Record<string, unknown>;
 
-    const url = `${process.env.BASE_URL}${API_ENDPOINTS.MEETING.GET_MEETINGS}`;
-    const queryParams = new URLSearchParams();
-    if (args.leadId) queryParams.append("leadId", args.leadId);
-    if (args.status) queryParams.append("status", args.status);
+    const url = appendListQueryToUrl(
+      `${process.env.BASE_URL}${API_ENDPOINTS.MEETING.GET_MEETINGS}`,
+      args,
+      {
+        leadId: args.leadId as string | undefined,
+        status: args.status as string | undefined,
+      }
+    );
 
-    const response = await fetch(`${url}?${queryParams.toString()}`, {
+    const response = await fetch(url, {
       method: "GET",
       headers: {
         "Content-Type": "application/json",
@@ -322,7 +359,11 @@ export async function handleGetMeetings(request: CallToolRequest) {
       content: [
         {
           type: "text",
-          text: `Retrieved meetings: ${JSON.stringify(data)}`,
+          text: formatPaginatedListText(
+            "Meetings",
+            "meetings",
+            data as Record<string, unknown>
+          ),
         },
       ],
     };
@@ -682,6 +723,118 @@ export async function handleUpdateOverdueNoShow(request: CallToolRequest) {
         {
           type: "text",
           text: `Failed to execute update-overdue-no-show tool: ${errorMessage}`,
+        },
+      ],
+    };
+  }
+}
+
+export async function handleGetUpcomingMeetingsByLead(request: CallToolRequest) {
+  try {
+    const result = GetUpcomingMeetingsByLeadSchema.safeParse(
+      request.params.arguments
+    );
+    if (!result.success) {
+      const errorMessages = result.error.errors
+        .map((err) => `${err.path.join(".")}: ${err.message}`)
+        .join(", ");
+      return {
+        content: [
+          {
+            type: "text",
+            text: `Failed to get upcoming meetings: ${errorMessages}. Retry again with correct tool parameters and values.`,
+          },
+        ],
+      };
+    }
+
+    const url = `${process.env.BASE_URL}${API_ENDPOINTS.MEETING.GET_UPCOMING_BY_LEAD}/${result.data.leadId}/upcoming`;
+    const response = await fetch(url, {
+      method: "GET",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${getApiKey(request)}`,
+      },
+    });
+
+    if (!response.ok) {
+      return {
+        content: [
+          {
+            type: "text",
+            text: `Failed to get upcoming meetings for lead: ${response.statusText}`,
+          },
+        ],
+      };
+    }
+
+    const data = await response.json();
+    return {
+      content: [
+        {
+          type: "text",
+          text: `Upcoming meetings for lead: ${JSON.stringify(data)}`,
+        },
+      ],
+    };
+  } catch (error: unknown) {
+    const errorMessage =
+      error instanceof Error ? error.message : "Unknown error occurred";
+    return {
+      content: [
+        {
+          type: "text",
+          text: `Failed to execute get-upcoming-meetings-by-lead tool: ${errorMessage}`,
+        },
+      ],
+    };
+  }
+}
+
+export async function handleSetAllOverdueNoShow(request: CallToolRequest) {
+  try {
+    // No params. REST route is PATCH /meeting/{id}; the id segment is ignored
+    // server-side (setAllOverdueMeetingsNoShow is business-wide), so we pass a
+    // stable placeholder.
+    const url = `${process.env.BASE_URL}${API_ENDPOINTS.MEETING.SET_ALL_OVERDUE_NO_SHOW}/all`;
+    const response = await fetch(url, {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${getApiKey(request)}`,
+      },
+    });
+
+    if (!response.ok) {
+      return {
+        content: [
+          {
+            type: "text",
+            text: `Failed to set all overdue meetings as no-show: ${response.statusText}`,
+          },
+        ],
+      };
+    }
+
+    const data = await response.json();
+    return {
+      content: [
+        {
+          type: "text",
+          text: `Successfully set all overdue meetings as no-show: ${JSON.stringify(
+            data
+          )}`,
+        },
+      ],
+    };
+  } catch (error: unknown) {
+    const errorMessage =
+      error instanceof Error ? error.message : "Unknown error occurred";
+    return {
+      content: [
+        {
+          type: "text",
+          text: `Failed to execute set-all-overdue-no-show tool: ${errorMessage}`,
         },
       ],
     };

@@ -33,6 +33,8 @@ import {
   handleUpdateMeetingByLead,
   handleUpdateMeetingStatus,
   handleUpdateOverdueNoShow,
+  handleGetUpcomingMeetingsByLead,
+  handleSetAllOverdueNoShow,
 } from "../tools/meeting.js";
 import {
   noteTools,
@@ -62,7 +64,11 @@ import {
   handleFindCampaignLead,
   handleAddLeadToCampaign,
   handleGetCampaignLead,
+  handleGetCampaignLeads,
+  handleRemoveLeadFromCampaign,
   handleFindLeadToCall,
+  handleUpdateCampaignLead,
+  handleDeleteCampaign,
 } from "../tools/campaign.js";
 import {
   automationTools,
@@ -70,14 +76,50 @@ import {
   handleGetAutomation,
   handleCreateAutomation,
   handleUpdateAutomation,
+  handleTriggerAutomation,
+  handleStopAutomation,
+  handleGetLeadAutomationSessions,
 } from "../tools/automation.js";
+import {
+  pipelineTools,
+  handleGetPipelines,
+  handleGetPipeline,
+  handleCreatePipeline,
+  handleUpdatePipeline,
+  handleDeletePipeline,
+} from "../tools/pipeline.js";
+import {
+  stageTools,
+  handleGetStages,
+  handleGetStage,
+  handleCreateStage,
+  handleUpdateStage,
+  handleDeleteStage,
+} from "../tools/stage.js";
+import {
+  opportunityTools,
+  handleGetOpportunities,
+  handleGetOpportunity,
+  handleCreateOpportunity,
+  handleUpdateOpportunity,
+  handleDeleteOpportunity,
+} from "../tools/opportunity.js";
+import {
+  callTools,
+  handleGetCalls,
+  handleGetCall,
+  handleCreateCall,
+  handleUpdateCall,
+} from "../tools/call.js";
 import {
   agentTools,
   handleGetPrimaryAgents,
+  handleGetPrimaryAgent,
   handleCreatePrimaryAgent,
   handleUpdatePrimaryAgent,
   handleListIntegrations,
   handleListN8nWorkflows,
+  handleTestN8nWorkflow,
   handleCreateChannelAgent,
   handleGetChannelAgent,
   handleUpdateChannelAgent,
@@ -87,7 +129,16 @@ import {
   handleGetTestLead,
   handleTestChannelAgent,
   handleClearTestConversation,
+  handleGetConversation,
+  handleSearchConversations,
   handleGetConversationMessages,
+  handleApproveDraftMessage,
+  handleRejectDraftMessage,
+  handleSendMessage,
+  handleUpdateConversation,
+  handleCreateConversationMessage,
+  handleUpdateConversationMessage,
+  handleDeleteConversationMessage,
 } from "../tools/agent.js";
 
 export const primaryServer = new Server(
@@ -115,6 +166,10 @@ primaryServer.setRequestHandler(ListToolsRequestSchema, async () => {
       ...followUpTools,
       ...campaignTools,
       ...automationTools,
+      ...pipelineTools,
+      ...stageTools,
+      ...opportunityTools,
+      ...callTools,
       ...agentTools,
     ],
   };
@@ -161,6 +216,10 @@ primaryServer.setRequestHandler(CallToolRequestSchema, async (request) => {
       return handleUpdateMeetingStatus(request);
     case "update-overdue-no-show":
       return handleUpdateOverdueNoShow(request);
+    case "get-upcoming-meetings-by-lead":
+      return handleGetUpcomingMeetingsByLead(request);
+    case "set-all-overdue-no-show":
+      return handleSetAllOverdueNoShow(request);
     case "create-follow-up":
       return handleCreateFollowUp(request);
     case "get-follow-up":
@@ -189,8 +248,16 @@ primaryServer.setRequestHandler(CallToolRequestSchema, async (request) => {
       return handleAddLeadToCampaign(request);
     case "get-campaign-lead":
       return handleGetCampaignLead(request);
+    case "get-campaign-leads":
+      return handleGetCampaignLeads(request);
+    case "remove-lead-from-campaign":
+      return handleRemoveLeadFromCampaign(request);
     case "find-lead-to-call":
       return handleFindLeadToCall(request);
+    case "update-campaign-lead":
+      return handleUpdateCampaignLead(request);
+    case "delete-campaign":
+      return handleDeleteCampaign(request);
     case "get-automations":
       return handleGetAutomations(request);
     case "get-automation":
@@ -199,6 +266,50 @@ primaryServer.setRequestHandler(CallToolRequestSchema, async (request) => {
       return handleCreateAutomation(request);
     case "update-automation":
       return handleUpdateAutomation(request);
+    case "trigger-automation":
+      return handleTriggerAutomation(request);
+    case "stop-automation":
+      return handleStopAutomation(request);
+    case "get-lead-automation-sessions":
+      return handleGetLeadAutomationSessions(request);
+    case "get-pipelines":
+      return handleGetPipelines(request);
+    case "get-pipeline":
+      return handleGetPipeline(request);
+    case "create-pipeline":
+      return handleCreatePipeline(request);
+    case "update-pipeline":
+      return handleUpdatePipeline(request);
+    case "delete-pipeline":
+      return handleDeletePipeline(request);
+    case "get-stages":
+      return handleGetStages(request);
+    case "get-stage":
+      return handleGetStage(request);
+    case "create-stage":
+      return handleCreateStage(request);
+    case "update-stage":
+      return handleUpdateStage(request);
+    case "delete-stage":
+      return handleDeleteStage(request);
+    case "get-opportunities":
+      return handleGetOpportunities(request);
+    case "get-opportunity":
+      return handleGetOpportunity(request);
+    case "create-opportunity":
+      return handleCreateOpportunity(request);
+    case "update-opportunity":
+      return handleUpdateOpportunity(request);
+    case "delete-opportunity":
+      return handleDeleteOpportunity(request);
+    case "get-calls":
+      return handleGetCalls(request);
+    case "get-call":
+      return handleGetCall(request);
+    case "create-call":
+      return handleCreateCall(request);
+    case "update-call":
+      return handleUpdateCall(request);
     case "create-note":
       return handleCreateNote(request);
     case "get-note":
@@ -209,6 +320,8 @@ primaryServer.setRequestHandler(CallToolRequestSchema, async (request) => {
       return handleGetNoteById(request);
     case "get-primary-agents":
       return handleGetPrimaryAgents(request);
+    case "get-primary-agent":
+      return handleGetPrimaryAgent(request);
     case "create-primary-agent":
       return handleCreatePrimaryAgent(request);
     case "update-primary-agent":
@@ -217,6 +330,8 @@ primaryServer.setRequestHandler(CallToolRequestSchema, async (request) => {
       return handleListIntegrations(request);
     case "list-n8n-workflows":
       return handleListN8nWorkflows(request);
+    case "test-n8n-workflow":
+      return handleTestN8nWorkflow(request);
     case "create-channel-agent":
       return handleCreateChannelAgent(request);
     case "get-channel-agent":
@@ -235,8 +350,26 @@ primaryServer.setRequestHandler(CallToolRequestSchema, async (request) => {
       return handleTestChannelAgent(request);
     case "clear-test-conversation":
       return handleClearTestConversation(request);
+    case "get-conversation":
+      return handleGetConversation(request);
+    case "search-conversations":
+      return handleSearchConversations(request);
     case "get-conversation-messages":
       return handleGetConversationMessages(request);
+    case "approve-draft-message":
+      return handleApproveDraftMessage(request);
+    case "reject-draft-message":
+      return handleRejectDraftMessage(request);
+    case "send-message":
+      return handleSendMessage(request);
+    case "update-conversation":
+      return handleUpdateConversation(request);
+    case "create-conversation-message":
+      return handleCreateConversationMessage(request);
+    case "update-conversation-message":
+      return handleUpdateConversationMessage(request);
+    case "delete-conversation-message":
+      return handleDeleteConversationMessage(request);
     case "update-note":
       return handleUpdateNote(request);
     case "delete-note":

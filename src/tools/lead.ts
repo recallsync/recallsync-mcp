@@ -9,6 +9,11 @@ import {
   UpdateLeadSchema,
   UpdateLeadRequest,
 } from "../schema/tool.js";
+import { listQueryJsonSchemaProperties } from "../schema/list-query.js";
+import {
+  appendListQueryToUrl,
+  formatPaginatedListText,
+} from "../utils/list-query.util.js";
 
 export const leadTools = [
   {
@@ -130,12 +135,16 @@ export const leadTools = [
   {
     name: "get-leads",
     description:
-      "Get all leads in the system with optional filters for status, status type, and quality",
+      "Get paginated leads for the business. Default pageSize=10; use 50 or 100 when the user asks for more. Pass select for specific fields (e.g. id,name,email,status). Supports date filters on createdAt.",
     arguments: [],
     inputSchema: {
       type: "object",
 
       properties: {
+        id: {
+          type: "string",
+          description: "Optional lead id filter",
+        },
         status: {
           type: "string",
           description: "Optional parameter status to filter leads",
@@ -155,6 +164,7 @@ export const leadTools = [
           type: "boolean",
           description: "Optional parameter to get all leads",
         },
+        ...listQueryJsonSchemaProperties,
       },
       required: [],
       additionalProperties: false,
@@ -179,7 +189,8 @@ export const leadTools = [
   },
   {
     name: "update-lead",
-    description: "Update a lead by ID",
+    description:
+      "Update a lead by ID. Pass any fields to change (status, company, website, customData for automation {{vars}}, etc.).",
     arguments: [],
     inputSchema: {
       type: "object",
@@ -227,6 +238,20 @@ export const leadTools = [
         note: {
           type: "string",
           description: "Note about the lead by agency/agent",
+        },
+        company: {
+          type: "string",
+          description: "Company name of the lead",
+        },
+        website: {
+          type: "string",
+          description: "Company website URL",
+        },
+        customData: {
+          type: "object",
+          description:
+            'Key/value strings for automation {{var}} substitution (e.g. { "personalizationHighlight": "especially your fintech case studies" })',
+          additionalProperties: { type: "string" },
         },
       },
       required: ["id"],
@@ -409,7 +434,10 @@ export async function handleFindLead(request: CallToolRequest) {
 
 export async function handleGetLeads(request: CallToolRequest) {
   try {
-    const url = `${process.env.BASE_URL}/leads`;
+    const args = (request.params.arguments ?? {}) as Record<string, unknown>;
+    const url = appendListQueryToUrl(`${process.env.BASE_URL}/leads`, args, {
+      id: args.id as string | undefined,
+    });
 
     const response = await fetch(url, {
       method: "GET",
@@ -447,54 +475,27 @@ export async function handleGetLeads(request: CallToolRequest) {
     }
 
     const res = await response.json();
-    const data = res.leads;
 
-    // format the response in a more readable way
-    if (Array.isArray(data) && data.length > 0) {
-      const formattedLeads = data
-        .map((lead: any) => {
-          return `- ${lead.name} (ID: ${lead.id})${
-            lead.phone ? ` - Phone: ${lead.phone}` : ""
-          }${lead.email ? ` - Email: ${lead.email}` : ""}`;
-        })
-        .join("\n");
-
-      return {
-        content: [
-          {
-            type: "text",
-            text: `Found ${data.length} leads:\n${formattedLeads}`,
-          },
-        ],
-      };
-    } else if (Array.isArray(data) && data.length === 0) {
-      return {
-        content: [
-          {
-            type: "text",
-            text: "No leads found in the system.",
-          },
-        ],
-      };
-    } else {
-      return {
-        content: [
-          {
-            type: "text",
-            text: "Unexpected response format from the server.",
-          },
-        ],
-      };
-    }
-  } catch (error: unknown) {
-    console.error("Get All Leads Exception:", error);
     return {
       content: [
         {
           type: "text",
-          text: `An error occurred while getting the leads: ${
-            error instanceof Error ? error.message : "Unknown error"
-          }`,
+          text: formatPaginatedListText(
+            "Leads",
+            "leads",
+            res as Record<string, unknown>
+          ),
+        },
+      ],
+    };
+  } catch (error: unknown) {
+    const errorMessage =
+      error instanceof Error ? error.message : "Unknown error occurred";
+    return {
+      content: [
+        {
+          type: "text",
+          text: `Failed to get leads: ${errorMessage}`,
         },
       ],
     };
@@ -567,9 +568,8 @@ export async function handleUpdateLead(request: CallToolRequest) {
       };
     }
 
-    const { id, status } = result.data;
+    const { id, ...updateFields } = result.data;
     const url = `${process.env.BASE_URL}${API_ENDPOINTS.LEAD.CREATE_LEAD}/lead/${id}`;
-    const body = { status };
 
     const response = await fetch(url, {
       method: "PUT",
@@ -577,7 +577,7 @@ export async function handleUpdateLead(request: CallToolRequest) {
         "Content-Type": "application/json",
         Authorization: `Bearer ${getApiKey(request)}`,
       },
-      body: JSON.stringify(body),
+      body: JSON.stringify(updateFields),
     });
 
     if (!response.ok) {
