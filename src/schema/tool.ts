@@ -995,3 +995,75 @@ export const UpdateCallSchema = z.object({
   campaignId: z.string().optional(),
 });
 export type UpdateCallRequest = z.infer<typeof UpdateCallSchema>;
+
+// Custom field (definition) schemas
+export const GetCustomFieldsSchema = z.object({}).merge(ListQuerySchema);
+export type GetCustomFieldsRequest = z.infer<typeof GetCustomFieldsSchema>;
+
+export const GetCustomFieldByIdSchema = z.object({
+  id: z.string().min(1, "Custom field ID is required"),
+});
+export type GetCustomFieldByIdRequest = z.infer<
+  typeof GetCustomFieldByIdSchema
+>;
+
+export const CreateCustomFieldSchema = z.object({
+  label: z.string().min(1, "Label is required"),
+  key: z.string().min(1, "Key is required"),
+  type: z.string().optional(),
+  options: z.array(z.string()).optional(),
+});
+export type CreateCustomFieldRequest = z.infer<typeof CreateCustomFieldSchema>;
+
+export const UpdateCustomFieldSchema = z.object({
+  id: z.string().min(1, "Custom field ID is required"),
+  label: z.string().optional(),
+  key: z.string().optional(),
+  type: z.string().optional(),
+  options: z.array(z.string()).optional(),
+});
+export type UpdateCustomFieldRequest = z.infer<typeof UpdateCustomFieldSchema>;
+
+export const DeleteCustomFieldSchema = z.object({
+  id: z.string().min(1, "Custom field ID is required"),
+});
+export type DeleteCustomFieldRequest = z.infer<typeof DeleteCustomFieldSchema>;
+
+// Custom field value (per lead) schemas
+export const GetLeadCustomFieldValuesSchema = z.object({
+  leadId: z.string().min(1, "Lead ID is required"),
+});
+export type GetLeadCustomFieldValuesRequest = z.infer<
+  typeof GetLeadCustomFieldValuesSchema
+>;
+
+export const UpsertCustomFieldValueSchema = z.object({
+  leadId: z.string().min(1, "Lead ID is required"),
+  fieldDefId: z.string().min(1, "Custom field definition ID is required"),
+  value: z.string().nullable().optional(),
+});
+export type UpsertCustomFieldValueRequest = z.infer<
+  typeof UpsertCustomFieldValueSchema
+>;
+
+export const BulkUpsertCustomFieldValuesSchema = z.object({
+  leadId: z.string().min(1, "Lead ID is required"),
+  values: z
+    .array(
+      z.object({
+        fieldDefId: z.string().min(1, "Custom field definition ID is required"),
+        value: z.string().nullable().optional(),
+      })
+    )
+    .min(1, "At least one value is required"),
+});
+export type BulkUpsertCustomFieldValuesRequest = z.infer<
+  typeof BulkUpsertCustomFieldValuesSchema
+>;
+
+export const DeleteCustomFieldValueSchema = z.object({
+  id: z.string().min(1, "Custom field value ID is required"),
+});
+export type DeleteCustomFieldValueRequest = z.infer<
+  typeof DeleteCustomFieldValueSchema
+>;

@@ -1,6 +1,6 @@
 import { CallToolRequest } from "@modelcontextprotocol/sdk/types.js";
 import { API_ENDPOINTS } from "../constants/tool.js";
-import { getApiKey } from "../utils/auth.util.js";
+import { getApiKey, getBaseUrl } from "../utils/auth.util.js";
 import {
   GetStagesSchema,
   GetStageByIdSchema,
@@ -110,7 +110,7 @@ export async function handleGetStages(request: CallToolRequest) {
 
     const { pipelineId, ...listArgs } = result.data;
     const url = appendListQueryToUrl(
-      `${process.env.BASE_URL}${API_ENDPOINTS.STAGE.GET_STAGES}`,
+      `${getBaseUrl(request)}${API_ENDPOINTS.STAGE.GET_STAGES}`,
       listArgs,
       { pipelineId }
     );
@@ -158,7 +158,7 @@ export async function handleGetStage(request: CallToolRequest) {
       };
     }
 
-    const url = `${process.env.BASE_URL}${API_ENDPOINTS.STAGE.GET_STAGE_BY_ID}/${result.data.id}`;
+    const url = `${getBaseUrl(request)}${API_ENDPOINTS.STAGE.GET_STAGE_BY_ID}/${result.data.id}`;
     const response = await fetch(url, {
       method: "GET",
       headers: {
@@ -198,7 +198,7 @@ export async function handleCreateStage(request: CallToolRequest) {
       };
     }
 
-    const url = `${process.env.BASE_URL}${API_ENDPOINTS.STAGE.CREATE_STAGE}`;
+    const url = `${getBaseUrl(request)}${API_ENDPOINTS.STAGE.CREATE_STAGE}`;
     const response = await fetch(url, {
       method: "POST",
       headers: {
@@ -240,7 +240,7 @@ export async function handleUpdateStage(request: CallToolRequest) {
     }
 
     const { id, name } = result.data;
-    const url = `${process.env.BASE_URL}${API_ENDPOINTS.STAGE.UPDATE_STAGE}/${id}`;
+    const url = `${getBaseUrl(request)}${API_ENDPOINTS.STAGE.UPDATE_STAGE}/${id}`;
     const response = await fetch(url, {
       method: "PUT",
       headers: {
@@ -281,7 +281,7 @@ export async function handleDeleteStage(request: CallToolRequest) {
       };
     }
 
-    const url = `${process.env.BASE_URL}${API_ENDPOINTS.STAGE.DELETE_STAGE}/${result.data.id}`;
+    const url = `${getBaseUrl(request)}${API_ENDPOINTS.STAGE.DELETE_STAGE}/${result.data.id}`;
     const response = await fetch(url, {
       method: "DELETE",
       headers: {

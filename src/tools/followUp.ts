@@ -1,6 +1,6 @@
 import { CallToolRequest } from "@modelcontextprotocol/sdk/types.js";
 import { API_ENDPOINTS } from "../constants/tool.js";
-import { getApiKey } from "../utils/auth.util.js";
+import { getApiKey, getBaseUrl } from "../utils/auth.util.js";
 import {
   CreateFollowUpSchema,
   CreateFollowUpRequest,
@@ -228,7 +228,7 @@ export async function handleCreateFollowUp(request: CallToolRequest) {
     };
 
     const response = await fetch(
-      `${process.env.BASE_URL}${API_ENDPOINTS.FOLLOW_UP.CREATE_FOLLOW_UP}`,
+      `${getBaseUrl(request)}${API_ENDPOINTS.FOLLOW_UP.CREATE_FOLLOW_UP}`,
       {
         method: "POST",
         headers: {
@@ -307,7 +307,7 @@ export async function handleGetFollowUp(request: CallToolRequest) {
     const { id } = result.data;
 
     const response = await fetch(
-      `${process.env.BASE_URL}${API_ENDPOINTS.FOLLOW_UP.GET_FOLLOW_UP}/${id}`,
+      `${getBaseUrl(request)}${API_ENDPOINTS.FOLLOW_UP.GET_FOLLOW_UP}/${id}`,
       {
         method: "GET",
         headers: {
@@ -381,7 +381,7 @@ export async function handleGetAllFollowUps(request: CallToolRequest) {
     const { type, status, priority } = result.data;
 
     const finalUrl = appendListQueryToUrl(
-      `${process.env.BASE_URL}${API_ENDPOINTS.FOLLOW_UP.GET_ALL_FOLLOW_UPS}`,
+      `${getBaseUrl(request)}${API_ENDPOINTS.FOLLOW_UP.GET_ALL_FOLLOW_UPS}`,
       result.data,
       { type, status, priority }
     );
@@ -476,7 +476,7 @@ export async function handleUpdateFollowUp(request: CallToolRequest) {
     if (notes) updateData.notes = notes;
 
     const response = await fetch(
-      `${process.env.BASE_URL}${API_ENDPOINTS.FOLLOW_UP.UPDATE_FOLLOW_UP}/${id}`,
+      `${getBaseUrl(request)}${API_ENDPOINTS.FOLLOW_UP.UPDATE_FOLLOW_UP}/${id}`,
       {
         method: "PUT",
         headers: {
@@ -561,7 +561,7 @@ export async function handleDeleteFollowUp(request: CallToolRequest) {
 
     const { id } = result.data;
 
-    const url = `${process.env.BASE_URL}${API_ENDPOINTS.FOLLOW_UP.DELETE_FOLLOW_UP}/${id}`;
+    const url = `${getBaseUrl(request)}${API_ENDPOINTS.FOLLOW_UP.DELETE_FOLLOW_UP}/${id}`;
 
     const response = await fetch(url, {
       method: "DELETE",

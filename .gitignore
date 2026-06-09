@@ -11,3 +11,5 @@ error.log
 combined.log
 generated 
 generated/
+
+.cursor/mcp.json

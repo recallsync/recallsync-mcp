@@ -1,6 +1,6 @@
 import { CallToolRequest } from "@modelcontextprotocol/sdk/types.js";
 import { API_ENDPOINTS } from "../constants/tool.js";
-import { getApiKey } from "../utils/auth.util.js";
+import { getApiKey, getBaseUrl } from "../utils/auth.util.js";
 import {
   GetCallsSchema,
   GetCallByIdSchema,
@@ -139,7 +139,7 @@ export async function handleGetCalls(request: CallToolRequest) {
 
     const { leadId, campaignId, ...listArgs } = result.data;
     const url = appendListQueryToUrl(
-      `${process.env.BASE_URL}${API_ENDPOINTS.CALL.GET_CALLS}`,
+      `${getBaseUrl(request)}${API_ENDPOINTS.CALL.GET_CALLS}`,
       listArgs,
       { leadId, campaignId }
     );
@@ -187,7 +187,7 @@ export async function handleGetCall(request: CallToolRequest) {
       };
     }
 
-    const url = `${process.env.BASE_URL}${API_ENDPOINTS.CALL.GET_CALL_BY_ID}/${result.data.id}`;
+    const url = `${getBaseUrl(request)}${API_ENDPOINTS.CALL.GET_CALL_BY_ID}/${result.data.id}`;
     const response = await fetch(url, {
       method: "GET",
       headers: {
@@ -227,7 +227,7 @@ export async function handleCreateCall(request: CallToolRequest) {
       };
     }
 
-    const url = `${process.env.BASE_URL}${API_ENDPOINTS.CALL.CREATE_CALL}`;
+    const url = `${getBaseUrl(request)}${API_ENDPOINTS.CALL.CREATE_CALL}`;
     const response = await fetch(url, {
       method: "POST",
       headers: {
@@ -269,7 +269,7 @@ export async function handleUpdateCall(request: CallToolRequest) {
     }
 
     const { id, ...rest } = result.data;
-    const url = `${process.env.BASE_URL}${API_ENDPOINTS.CALL.UPDATE_CALL}/${id}`;
+    const url = `${getBaseUrl(request)}${API_ENDPOINTS.CALL.UPDATE_CALL}/${id}`;
     const response = await fetch(url, {
       method: "PUT",
       headers: {

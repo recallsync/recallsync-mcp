@@ -1,6 +1,6 @@
 import { CallToolRequest } from "@modelcontextprotocol/sdk/types.js";
 import { API_ENDPOINTS } from "../constants/tool.js";
-import { getApiKey } from "../utils/auth.util.js";
+import { getApiKey, getBaseUrl } from "../utils/auth.util.js";
 import {
   CreateMeetingSchema,
   CreateMeetingRequest,
@@ -278,7 +278,7 @@ export async function handleCreateMeeting(request: CallToolRequest) {
       };
     }
 
-    const url = `${process.env.BASE_URL}${API_ENDPOINTS.MEETING.CREATE_MEETING}`;
+    const url = `${getBaseUrl(request)}${API_ENDPOINTS.MEETING.CREATE_MEETING}`;
     const response = await fetch(url, {
       method: "POST",
       headers: {
@@ -327,7 +327,7 @@ export async function handleGetMeetings(request: CallToolRequest) {
     const args = (request.params.arguments ?? {}) as Record<string, unknown>;
 
     const url = appendListQueryToUrl(
-      `${process.env.BASE_URL}${API_ENDPOINTS.MEETING.GET_MEETINGS}`,
+      `${getBaseUrl(request)}${API_ENDPOINTS.MEETING.GET_MEETINGS}`,
       args,
       {
         leadId: args.leadId as string | undefined,
@@ -399,7 +399,7 @@ export async function handleGetMeetingsByLead(request: CallToolRequest) {
       };
     }
 
-    const url = `${process.env.BASE_URL}${API_ENDPOINTS.MEETING.GET_MEETING_BY_LEAD}/${args.leadId}`;
+    const url = `${getBaseUrl(request)}${API_ENDPOINTS.MEETING.GET_MEETING_BY_LEAD}/${args.leadId}`;
     const queryParams = new URLSearchParams();
     if (args.status) queryParams.append("status", args.status);
 
@@ -468,7 +468,7 @@ export async function handleUpdateMeeting(request: CallToolRequest) {
     }
 
     const { meetingUID, ...updateData } = result.data;
-    const url = `${process.env.BASE_URL}${API_ENDPOINTS.MEETING.UPDATE_MEETING}/${meetingUID}`;
+    const url = `${getBaseUrl(request)}${API_ENDPOINTS.MEETING.UPDATE_MEETING}/${meetingUID}`;
 
     const response = await fetch(url, {
       method: "PUT",
@@ -537,7 +537,7 @@ export async function handleUpdateMeetingByLead(request: CallToolRequest) {
     }
 
     const { leadId, status } = result.data;
-    const url = `${process.env.BASE_URL}${API_ENDPOINTS.MEETING.UPDATE_MEETING_BY_LEAD}/${leadId}`;
+    const url = `${getBaseUrl(request)}${API_ENDPOINTS.MEETING.UPDATE_MEETING_BY_LEAD}/${leadId}`;
 
     const response = await fetch(url, {
       method: "PUT",
@@ -606,7 +606,7 @@ export async function handleUpdateMeetingStatus(request: CallToolRequest) {
     }
 
     const { meetingId, status } = result.data;
-    const url = `${process.env.BASE_URL}${API_ENDPOINTS.MEETING.UPDATE_MEETING_STATUS}/${meetingId}`;
+    const url = `${getBaseUrl(request)}${API_ENDPOINTS.MEETING.UPDATE_MEETING_STATUS}/${meetingId}`;
 
     const response = await fetch(`${url}?status=${status}`, {
       method: "PATCH",
@@ -673,7 +673,7 @@ export async function handleUpdateOverdueNoShow(request: CallToolRequest) {
       };
     }
 
-    const url = `${process.env.BASE_URL}${API_ENDPOINTS.MEETING.UPDATE_OVERDUE_NO_SHOW}`;
+    const url = `${getBaseUrl(request)}${API_ENDPOINTS.MEETING.UPDATE_OVERDUE_NO_SHOW}`;
     const queryParams = new URLSearchParams();
     if (result.data.unit) queryParams.append("unit", result.data.unit);
     if (result.data.amount)
@@ -748,7 +748,7 @@ export async function handleGetUpcomingMeetingsByLead(request: CallToolRequest) 
       };
     }
 
-    const url = `${process.env.BASE_URL}${API_ENDPOINTS.MEETING.GET_UPCOMING_BY_LEAD}/${result.data.leadId}/upcoming`;
+    const url = `${getBaseUrl(request)}${API_ENDPOINTS.MEETING.GET_UPCOMING_BY_LEAD}/${result.data.leadId}/upcoming`;
     const response = await fetch(url, {
       method: "GET",
       headers: {
@@ -796,7 +796,7 @@ export async function handleSetAllOverdueNoShow(request: CallToolRequest) {
     // No params. REST route is PATCH /meeting/{id}; the id segment is ignored
     // server-side (setAllOverdueMeetingsNoShow is business-wide), so we pass a
     // stable placeholder.
-    const url = `${process.env.BASE_URL}${API_ENDPOINTS.MEETING.SET_ALL_OVERDUE_NO_SHOW}/all`;
+    const url = `${getBaseUrl(request)}${API_ENDPOINTS.MEETING.SET_ALL_OVERDUE_NO_SHOW}/all`;
     const response = await fetch(url, {
       method: "PATCH",
       headers: {

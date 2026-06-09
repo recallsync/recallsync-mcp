@@ -1,6 +1,6 @@
 import { CallToolRequest } from "@modelcontextprotocol/sdk/types.js";
 import { API_ENDPOINTS } from "../constants/tool.js";
-import { getApiKey } from "../utils/auth.util.js";
+import { getApiKey, getBaseUrl } from "../utils/auth.util.js";
 import {
   CreatePrimaryAgentSchema,
   UpdatePrimaryAgentSchema,
@@ -771,7 +771,7 @@ export const agentTools = [
 
 export async function handleGetPrimaryAgents(request: CallToolRequest) {
   try {
-    const url = `${process.env.BASE_URL}${API_ENDPOINTS.AGENT.GET_PRIMARY_AGENTS}`;
+    const url = `${getBaseUrl(request)}${API_ENDPOINTS.AGENT.GET_PRIMARY_AGENTS}`;
 
     const response = await fetch(url, {
       method: "GET",
@@ -832,7 +832,7 @@ export async function handleGetPrimaryAgent(request: CallToolRequest) {
       };
     }
 
-    const url = `${process.env.BASE_URL}${API_ENDPOINTS.AGENT.GET_PRIMARY_AGENT_BY_ID}/${result.data.id}`;
+    const url = `${getBaseUrl(request)}${API_ENDPOINTS.AGENT.GET_PRIMARY_AGENT_BY_ID}/${result.data.id}`;
     const response = await fetch(url, {
       method: "GET",
       headers: {
@@ -889,7 +889,7 @@ export async function handleCreatePrimaryAgent(request: CallToolRequest) {
       };
     }
 
-    const url = `${process.env.BASE_URL}${API_ENDPOINTS.AGENT.CREATE_PRIMARY_AGENT}`;
+    const url = `${getBaseUrl(request)}${API_ENDPOINTS.AGENT.CREATE_PRIMARY_AGENT}`;
     const response = await fetch(url, {
       method: "POST",
       headers: {
@@ -951,7 +951,7 @@ export async function handleUpdatePrimaryAgent(request: CallToolRequest) {
     }
 
     const { id, ...updateFields } = result.data;
-    const url = `${process.env.BASE_URL}${API_ENDPOINTS.AGENT.UPDATE_PRIMARY_AGENT}/${id}`;
+    const url = `${getBaseUrl(request)}${API_ENDPOINTS.AGENT.UPDATE_PRIMARY_AGENT}/${id}`;
     const response = await fetch(url, {
       method: "PUT",
       headers: {
@@ -997,7 +997,7 @@ export async function handleUpdatePrimaryAgent(request: CallToolRequest) {
 
 export async function handleListIntegrations(request: CallToolRequest) {
   try {
-    const url = `${process.env.BASE_URL}${API_ENDPOINTS.INTEGRATION.LIST_PROVIDERS}`;
+    const url = `${getBaseUrl(request)}${API_ENDPOINTS.INTEGRATION.LIST_PROVIDERS}`;
 
     const response = await fetch(url, {
       method: "GET",
@@ -1043,7 +1043,7 @@ export async function handleListIntegrations(request: CallToolRequest) {
 
 export async function handleListN8nWorkflows(request: CallToolRequest) {
   try {
-    const url = `${process.env.BASE_URL}${API_ENDPOINTS.INTEGRATION.LIST_N8N_WORKFLOWS}`;
+    const url = `${getBaseUrl(request)}${API_ENDPOINTS.INTEGRATION.LIST_N8N_WORKFLOWS}`;
 
     const response = await fetch(url, {
       method: "GET",
@@ -1111,7 +1111,7 @@ export async function handleTestN8nWorkflow(request: CallToolRequest) {
       };
     }
 
-    const url = `${process.env.BASE_URL}${API_ENDPOINTS.INTEGRATION.TEST_N8N_WORKFLOW}`;
+    const url = `${getBaseUrl(request)}${API_ENDPOINTS.INTEGRATION.TEST_N8N_WORKFLOW}`;
     const response = await fetch(url, {
       method: "POST",
       headers: {
@@ -1180,7 +1180,7 @@ export async function handleCreateChannelAgent(request: CallToolRequest) {
       };
     }
 
-    const url = `${process.env.BASE_URL}${API_ENDPOINTS.CHANNEL_AGENT.CREATE_CHANNEL_AGENT}`;
+    const url = `${getBaseUrl(request)}${API_ENDPOINTS.CHANNEL_AGENT.CREATE_CHANNEL_AGENT}`;
     const response = await fetch(url, {
       method: "POST",
       headers: {
@@ -1251,7 +1251,7 @@ export async function handleUpdateChannelAgent(request: CallToolRequest) {
     }
 
     const { id, ...updateFields } = result.data;
-    const url = `${process.env.BASE_URL}${API_ENDPOINTS.CHANNEL_AGENT.UPDATE_CHANNEL_AGENT}/${id}`;
+    const url = `${getBaseUrl(request)}${API_ENDPOINTS.CHANNEL_AGENT.UPDATE_CHANNEL_AGENT}/${id}`;
     const response = await fetch(url, {
       method: "PUT",
       headers: {
@@ -1321,7 +1321,7 @@ export async function handleDeleteChannelAgent(request: CallToolRequest) {
     }
 
     const { id } = result.data;
-    const url = `${process.env.BASE_URL}${API_ENDPOINTS.CHANNEL_AGENT.DELETE_CHANNEL_AGENT}/${id}`;
+    const url = `${getBaseUrl(request)}${API_ENDPOINTS.CHANNEL_AGENT.DELETE_CHANNEL_AGENT}/${id}`;
     const response = await fetch(url, {
       method: "DELETE",
       headers: {
@@ -1392,7 +1392,7 @@ export async function handleSetChannelAgentTools(request: CallToolRequest) {
     }
 
     const { id, tools } = result.data;
-    const url = `${process.env.BASE_URL}${API_ENDPOINTS.CHANNEL_AGENT.SET_CHANNEL_AGENT_TOOLS}/${id}/tools`;
+    const url = `${getBaseUrl(request)}${API_ENDPOINTS.CHANNEL_AGENT.SET_CHANNEL_AGENT_TOOLS}/${id}/tools`;
     const response = await fetch(url, {
       method: "PUT",
       headers: {
@@ -1462,7 +1462,7 @@ export async function handleGetChannelAgent(request: CallToolRequest) {
     }
 
     const { id } = result.data;
-    const url = `${process.env.BASE_URL}${API_ENDPOINTS.CHANNEL_AGENT.GET_CHANNEL_AGENT}/${id}`;
+    const url = `${getBaseUrl(request)}${API_ENDPOINTS.CHANNEL_AGENT.GET_CHANNEL_AGENT}/${id}`;
     const response = await fetch(url, {
       method: "GET",
       headers: {
@@ -1533,7 +1533,7 @@ export async function handleSetChannelAgentFlowDraft(request: CallToolRequest) {
     }
 
     const { id, flow, publish } = result.data;
-    const url = `${process.env.BASE_URL}${API_ENDPOINTS.CHANNEL_AGENT.SET_CHANNEL_AGENT_FLOW_DRAFT}/${id}/flow-draft`;
+    const url = `${getBaseUrl(request)}${API_ENDPOINTS.CHANNEL_AGENT.SET_CHANNEL_AGENT_FLOW_DRAFT}/${id}/flow-draft`;
     const response = await fetch(url, {
       method: "PUT",
       headers: {
@@ -1589,7 +1589,7 @@ export async function handleSetChannelAgentFlowDraft(request: CallToolRequest) {
 
 export async function handleGetTestLead(request: CallToolRequest) {
   try {
-    const url = `${process.env.BASE_URL}${API_ENDPOINTS.CHANNEL_AGENT.GET_TEST_LEAD}`;
+    const url = `${getBaseUrl(request)}${API_ENDPOINTS.CHANNEL_AGENT.GET_TEST_LEAD}`;
 
     const response = await fetch(url, {
       method: "GET",
@@ -1650,7 +1650,7 @@ export async function handleTestChannelAgent(request: CallToolRequest) {
       };
     }
 
-    const url = `${process.env.BASE_URL}${API_ENDPOINTS.CHANNEL_AGENT.TEST_CHANNEL_AGENT}`;
+    const url = `${getBaseUrl(request)}${API_ENDPOINTS.CHANNEL_AGENT.TEST_CHANNEL_AGENT}`;
     const response = await fetch(url, {
       method: "POST",
       headers: {
@@ -1721,7 +1721,7 @@ export async function handleClearTestConversation(request: CallToolRequest) {
       };
     }
 
-    const url = `${process.env.BASE_URL}${API_ENDPOINTS.CHANNEL_AGENT.CLEAR_TEST_CONVERSATION}`;
+    const url = `${getBaseUrl(request)}${API_ENDPOINTS.CHANNEL_AGENT.CLEAR_TEST_CONVERSATION}`;
     const response = await fetch(url, {
       method: "POST",
       headers: {
@@ -1797,7 +1797,7 @@ export async function handleGetConversation(request: CallToolRequest) {
     }
     if (result.data.channel) queryParams.append("agent_channel", result.data.channel);
 
-    const url = `${process.env.BASE_URL}${
+    const url = `${getBaseUrl(request)}${
       API_ENDPOINTS.CONVERSATION.GET_CONVERSATION
     }?${queryParams.toString()}`;
     const response = await fetch(url, {
@@ -1866,7 +1866,7 @@ export async function handleSearchConversations(request: CallToolRequest) {
     }
 
     const qs = queryParams.toString();
-    const url = `${process.env.BASE_URL}${
+    const url = `${getBaseUrl(request)}${
       API_ENDPOINTS.CONVERSATION.SEARCH_CONVERSATIONS
     }${qs ? `?${qs}` : ""}`;
     const response = await fetch(url, {
@@ -1931,7 +1931,7 @@ export async function handleGetConversationMessages(request: CallToolRequest) {
     }
 
     const url = appendListQueryToUrl(
-      `${process.env.BASE_URL}${API_ENDPOINTS.CONVERSATION.GET_MESSAGES(
+      `${getBaseUrl(request)}${API_ENDPOINTS.CONVERSATION.GET_MESSAGES(
         result.data.conversationId
       )}`,
       result.data,
@@ -2005,7 +2005,7 @@ export async function handleApproveDraftMessage(request: CallToolRequest) {
     }
 
     const { messageId, ...body } = result.data;
-    const url = `${process.env.BASE_URL}${API_ENDPOINTS.CONVERSATION.APPROVE_DRAFT_MESSAGE(
+    const url = `${getBaseUrl(request)}${API_ENDPOINTS.CONVERSATION.APPROVE_DRAFT_MESSAGE(
       messageId
     )}`;
     const response = await fetch(url, {
@@ -2076,7 +2076,7 @@ export async function handleRejectDraftMessage(request: CallToolRequest) {
       };
     }
 
-    const url = `${process.env.BASE_URL}${API_ENDPOINTS.CONVERSATION.REJECT_DRAFT_MESSAGE(
+    const url = `${getBaseUrl(request)}${API_ENDPOINTS.CONVERSATION.REJECT_DRAFT_MESSAGE(
       result.data.messageId
     )}`;
     const response = await fetch(url, {
@@ -2147,7 +2147,7 @@ export async function handleSendMessage(request: CallToolRequest) {
     }
 
     const { conversationId, ...body } = result.data;
-    const url = `${process.env.BASE_URL}${API_ENDPOINTS.CONVERSATION.SEND_MESSAGE(
+    const url = `${getBaseUrl(request)}${API_ENDPOINTS.CONVERSATION.SEND_MESSAGE(
       conversationId
     )}`;
     const response = await fetch(url, {
@@ -2213,7 +2213,7 @@ export async function handleUpdateConversation(request: CallToolRequest) {
     }
 
     const { conversationId, ...body } = result.data;
-    const url = `${process.env.BASE_URL}${API_ENDPOINTS.CONVERSATION.UPDATE_CONVERSATION(
+    const url = `${getBaseUrl(request)}${API_ENDPOINTS.CONVERSATION.UPDATE_CONVERSATION(
       conversationId
     )}`;
     const response = await fetch(url, {
@@ -2281,7 +2281,7 @@ export async function handleCreateConversationMessage(request: CallToolRequest) 
     }
 
     const { conversationId, ...body } = result.data;
-    const url = `${process.env.BASE_URL}${API_ENDPOINTS.CONVERSATION.CREATE_MESSAGE(
+    const url = `${getBaseUrl(request)}${API_ENDPOINTS.CONVERSATION.CREATE_MESSAGE(
       conversationId
     )}`;
     const response = await fetch(url, {
@@ -2355,7 +2355,7 @@ export async function handleUpdateConversationMessage(request: CallToolRequest) 
     }
 
     const { conversationId, id, ...body } = result.data;
-    const url = `${process.env.BASE_URL}${API_ENDPOINTS.CONVERSATION.UPDATE_MESSAGE(
+    const url = `${getBaseUrl(request)}${API_ENDPOINTS.CONVERSATION.UPDATE_MESSAGE(
       conversationId,
       id
     )}`;
@@ -2430,7 +2430,7 @@ export async function handleDeleteConversationMessage(request: CallToolRequest) 
     }
 
     const { conversationId, id } = result.data;
-    const url = `${process.env.BASE_URL}${API_ENDPOINTS.CONVERSATION.DELETE_MESSAGE(
+    const url = `${getBaseUrl(request)}${API_ENDPOINTS.CONVERSATION.DELETE_MESSAGE(
       conversationId,
       id
     )}`;

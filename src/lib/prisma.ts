@@ -1,38 +1,82 @@
+import { AsyncLocalStorage } from "node:async_hooks";
 import { PrismaPlanetScale } from "@prisma/adapter-planetscale";
 import { PrismaClient } from "../generated/client/index.js";
 
 const globalForPrisma = globalThis as unknown as {
-  prisma?: PrismaClient;
+  primaryPrisma?: PrismaClient;
 };
 
-// Prisma 7 uses the "client" engine, which requires a driver adapter instead of
-// the legacy `datasources` option.
-const adapter = new PrismaPlanetScale({ url: process.env.DATABASE_URL });
+const tenantPrismaStore = new AsyncLocalStorage<PrismaClient>();
+const tenantClients: Record<string, PrismaClient> = {};
 
-export const prisma =
-  globalForPrisma.prisma ??
-  new PrismaClient({
-    adapter,
-    transactionOptions: {
-      maxWait: 15000, // 15 seconds
-      timeout: 10000, // 10 seconds
-    },
-  });
+const defaultTransactionOptions = {
+  maxWait: 15000,
+  timeout: 10000,
+};
 
-// Add connection error handling - don't block startup
+/** Primary (registry) DB — Config / domain lookups. */
+export function getPrimaryPrisma(): PrismaClient {
+  if (!globalForPrisma.primaryPrisma) {
+    const adapter = new PrismaPlanetScale({ url: process.env.DATABASE_URL });
+    globalForPrisma.primaryPrisma = new PrismaClient({
+      adapter,
+      transactionOptions: defaultTransactionOptions,
+    });
+  }
+  return globalForPrisma.primaryPrisma;
+}
+
+/** Cached tenant Prisma client for a specific database URL. */
+export function getPrismaClientForUrl(databaseUrl: string): PrismaClient {
+  if (!tenantClients[databaseUrl]) {
+    const adapter = new PrismaPlanetScale({ url: databaseUrl });
+    tenantClients[databaseUrl] = new PrismaClient({
+      adapter,
+      transactionOptions: defaultTransactionOptions,
+    });
+  }
+  return tenantClients[databaseUrl];
+}
+
+/** Run GHL/CAL handlers against the resolved tenant Prisma client. */
+export function runWithTenantPrisma<T>(
+  client: PrismaClient,
+  fn: () => T | Promise<T>
+): T | Promise<T> {
+  return tenantPrismaStore.run(client, fn);
+}
+
+function getActivePrisma(): PrismaClient {
+  return tenantPrismaStore.getStore() ?? getPrimaryPrisma();
+}
+
+/**
+ * Request-scoped Prisma for GHL/CAL.
+ * Defaults to primary DB outside a tenant context (e.g. startup).
+ */
+export const prisma: PrismaClient = new Proxy({} as PrismaClient, {
+  get(_target, prop) {
+    const client = getActivePrisma();
+    const value = client[prop as keyof PrismaClient];
+    if (typeof value === "function") {
+      return (value as (...args: unknown[]) => unknown).bind(client);
+    }
+    return value;
+  },
+});
+
 setTimeout(() => {
-  prisma
+  getPrimaryPrisma()
     .$connect()
     .then(() => {
-      console.log("✅ Prisma connected to database");
+      console.log("✅ Prisma connected to primary database");
     })
     .catch((error) => {
       console.error("❌ Prisma connection failed:", error);
       console.log("⚠️  Server will continue without database connection");
-      // Don't throw - let the app continue without database if needed
     });
-}, 1000); // Delay connection attempt by 1 second
+}, 1000);
 
 if (process.env.NODE_ENV !== "production") {
-  globalForPrisma.prisma = prisma;
+  globalForPrisma.primaryPrisma = getPrimaryPrisma();
 }

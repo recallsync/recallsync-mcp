@@ -11,8 +11,72 @@ import { primaryServer } from "./src/servers/primary.server.js";
 import { ghlServer } from "./src/servers/ghl.server.js";
 import { calServer } from "./src/servers/cal.server.js";
 import { isInitializeRequest } from "@modelcontextprotocol/sdk/types.js";
+import {
+  resolveTenantPrisma,
+  TenantAuthError,
+} from "./src/lib/resolve-tenant-prisma.js";
+import { runWithTenantPrisma } from "./src/lib/prisma.js";
 
 dotenv.config();
+
+const HOST_DOMAIN_HEADER = "host_domain";
+
+function getHostDomain(req: Request): string | undefined {
+  const raw = req.headers[HOST_DOMAIN_HEADER];
+  return typeof raw === "string" ? raw.trim() : undefined;
+}
+
+function unauthorizedJson(res: Response, message: string) {
+  res.status(401).json({
+    jsonrpc: "2.0",
+    error: {
+      code: -32000,
+      message,
+    },
+    id: null,
+  });
+}
+
+function isToolsCall(req: Request): boolean {
+  return Boolean(
+    req.body && (req.body as { method?: string }).method === "tools/call"
+  );
+}
+
+/** Resolve tenant DB from host_domain + api_key for GHL/CAL tool calls. */
+async function runGhlCalWithTenantContext(
+  req: Request,
+  res: Response,
+  apiKey: string | undefined,
+  handler: () => Promise<void>
+): Promise<void> {
+  if (!isToolsCall(req)) {
+    await handler();
+    return;
+  }
+
+  if (!apiKey) {
+    unauthorizedJson(res, "Unauthorized: Missing API key");
+    return;
+  }
+
+  const hostDomain = getHostDomain(req);
+  if (!hostDomain) {
+    unauthorizedJson(res, "Unauthorized: Missing host_domain");
+    return;
+  }
+
+  try {
+    const tenantPrisma = await resolveTenantPrisma(apiKey, hostDomain);
+    await runWithTenantPrisma(tenantPrisma, handler);
+  } catch (error) {
+    if (error instanceof TenantAuthError) {
+      unauthorizedJson(res, error.message);
+      return;
+    }
+    throw error;
+  }
+}
 
 // Configure Winston Logger
 const logger = winston.createLogger({
@@ -245,6 +309,7 @@ app.all("/mcp", async (req: Request, res: Response) => {
           arguments: {
             ...req.body.params.arguments,
             _apiKey: api_token,
+            _hostDomain: getHostDomain(req),
           },
         },
       };
@@ -326,7 +391,11 @@ app.all("/mcp-ghl", async (req: Request, res: Response) => {
       bodyMethod: req.body?.method,
     });
 
-    await transport.handleRequest(req, res, modifiedBody);
+    await runGhlCalWithTenantContext(req, res, api_token, async () => {
+      await transport.handleRequest(req, res, modifiedBody);
+    });
+
+    if (res.headersSent) return;
 
     logger.info(`GHL request handled`, {
       sessionId,
@@ -404,8 +473,9 @@ app.all("/mcp-cal", async (req: Request, res: Response) => {
       };
     }
 
-    // Handle the request
-    await transport.handleRequest(req, res, modifiedBody);
+    await runGhlCalWithTenantContext(req, res, api_key, async () => {
+      await transport.handleRequest(req, res, modifiedBody);
+    });
   } catch (error) {
     if (!res.headersSent) {
       res.status(500).json({
@@ -510,11 +580,17 @@ app.post("/ghl-messages", async (req: Request, res: Response) => {
 
   if (transport) {
     try {
-      await transport.handlePostMessage(req, res, modifiedBody);
-      logger.debug(`GHL SSE message handled successfully`, { sessionId });
+      await runGhlCalWithTenantContext(req, res, api_token, async () => {
+        await transport.handlePostMessage(req, res, modifiedBody);
+      });
+      if (!res.headersSent) {
+        logger.debug(`GHL SSE message handled successfully`, { sessionId });
+      }
     } catch (error) {
       logger.error("Error handling GHL SSE message", { error, sessionId });
-      res.status(500).send("Error handling message");
+      if (!res.headersSent) {
+        res.status(500).send("Error handling message");
+      }
     }
   } else {
     logger.warn(`No GHL SSE transport found for sessionId: ${sessionId}`);
@@ -573,11 +649,17 @@ app.post("/cal-messages", async (req: Request, res: Response) => {
 
   if (transport) {
     try {
-      await transport.handlePostMessage(req, res, modifiedBody);
-      logger.debug(`Cal SSE message handled successfully`, { sessionId });
+      await runGhlCalWithTenantContext(req, res, api_key, async () => {
+        await transport.handlePostMessage(req, res, modifiedBody);
+      });
+      if (!res.headersSent) {
+        logger.debug(`Cal SSE message handled successfully`, { sessionId });
+      }
     } catch (error) {
       logger.error("Error handling Cal SSE message", { error, sessionId });
-      res.status(500).send("Error handling message");
+      if (!res.headersSent) {
+        res.status(500).send("Error handling message");
+      }
     }
   } else {
     logger.warn(`No Cal SSE transport found for sessionId: ${sessionId}`);

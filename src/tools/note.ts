@@ -1,6 +1,6 @@
 import { CallToolRequest } from "@modelcontextprotocol/sdk/types.js";
 import { API_ENDPOINTS } from "../constants/tool.js";
-import { getApiKey } from "../utils/auth.util.js";
+import { getApiKey, getBaseUrl } from "../utils/auth.util.js";
 import {
   CreateNoteSchema,
   CreateNoteRequest,
@@ -165,7 +165,7 @@ export async function handleCreateNote(request: CallToolRequest) {
     }
 
     const { leadId, note } = result.data;
-    const url = `${process.env.BASE_URL}/${leadId}/note`;
+    const url = `${getBaseUrl(request)}/${leadId}/note`;
 
     const response = await fetch(url, {
       method: "POST",
@@ -251,7 +251,7 @@ export async function handleGetNote(request: CallToolRequest) {
     }
 
     const { leadId, noteId } = result.data;
-    const url = `${process.env.BASE_URL}/${API_ENDPOINTS.NOTE.GET_NOTES(
+    const url = `${getBaseUrl(request)}/${API_ENDPOINTS.NOTE.GET_NOTES(
       leadId
     )}/${noteId}`;
 
@@ -324,7 +324,7 @@ export async function handleGetAllNotes(request: CallToolRequest) {
     }
 
     const { leadId } = result.data;
-    const url = `${process.env.BASE_URL}/${leadId}/note`;
+    const url = `${getBaseUrl(request)}/${leadId}/note`;
     const response = await fetch(url, {
       method: "GET",
       headers: {
@@ -429,7 +429,7 @@ export async function handleUpdateNote(request: CallToolRequest) {
 
     const { leadId, noteId, note } = result.data;
 
-    const url = `${process.env.BASE_URL}/${API_ENDPOINTS.NOTE.GET_NOTES(
+    const url = `${getBaseUrl(request)}/${API_ENDPOINTS.NOTE.GET_NOTES(
       leadId
     )}/${noteId}`;
 
@@ -503,7 +503,7 @@ export async function handleDeleteNote(request: CallToolRequest) {
     }
 
     const { leadId, noteId } = result.data;
-    const url = `${process.env.BASE_URL}/${leadId}/note/${noteId}`;
+    const url = `${getBaseUrl(request)}/${leadId}/note/${noteId}`;
 
     const response = await fetch(url, {
       method: "DELETE",
@@ -580,7 +580,7 @@ export async function handleGetNoteById(request: CallToolRequest) {
       };
     }
 
-    const url = `${process.env.BASE_URL}/${leadId}/note/${noteId}`;
+    const url = `${getBaseUrl(request)}/${leadId}/note/${noteId}`;
 
     const response = await fetch(url, {
       method: "GET",

@@ -1,6 +1,6 @@
 import { CallToolRequest } from "@modelcontextprotocol/sdk/types.js";
 import { API_ENDPOINTS } from "../constants/tool.js";
-import { getApiKey } from "../utils/auth.util.js";
+import { getApiKey, getBaseUrl } from "../utils/auth.util.js";
 import {
   CreateLeadSchema,
   CreateLeadRequest,
@@ -313,7 +313,7 @@ export async function handleCreateLead(request: CallToolRequest) {
       };
     }
 
-    const url = `${process.env.BASE_URL}${API_ENDPOINTS.LEAD.CREATE_LEAD}`;
+    const url = `${getBaseUrl(request)}${API_ENDPOINTS.LEAD.CREATE_LEAD}`;
     // Forward all provided fields. The backend create schema requires the
     // `phone` key to be present (empty string is accepted), and validates at
     // runtime that at least one of email/phone is non-empty.
@@ -385,7 +385,7 @@ export async function handleFindLead(request: CallToolRequest) {
     }
 
     const { email, phone } = result.data;
-    const url = `${process.env.BASE_URL}${API_ENDPOINTS.LEAD.FIND_LEAD}`;
+    const url = `${getBaseUrl(request)}${API_ENDPOINTS.LEAD.FIND_LEAD}`;
     const queryParams = new URLSearchParams();
     if (email) queryParams.append("email", email);
     if (phone) queryParams.append("phone", phone);
@@ -435,7 +435,7 @@ export async function handleFindLead(request: CallToolRequest) {
 export async function handleGetLeads(request: CallToolRequest) {
   try {
     const args = (request.params.arguments ?? {}) as Record<string, unknown>;
-    const url = appendListQueryToUrl(`${process.env.BASE_URL}/leads`, args, {
+    const url = appendListQueryToUrl(`${getBaseUrl(request)}/leads`, args, {
       id: args.id as string | undefined,
     });
 
@@ -505,7 +505,7 @@ export async function handleGetLeads(request: CallToolRequest) {
 export async function handleGetLead(request: CallToolRequest) {
   try {
     const { id } = request.params.arguments as { id: string };
-    const url = `${process.env.BASE_URL}${API_ENDPOINTS.LEAD.GET_LEADS}/lead/${id}`;
+    const url = `${getBaseUrl(request)}${API_ENDPOINTS.LEAD.GET_LEADS}/lead/${id}`;
 
     const response = await fetch(url, {
       method: "GET",
@@ -569,7 +569,7 @@ export async function handleUpdateLead(request: CallToolRequest) {
     }
 
     const { id, ...updateFields } = result.data;
-    const url = `${process.env.BASE_URL}${API_ENDPOINTS.LEAD.CREATE_LEAD}/lead/${id}`;
+    const url = `${getBaseUrl(request)}${API_ENDPOINTS.LEAD.CREATE_LEAD}/lead/${id}`;
 
     const response = await fetch(url, {
       method: "PUT",
@@ -617,7 +617,7 @@ export async function handleUpdateLead(request: CallToolRequest) {
 export async function handleDeleteLead(request: CallToolRequest) {
   try {
     const { id } = request.params.arguments as { id: string };
-    const url = `${process.env.BASE_URL}${API_ENDPOINTS.LEAD.GET_LEADS}/lead/${id}`;
+    const url = `${getBaseUrl(request)}${API_ENDPOINTS.LEAD.GET_LEADS}/lead/${id}`;
 
     const response = await fetch(url, {
       method: "DELETE",
@@ -663,7 +663,7 @@ export async function handleDeleteLead(request: CallToolRequest) {
 export async function handleGetLeadByName(request: CallToolRequest) {
   try {
     const { name } = request.params.arguments as { name: string };
-    const url = `${process.env.BASE_URL}${
+    const url = `${getBaseUrl(request)}${
       API_ENDPOINTS.LEAD.GET_LEADS
     }/search/?name=${encodeURIComponent(name)}`;
 

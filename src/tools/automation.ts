@@ -1,6 +1,6 @@
 import { CallToolRequest } from "@modelcontextprotocol/sdk/types.js";
 import { API_ENDPOINTS } from "../constants/tool.js";
-import { getApiKey } from "../utils/auth.util.js";
+import { getApiKey, getBaseUrl } from "../utils/auth.util.js";
 import {
   GetAutomationsSchema,
   GetAutomationSchema,
@@ -203,7 +203,7 @@ export async function handleGetAutomations(request: CallToolRequest) {
     }
 
     const url = appendListQueryToUrl(
-      `${process.env.BASE_URL}${API_ENDPOINTS.AUTOMATION.GET_AUTOMATIONS}`,
+      `${getBaseUrl(request)}${API_ENDPOINTS.AUTOMATION.GET_AUTOMATIONS}`,
       result.data,
       { status: result.data.status }
     );
@@ -261,7 +261,7 @@ export async function handleGetAutomation(request: CallToolRequest) {
     }
 
     const { automationId } = result.data;
-    const url = `${process.env.BASE_URL}${API_ENDPOINTS.AUTOMATION.GET_AUTOMATION_BY_ID}/${automationId}`;
+    const url = `${getBaseUrl(request)}${API_ENDPOINTS.AUTOMATION.GET_AUTOMATION_BY_ID}/${automationId}`;
     const response = await fetch(url, {
       method: "GET",
       headers: { Authorization: `Bearer ${getApiKey(request)}` },
@@ -305,7 +305,7 @@ export async function handleCreateAutomation(request: CallToolRequest) {
       };
     }
 
-    const url = `${process.env.BASE_URL}${API_ENDPOINTS.AUTOMATION.CREATE_AUTOMATION}`;
+    const url = `${getBaseUrl(request)}${API_ENDPOINTS.AUTOMATION.CREATE_AUTOMATION}`;
     const response = await fetch(url, {
       method: "POST",
       headers: {
@@ -356,7 +356,7 @@ export async function handleUpdateAutomation(request: CallToolRequest) {
     }
 
     const { automationId, ...updateFields } = result.data;
-    const url = `${process.env.BASE_URL}${API_ENDPOINTS.AUTOMATION.UPDATE_AUTOMATION}/${automationId}`;
+    const url = `${getBaseUrl(request)}${API_ENDPOINTS.AUTOMATION.UPDATE_AUTOMATION}/${automationId}`;
     const response = await fetch(url, {
       method: "PATCH",
       headers: {
@@ -407,7 +407,7 @@ export async function handleTriggerAutomation(request: CallToolRequest) {
     }
 
     const { automationId, leadId } = result.data;
-    const url = `${process.env.BASE_URL}${API_ENDPOINTS.AUTOMATION.TRIGGER_AUTOMATION}/${automationId}/trigger`;
+    const url = `${getBaseUrl(request)}${API_ENDPOINTS.AUTOMATION.TRIGGER_AUTOMATION}/${automationId}/trigger`;
     const response = await fetch(url, {
       method: "POST",
       headers: {
@@ -458,7 +458,7 @@ export async function handleStopAutomation(request: CallToolRequest) {
     }
 
     const { automationId, leadId } = result.data;
-    const url = `${process.env.BASE_URL}${API_ENDPOINTS.AUTOMATION.STOP_AUTOMATION}/${automationId}/stop`;
+    const url = `${getBaseUrl(request)}${API_ENDPOINTS.AUTOMATION.STOP_AUTOMATION}/${automationId}/stop`;
     const response = await fetch(url, {
       method: "POST",
       headers: {
@@ -512,7 +512,7 @@ export async function handleGetLeadAutomationSessions(request: CallToolRequest) 
 
     const { leadId, status, ...listArgs } = result.data;
     const url = appendListQueryToUrl(
-      `${process.env.BASE_URL}${API_ENDPOINTS.AUTOMATION.GET_LEAD_SESSIONS}`,
+      `${getBaseUrl(request)}${API_ENDPOINTS.AUTOMATION.GET_LEAD_SESSIONS}`,
       listArgs,
       { leadId, status }
     );

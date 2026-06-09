@@ -1,6 +1,6 @@
 import { CallToolRequest } from "@modelcontextprotocol/sdk/types.js";
 import { API_ENDPOINTS } from "../constants/tool.js";
-import { getApiKey } from "../utils/auth.util.js";
+import { getApiKey, getBaseUrl } from "../utils/auth.util.js";
 import {
   FindCampaignLeadSchema,
   FindCampaignLeadRequest,
@@ -380,7 +380,7 @@ export async function handleGetAllCampaigns(request: CallToolRequest) {
     }
 
     const url = appendListQueryToUrl(
-      `${process.env.BASE_URL}${API_ENDPOINTS.CAMPAIGN.GET_ALL_CAMPAIGNS}`,
+      `${getBaseUrl(request)}${API_ENDPOINTS.CAMPAIGN.GET_ALL_CAMPAIGNS}`,
       result.data,
       { status: result.data.status }
     );
@@ -438,7 +438,7 @@ export async function handleGetCampaign(request: CallToolRequest) {
     }
 
     const { campaignId } = result.data;
-    const url = `${process.env.BASE_URL}${API_ENDPOINTS.CAMPAIGN.GET_CAMPAIGN_BY_ID}/${campaignId}`;
+    const url = `${getBaseUrl(request)}${API_ENDPOINTS.CAMPAIGN.GET_CAMPAIGN_BY_ID}/${campaignId}`;
     const response = await fetch(url, {
       method: "GET",
       headers: { Authorization: `Bearer ${getApiKey(request)}` },
@@ -482,7 +482,7 @@ export async function handleCreateCampaign(request: CallToolRequest) {
       };
     }
 
-    const url = `${process.env.BASE_URL}${API_ENDPOINTS.CAMPAIGN.CREATE_CAMPAIGN}`;
+    const url = `${getBaseUrl(request)}${API_ENDPOINTS.CAMPAIGN.CREATE_CAMPAIGN}`;
     const response = await fetch(url, {
       method: "POST",
       headers: {
@@ -533,7 +533,7 @@ export async function handleUpdateCampaign(request: CallToolRequest) {
     }
 
     const { campaignId, ...updateFields } = result.data;
-    const url = `${process.env.BASE_URL}${API_ENDPOINTS.CAMPAIGN.UPDATE_CAMPAIGN}/${campaignId}`;
+    const url = `${getBaseUrl(request)}${API_ENDPOINTS.CAMPAIGN.UPDATE_CAMPAIGN}/${campaignId}`;
     const response = await fetch(url, {
       method: "PATCH",
       headers: {
@@ -586,7 +586,7 @@ export async function handleConfigureCampaignSettings(request: CallToolRequest) 
     }
 
     const { campaignId, ...settings } = result.data;
-    const url = `${process.env.BASE_URL}${API_ENDPOINTS.CAMPAIGN.CONFIGURE_SETTINGS}/${campaignId}/settings`;
+    const url = `${getBaseUrl(request)}${API_ENDPOINTS.CAMPAIGN.CONFIGURE_SETTINGS}/${campaignId}/settings`;
     const response = await fetch(url, {
       method: "PUT",
       headers: {
@@ -651,7 +651,7 @@ export async function handleFindCampaignLead(request: CallToolRequest) {
     if (email) queryParams.append("email", email);
     if (phone) queryParams.append("phone", phone);
 
-    const url = `${process.env.BASE_URL}${
+    const url = `${getBaseUrl(request)}${
       API_ENDPOINTS.CAMPAIGN.FIND_LEAD
     }?${queryParams.toString()}`;
 
@@ -701,7 +701,7 @@ export async function handleAddLeadToCampaign(request: CallToolRequest) {
     }
 
     const { campaignId, leadId } = result.data;
-    const url = `${process.env.BASE_URL}${API_ENDPOINTS.CAMPAIGN.ADD_LEAD_TO_CAMPAIGN}/${campaignId}/add-lead/${leadId}`;
+    const url = `${getBaseUrl(request)}${API_ENDPOINTS.CAMPAIGN.ADD_LEAD_TO_CAMPAIGN}/${campaignId}/add-lead/${leadId}`;
 
     const response = await fetch(url, {
       method: "POST",
@@ -751,7 +751,7 @@ export async function handleGetCampaignLeads(request: CallToolRequest) {
 
     const { campaignId, withoutWorkingHoursCheck = true } = result.data;
     const url = appendListQueryToUrl(
-      `${process.env.BASE_URL}${API_ENDPOINTS.CAMPAIGN.GET_CAMPAIGN_LEADS}/${campaignId}/leads`,
+      `${getBaseUrl(request)}${API_ENDPOINTS.CAMPAIGN.GET_CAMPAIGN_LEADS}/${campaignId}/leads`,
       result.data,
       {
         withoutWorkingHoursCheck: withoutWorkingHoursCheck ? "true" : "false",
@@ -813,7 +813,7 @@ export async function handleRemoveLeadFromCampaign(request: CallToolRequest) {
     }
 
     const { campaignId, leadId } = result.data;
-    const url = `${process.env.BASE_URL}${API_ENDPOINTS.CAMPAIGN.REMOVE_LEAD_FROM_CAMPAIGN}/${campaignId}/lead/${leadId}`;
+    const url = `${getBaseUrl(request)}${API_ENDPOINTS.CAMPAIGN.REMOVE_LEAD_FROM_CAMPAIGN}/${campaignId}/lead/${leadId}`;
 
     const response = await fetch(url, {
       method: "DELETE",
@@ -871,7 +871,7 @@ export async function handleGetCampaignLead(request: CallToolRequest) {
     }
 
     const { leadId } = result.data;
-    const url = `${process.env.BASE_URL}${API_ENDPOINTS.CAMPAIGN.GET_LEAD_BY_ID}/${leadId}`;
+    const url = `${getBaseUrl(request)}${API_ENDPOINTS.CAMPAIGN.GET_LEAD_BY_ID}/${leadId}`;
 
     const response = await fetch(url, {
       method: "GET",
@@ -919,7 +919,7 @@ export async function handleUpdateCampaignStatus(request: CallToolRequest) {
     }
 
     const { campaignId, status } = result.data;
-    const url = `${process.env.BASE_URL}${API_ENDPOINTS.CAMPAIGN.UPDATE_CAMPAIGN_STATUS}/${campaignId}`;
+    const url = `${getBaseUrl(request)}${API_ENDPOINTS.CAMPAIGN.UPDATE_CAMPAIGN_STATUS}/${campaignId}`;
 
     const response = await fetch(url, {
       method: "PUT",
@@ -973,7 +973,7 @@ export async function handleUpdateCampaignLead(request: CallToolRequest) {
     }
 
     const { campaignLeadId, status } = result.data;
-    const url = `${process.env.BASE_URL}${API_ENDPOINTS.CAMPAIGN.UPDATE_CAMPAIGN_LEAD}/${campaignLeadId}`;
+    const url = `${getBaseUrl(request)}${API_ENDPOINTS.CAMPAIGN.UPDATE_CAMPAIGN_LEAD}/${campaignLeadId}`;
 
     const response = await fetch(url, {
       method: "PUT",
@@ -1035,7 +1035,7 @@ export async function handleDeleteCampaign(request: CallToolRequest) {
     }
 
     const { campaignId } = result.data;
-    const url = `${process.env.BASE_URL}${API_ENDPOINTS.CAMPAIGN.DELETE_CAMPAIGN}/${campaignId}`;
+    const url = `${getBaseUrl(request)}${API_ENDPOINTS.CAMPAIGN.DELETE_CAMPAIGN}/${campaignId}`;
 
     const response = await fetch(url, {
       method: "DELETE",
@@ -1090,7 +1090,7 @@ export async function handleFindLeadToCall(request: CallToolRequest) {
     }
 
     const { campaignId } = result.data;
-    const url = `${process.env.BASE_URL}${API_ENDPOINTS.CAMPAIGN.FIND_LEAD_TO_CALL}/${campaignId}/find`;
+    const url = `${getBaseUrl(request)}${API_ENDPOINTS.CAMPAIGN.FIND_LEAD_TO_CALL}/${campaignId}/find`;
 
     const response = await fetch(url, {
       method: "GET",

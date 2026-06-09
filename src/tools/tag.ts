@@ -3,7 +3,7 @@ import {
   CallToolRequest,
 } from "@modelcontextprotocol/sdk/types.js";
 import { API_ENDPOINTS } from "../constants/tool.js";
-import { getApiKey } from "../utils/auth.util.js";
+import { getApiKey, getBaseUrl } from "../utils/auth.util.js";
 import {
   CreateTagSchema,
   CreateTagRequest,
@@ -115,7 +115,7 @@ export async function handleCreateTag(request: CallToolRequest) {
     }
 
     const { name } = result.data;
-    const url = `${process.env.BASE_URL}${API_ENDPOINTS.TAG.CREATE_TAG}`;
+    const url = `${getBaseUrl(request)}${API_ENDPOINTS.TAG.CREATE_TAG}`;
     const body = { name };
 
     const response = await fetch(url, {
@@ -163,7 +163,7 @@ export async function handleCreateTag(request: CallToolRequest) {
 
 export async function handleGetTags(request: CallToolRequest) {
   try {
-    const url = `${process.env.BASE_URL}${API_ENDPOINTS.TAG.GET_TAGS}`;
+    const url = `${getBaseUrl(request)}${API_ENDPOINTS.TAG.GET_TAGS}`;
 
     const response = await fetch(url, {
       method: "GET",
@@ -210,7 +210,7 @@ export async function handleGetTags(request: CallToolRequest) {
 export async function handleGetTag(request: CallToolRequest) {
   try {
     const { id } = request.params.arguments as { id: string };
-    const url = `${process.env.BASE_URL}${API_ENDPOINTS.TAG.GET_TAG}/${id}`;
+    const url = `${getBaseUrl(request)}${API_ENDPOINTS.TAG.GET_TAG}/${id}`;
 
     const response = await fetch(url, {
       method: "GET",
@@ -274,7 +274,7 @@ export async function handleUpdateTag(request: CallToolRequest) {
     }
 
     const { id, name } = result.data;
-    const url = `${process.env.BASE_URL}${API_ENDPOINTS.TAG.UPDATE_TAG}/${id}`;
+    const url = `${getBaseUrl(request)}${API_ENDPOINTS.TAG.UPDATE_TAG}/${id}`;
     const body = { name };
 
     const response = await fetch(url, {
@@ -323,7 +323,7 @@ export async function handleUpdateTag(request: CallToolRequest) {
 export async function handleDeleteTag(request: CallToolRequest) {
   try {
     const { id } = request.params.arguments as { id: string };
-    const url = `${process.env.BASE_URL}${API_ENDPOINTS.TAG.DELETE_TAG}/${id}`;
+    const url = `${getBaseUrl(request)}${API_ENDPOINTS.TAG.DELETE_TAG}/${id}`;
 
     const response = await fetch(url, {
       method: "DELETE",

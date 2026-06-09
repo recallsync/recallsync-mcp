@@ -16,3 +16,21 @@ export const getApiKey = (request: CallToolRequest): string => {
   }
   return apiKey;
 };
+
+/**
+ * Base URL for RecallSync REST calls.
+ *
+ * The `/mcp` route injects the request's `host_domain` as `_hostDomain`. When
+ * present we target the agency's white-labeled domain so recallsync-app resolves
+ * the correct tenant DB by host; otherwise we fall back to `process.env.BASE_URL`.
+ */
+export const getBaseUrl = (request: CallToolRequest): string => {
+  const args = (request.params.arguments ?? {}) as Record<string, unknown>;
+  const hostDomain = args._hostDomain;
+  const baseUrl =
+    typeof hostDomain === "string" && hostDomain.trim()
+      ? `https://${hostDomain.trim().replace(/^https?:\/\//, "")}`
+      : process.env.BASE_URL ?? "";
+  console.log("[MCP] REST base URL in use:", baseUrl);
+  return baseUrl;
+};

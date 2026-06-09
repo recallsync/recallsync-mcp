@@ -112,6 +112,18 @@ import {
   handleUpdateCall,
 } from "../tools/call.js";
 import {
+  customFieldTools,
+  handleGetCustomFields,
+  handleGetCustomField,
+  handleCreateCustomField,
+  handleUpdateCustomField,
+  handleDeleteCustomField,
+  handleGetLeadCustomFieldValues,
+  handleSetLeadCustomFieldValue,
+  handleBulkSetLeadCustomFieldValues,
+  handleDeleteLeadCustomFieldValue,
+} from "../tools/custom-field.js";
+import {
   agentTools,
   handleGetPrimaryAgents,
   handleGetPrimaryAgent,
@@ -170,6 +182,7 @@ primaryServer.setRequestHandler(ListToolsRequestSchema, async () => {
       ...stageTools,
       ...opportunityTools,
       ...callTools,
+      ...customFieldTools,
       ...agentTools,
     ],
   };
@@ -310,6 +323,24 @@ primaryServer.setRequestHandler(CallToolRequestSchema, async (request) => {
       return handleCreateCall(request);
     case "update-call":
       return handleUpdateCall(request);
+    case "get-custom-fields":
+      return handleGetCustomFields(request);
+    case "get-custom-field":
+      return handleGetCustomField(request);
+    case "create-custom-field":
+      return handleCreateCustomField(request);
+    case "update-custom-field":
+      return handleUpdateCustomField(request);
+    case "delete-custom-field":
+      return handleDeleteCustomField(request);
+    case "get-lead-custom-field-values":
+      return handleGetLeadCustomFieldValues(request);
+    case "set-lead-custom-field-value":
+      return handleSetLeadCustomFieldValue(request);
+    case "bulk-set-lead-custom-field-values":
+      return handleBulkSetLeadCustomFieldValues(request);
+    case "delete-lead-custom-field-value":
+      return handleDeleteLeadCustomFieldValue(request);
     case "create-note":
       return handleCreateNote(request);
     case "get-note":

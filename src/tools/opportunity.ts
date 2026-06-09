@@ -1,6 +1,6 @@
 import { CallToolRequest } from "@modelcontextprotocol/sdk/types.js";
 import { API_ENDPOINTS } from "../constants/tool.js";
-import { getApiKey } from "../utils/auth.util.js";
+import { getApiKey, getBaseUrl } from "../utils/auth.util.js";
 import {
   GetOpportunitiesSchema,
   GetOpportunityByIdSchema,
@@ -140,7 +140,7 @@ export async function handleGetOpportunities(request: CallToolRequest) {
 
     const { pipelineId, stageId, leadId, ...listArgs } = result.data;
     const url = appendListQueryToUrl(
-      `${process.env.BASE_URL}${API_ENDPOINTS.OPPORTUNITY.GET_OPPORTUNITIES}`,
+      `${getBaseUrl(request)}${API_ENDPOINTS.OPPORTUNITY.GET_OPPORTUNITIES}`,
       listArgs,
       { pipelineId, stageId, leadId }
     );
@@ -200,7 +200,7 @@ export async function handleGetOpportunity(request: CallToolRequest) {
       };
     }
 
-    const url = `${process.env.BASE_URL}${API_ENDPOINTS.OPPORTUNITY.GET_OPPORTUNITY_BY_ID}/${result.data.id}`;
+    const url = `${getBaseUrl(request)}${API_ENDPOINTS.OPPORTUNITY.GET_OPPORTUNITY_BY_ID}/${result.data.id}`;
     const response = await fetch(url, {
       method: "GET",
       headers: {
@@ -250,7 +250,7 @@ export async function handleCreateOpportunity(request: CallToolRequest) {
       };
     }
 
-    const url = `${process.env.BASE_URL}${API_ENDPOINTS.OPPORTUNITY.CREATE_OPPORTUNITY}`;
+    const url = `${getBaseUrl(request)}${API_ENDPOINTS.OPPORTUNITY.CREATE_OPPORTUNITY}`;
     const response = await fetch(url, {
       method: "POST",
       headers: {
@@ -302,7 +302,7 @@ export async function handleUpdateOpportunity(request: CallToolRequest) {
     }
 
     const { id, ...body } = result.data;
-    const url = `${process.env.BASE_URL}${API_ENDPOINTS.OPPORTUNITY.UPDATE_OPPORTUNITY}/${id}`;
+    const url = `${getBaseUrl(request)}${API_ENDPOINTS.OPPORTUNITY.UPDATE_OPPORTUNITY}/${id}`;
     const response = await fetch(url, {
       method: "PUT",
       headers: {
@@ -353,7 +353,7 @@ export async function handleDeleteOpportunity(request: CallToolRequest) {
       };
     }
 
-    const url = `${process.env.BASE_URL}${API_ENDPOINTS.OPPORTUNITY.DELETE_OPPORTUNITY}/${result.data.id}`;
+    const url = `${getBaseUrl(request)}${API_ENDPOINTS.OPPORTUNITY.DELETE_OPPORTUNITY}/${result.data.id}`;
     const response = await fetch(url, {
       method: "DELETE",
       headers: {

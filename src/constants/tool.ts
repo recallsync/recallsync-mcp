@@ -131,4 +131,14 @@ export const API_ENDPOINTS = {
     CREATE_CALL: "/call", // POST
     UPDATE_CALL: "/call", // PUT, append `/{id}`
   },
+  CUSTOM_FIELD: {
+    GET_CUSTOM_FIELDS: "/custom-field", // GET, ?page=...
+    CREATE_CUSTOM_FIELD: "/custom-field", // POST
+    GET_CUSTOM_FIELD_BY_ID: "/custom-field", // GET, append `/{id}`
+    UPDATE_CUSTOM_FIELD: "/custom-field", // PUT, append `/{id}`
+    DELETE_CUSTOM_FIELD: "/custom-field", // DELETE, append `/{id}`
+    GET_LEAD_VALUES: "/custom-field/lead", // GET, append `/{leadId}`
+    UPSERT_VALUE: "/custom-field/value", // POST (single or { values: [] } bulk)
+    DELETE_VALUE: "/custom-field/value", // DELETE, append `/{id}`
+  },
 } as const;

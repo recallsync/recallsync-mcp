@@ -1,6 +1,6 @@
 import { CallToolRequest } from "@modelcontextprotocol/sdk/types.js";
 import { API_ENDPOINTS } from "../constants/tool.js";
-import { getApiKey } from "../utils/auth.util.js";
+import { getApiKey, getBaseUrl } from "../utils/auth.util.js";
 import {
   GetPipelinesSchema,
   GetPipelineByIdSchema,
@@ -105,7 +105,7 @@ export async function handleGetPipelines(request: CallToolRequest) {
     }
 
     const url = appendListQueryToUrl(
-      `${process.env.BASE_URL}${API_ENDPOINTS.PIPELINE.GET_PIPELINES}`,
+      `${getBaseUrl(request)}${API_ENDPOINTS.PIPELINE.GET_PIPELINES}`,
       result.data
     );
     const response = await fetch(url, {
@@ -152,7 +152,7 @@ export async function handleGetPipeline(request: CallToolRequest) {
       };
     }
 
-    const url = `${process.env.BASE_URL}${API_ENDPOINTS.PIPELINE.GET_PIPELINE_BY_ID}/${result.data.id}`;
+    const url = `${getBaseUrl(request)}${API_ENDPOINTS.PIPELINE.GET_PIPELINE_BY_ID}/${result.data.id}`;
     const response = await fetch(url, {
       method: "GET",
       headers: {
@@ -192,7 +192,7 @@ export async function handleCreatePipeline(request: CallToolRequest) {
       };
     }
 
-    const url = `${process.env.BASE_URL}${API_ENDPOINTS.PIPELINE.CREATE_PIPELINE}`;
+    const url = `${getBaseUrl(request)}${API_ENDPOINTS.PIPELINE.CREATE_PIPELINE}`;
     const response = await fetch(url, {
       method: "POST",
       headers: {
@@ -236,7 +236,7 @@ export async function handleUpdatePipeline(request: CallToolRequest) {
     }
 
     const { id, name } = result.data;
-    const url = `${process.env.BASE_URL}${API_ENDPOINTS.PIPELINE.UPDATE_PIPELINE}/${id}`;
+    const url = `${getBaseUrl(request)}${API_ENDPOINTS.PIPELINE.UPDATE_PIPELINE}/${id}`;
     const response = await fetch(url, {
       method: "PUT",
       headers: {
@@ -279,7 +279,7 @@ export async function handleDeletePipeline(request: CallToolRequest) {
       };
     }
 
-    const url = `${process.env.BASE_URL}${API_ENDPOINTS.PIPELINE.DELETE_PIPELINE}/${result.data.id}`;
+    const url = `${getBaseUrl(request)}${API_ENDPOINTS.PIPELINE.DELETE_PIPELINE}/${result.data.id}`;
     const response = await fetch(url, {
       method: "DELETE",
       headers: {
