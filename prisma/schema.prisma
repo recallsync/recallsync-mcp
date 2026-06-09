@@ -2145,6 +2145,7 @@ enum LEAD_QUALITY {
 enum LEAD_SOURCE {
   UNKNOWN
   INSTA_OS
+  AIOS
 }
 
 /// Insta OS first-contact channel (use with leadSource = INSTA_OS). Set only on lead create.
@@ -2153,6 +2154,7 @@ enum LEAD_SUB_SOURCE {
   INSTA_COMMENT
   INSTA_DM
   WHATSAPP_DM
+  GM_SCRAPER
 }
 
 // Meeting Enums
