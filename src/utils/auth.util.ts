@@ -29,7 +29,7 @@ export const getBaseUrl = (request: CallToolRequest): string => {
   const hostDomain = args._hostDomain;
   const baseUrl =
     typeof hostDomain === "string" && hostDomain.trim()
-      ? `https://${hostDomain.trim().replace(/^https?:\/\//, "")}`
+      ? `https://${hostDomain.trim().replace(/^https?:\/\//, "")}/api/rest`
       : process.env.BASE_URL ?? "";
   console.log("[MCP] REST base URL in use:", baseUrl);
   return baseUrl;
