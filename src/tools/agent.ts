@@ -342,7 +342,7 @@ export const agentTools = [
   {
     name: "set-channel-agent-flow-draft",
     description:
-      "Push a flow graph to a FLOW channel agent's draft (currentFlow) — the version the builder and test-channel-agent run. Pass the v2 flow object (or a full export bundle with a `flow` key); it is validated/migrated server-side. Headers/secrets in ba_http nodes are sent as-is (not stored in Git). Use publish=true to also promote the draft to the live `flow`.",
+      "Push a flow graph to a FLOW channel agent's draft (currentFlow) — the version the builder and test-channel-agent run. Pass the v2 flow object (or a full export bundle with a `flow` key); it is validated/migrated server-side. Optionally pass flowSettings (e.g. { model: { firstMessage: \"<email subject>\" } }) to set the agent's default email subject. Headers/secrets in ba_http nodes are sent as-is (not stored in Git). Use publish=true to also promote the draft (and flowSettings) to the live `flow`.",
     arguments: [],
     inputSchema: {
       type: "object",
@@ -357,6 +357,11 @@ export const agentTools = [
           type: "boolean",
           description:
             "When true, also copy the draft into the live `flow` field (default false: draft only).",
+        },
+        flowSettings: {
+          type: "object",
+          description:
+            "Optional flow settings stored on the agent. For EMAIL channel agents, model.firstMessage is the default email subject used when no per-message subject is supplied (e.g. { \"model\": { \"firstMessage\": \"quick question\" } }).",
         },
       },
       required: ["id", "flow"],
@@ -1532,7 +1537,7 @@ export async function handleSetChannelAgentFlowDraft(request: CallToolRequest) {
       };
     }
 
-    const { id, flow, publish } = result.data;
+    const { id, flow, publish, flowSettings } = result.data;
     const url = `${getBaseUrl(request)}${API_ENDPOINTS.CHANNEL_AGENT.SET_CHANNEL_AGENT_FLOW_DRAFT}/${id}/flow-draft`;
     const response = await fetch(url, {
       method: "PUT",
@@ -1540,7 +1545,7 @@ export async function handleSetChannelAgentFlowDraft(request: CallToolRequest) {
         "Content-Type": "application/json",
         Authorization: `Bearer ${getApiKey(request)}`,
       },
-      body: JSON.stringify({ flow, publish }),
+      body: JSON.stringify({ flow, publish, flowSettings }),
     });
 
     if (!response.ok) {

@@ -230,6 +230,9 @@ export const SetChannelAgentFlowDraftSchema = z.object({
   id: z.string().min(1, "Channel agent id is required"),
   flow: z.record(z.string(), z.any()),
   publish: z.boolean().optional(),
+  // Optional flow settings written to currentFlowSettings (and flowSettings on
+  // publish). For EMAIL agents, model.firstMessage is the default email subject.
+  flowSettings: z.record(z.string(), z.any()).optional(),
 });
 
 export type SetChannelAgentFlowDraftRequest = z.infer<
