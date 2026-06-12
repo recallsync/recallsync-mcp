@@ -27,10 +27,24 @@ export const getApiKey = (request: CallToolRequest): string => {
 export const getBaseUrl = (request: CallToolRequest): string => {
   const args = (request.params.arguments ?? {}) as Record<string, unknown>;
   const hostDomain = args._hostDomain;
-  const baseUrl =
-    typeof hostDomain === "string" && hostDomain.trim()
-      ? `https://${hostDomain.trim().replace(/^https?:\/\//, "")}/api/rest`
-      : process.env.BASE_URL ?? "";
+  const fallback = process.env.BASE_URL
+    ? new URL(process.env.BASE_URL).origin
+    : "";
+
+  let origin = fallback;
+  if (typeof hostDomain === "string" && hostDomain.trim()) {
+    const value = hostDomain.trim();
+    if (/^https?:\/\//i.test(value)) {
+      origin = new URL(value).origin;
+    } else if (/^(localhost|127\.0\.0\.1)(:|$)/.test(value) && fallback) {
+      // Preserve local dev scheme/port from BASE_URL.
+      origin = fallback;
+    } else {
+      origin = `https://${value}`;
+    }
+  }
+
+  const baseUrl = `${origin}/api/rest`;
   console.log("[MCP] REST base URL in use:", baseUrl);
   return baseUrl;
 };

@@ -16,7 +16,13 @@ function getPrimaryAgencyId(): string | undefined {
 }
 
 function normalizeHostDomain(hostDomain: string): string {
-  return hostDomain.trim().split(":")[0] ?? hostDomain.trim();
+  return (
+    hostDomain
+      .trim()
+      .replace(/^https?:\/\//i, "")
+      .split("/")[0]
+      ?.split(":")[0] ?? hostDomain.trim()
+  );
 }
 
 function isPrimaryHost(hostDomain: string): boolean {
