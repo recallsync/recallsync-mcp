@@ -29,6 +29,9 @@ model User {
   isActive       Boolean   @default(true)
   deactivatedAt  DateTime?
 
+  // Sales-person webhook: receives sales-person events (e.g. lead_assigned)
+  webhookUrl String?
+
   // Stripe
   stripeCustomerId           String?
   stripeSubscriptionId       String?
@@ -112,6 +115,7 @@ model User {
 
 model ApiKey {
   id        String    @id @default(uuid())
+  name      String?
   isActive  Boolean   @default(true)
   createdAt DateTime  @default(now())
   lastUsed  DateTime?
@@ -190,6 +194,21 @@ model Config {
   // Metadata
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+/// Primary-DB registry: maps external webhook ids (IG user id, WA phone_number_id, …)
+/// to the agency whose tenant DB holds the integration data. No secrets duplicated.
+model WebhookRoute {
+  id         String   @id @default(uuid())
+  provider   String
+  externalId String
+  agencyId   String
+  businessId String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([provider, externalId])
+  @@index([agencyId])
 }
 
 model BusinessConfig {
@@ -342,6 +361,9 @@ model Lead {
   // other fields
   ghlContactId String?
 
+  /// Stable browser id from website chat embed (localStorage on host page). Unique per business.
+  embedVisitorId String?
+
   // Relations
   agencyId String
   Agency   User   @relation("AgencyToLead", fields: [agencyId], references: [id], onDelete: Cascade)
@@ -353,9 +375,6 @@ model Lead {
   SalesAgent   User?   @relation("SalesAgentToLead", fields: [salesAgentId], references: [id], onDelete: SetNull)
 
   isTestLead     Boolean  @default(false)
-  linkedLeadId   String? // soft-link to "main" profile if this is a secondary lead
-  linkedLead     Lead?    @relation("LinkedLeads", fields: [linkedLeadId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  duplicateLeads Lead[]   @relation("LinkedLeads")
   // Metadata Fields
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
@@ -378,6 +397,7 @@ model Lead {
   InstaOsEvents         InstaOsEvent[]
   InstaOsDmOutboxes     InstaOsDmOutbox[]
   LeadJourneyEvents     LeadJourneyEvent[]
+  LeadIgAccountConfigs  LeadIgAccountConfig[]
 
   @@index([agencyId])
   @@index([salesAgentId])
@@ -386,9 +406,9 @@ model Lead {
   @@index([phone])
   @@index([email])
   @@index([ghlContactId])
-  @@index([linkedLeadId])
   @@index([businessId, leadSource])
   @@index([businessId, leadSubSource])
+  @@unique([businessId, embedVisitorId])
 }
 
 model LeadTag {
@@ -536,6 +556,17 @@ model ConversationMessage {
   systemDescription String?              @db.Text // ex: Appointment booked for 10:00 AM on 10th July 2025
 
   ghlMessageId String?
+  /// Platform message id for native channels (Instagram `mid`, WhatsApp `wamid`).
+  /// Stored for both inbound and outbound messages so quoted replies can be
+  /// resolved back to the local message row.
+  externalMessageId String? @db.VarChar(191)
+  /// Raw platform message id this inbound message replied to, when supplied by
+  /// Instagram / WhatsApp.
+  replyToExternalId String? @db.VarChar(191)
+  /// Snapshot of the quoted message content. This keeps model history cheap and
+  /// preserves context even if the referenced message is later edited/deleted.
+  replyToContent String? @db.Text
+  replyToSender  MESSAGE_SENDER?
 
   /// Set for LEAD inbound from GHL recall-high webhook; @@unique skips duplicate webhook/worker retries.
   sourceInboundDedupKey String? @db.VarChar(512)
@@ -562,12 +593,20 @@ model ConversationMessage {
   agentId String?
   Agent   Agent?  @relation(fields: [agentId], references: [id], onDelete: Cascade)
 
+  /// IG account that sent/received this message (channel INSTAGRAM only).
+  instagramAccountId String?
+  InstagramAccount   InstagramAccount? @relation(fields: [instagramAccountId], references: [id], onDelete: SetNull)
+
   // Metadata
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([leadId])
   @@index([conversationId])
+  @@index([conversationId, instagramAccountId, createdAt])
+  @@index([instagramAccountId])
+  @@index([externalMessageId])
+  @@index([conversationId, businessId, externalMessageId])
   @@index([callId])
   @@index([agencyId])
   @@index([businessId])
@@ -699,7 +738,8 @@ model Agent {
 
   // agent settings
   settings Json
-  isActive Boolean   @default(false)
+  isActive Boolean    @default(false)
+  agentMode AGENT_MODE @default(AUTO)
   provider PROVIDER?
 
   // sequence config
@@ -934,6 +974,10 @@ model Campaign {
   primaryAgentId String?
   PrimaryAgent   PrimaryAgent? @relation(fields: [primaryAgentId], references: [id], onDelete: Cascade)
 
+  // Optional outbound automation (cadence) run alongside this campaign.
+  automationId String?
+  Automation   Automation? @relation(fields: [automationId], references: [id], onDelete: SetNull)
+
   // Metadata
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -944,6 +988,7 @@ model Campaign {
   @@index([agencyId])
   @@index([businessId])
   @@index([primaryAgentId])
+  @@index([automationId])
 }
 
 model CampaignLead {
@@ -1248,6 +1293,7 @@ model Business {
   InstaOsEvents         InstaOsEvent[]
   InstaOsDmOutboxes     InstaOsDmOutbox[]
   LeadJourneyEvents     LeadJourneyEvent[]
+  LeadIgAccountConfigs  LeadIgAccountConfig[]
   BaseAgents     BaseAgent[] @relation("BusinessBaseAgents")
   BaseAgentSessions     BaseAgentSession[]
   MiniAppSubscriptions  MiniAppSubscription[]
@@ -1303,6 +1349,8 @@ model InstagramAccount {
 
   InstaOsAutomations InstaOsAutomation[]
   Conversations      Conversation[]
+  ConversationMessages ConversationMessage[]
+  LeadIgAccountConfigs LeadIgAccountConfig[]
   BaseAgentsScoped      BaseAgent[] @relation("InstagramAccountBaseAgents")
   WorkflowAgentsScoped  Agent[]     @relation("InstagramAccountWorkflowAgents")
 
@@ -1311,6 +1359,29 @@ model InstagramAccount {
 
   @@index([businessId])
   @@index([businessId, createdAt])
+}
+
+/// Per-(lead, Instagram account) inbox state: service window and sort key for scoped inbox.
+model LeadIgAccountConfig {
+  id                 String @id @default(uuid())
+  leadId             String
+  businessId         String
+  instagramAccountId String
+
+  instagramServiceWindowExpiresAt DateTime?
+  lastMessageAt                   DateTime  @default(now())
+
+  Lead             Lead             @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  Business         Business         @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  InstagramAccount InstagramAccount @relation(fields: [instagramAccountId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([leadId, instagramAccountId])
+  @@index([businessId, instagramAccountId, lastMessageAt])
+  @@index([instagramAccountId])
+  @@index([leadId])
 }
 
 model WhatsAppAccount {
@@ -1329,6 +1400,8 @@ model WhatsAppAccount {
   tokenExpiresAt     DateTime?
 
   webhookSubscribed  Boolean   @default(false)
+  /// When set, inbound Meta webhook payloads are forwarded here (raw body + headers).
+  forwardWebhookUrl  String?
   isConnected        Boolean   @default(true)
   connectedAt        DateTime  @default(now())
   disconnectedAt     DateTime?
@@ -1563,6 +1636,22 @@ model BaseAgent {
   /// When false, runtime skips this agent: webhooks/auto-connect/scheduled work treat it as paused.
   /// Mirrors the legacy `Agent.isActive` switch from the AI agent upsert form.
   isActive Boolean @default(true)
+  agentMode AGENT_MODE @default(AUTO)
+
+  /// When true, the agent gets booking tools from the MCP server (calendar booking).
+  /// Standard agents: applies to the single-prompt turn. Flow agents: opt-in per objective node.
+  bookingEnabled Boolean @default(false)
+
+  /// When true, the agent receives a `smart_stop` tool that can pause AI replies
+  /// by switching the conversation to MANUAL when the model detects a configured
+  /// escalation/stop condition (for example abuse or sensitive information).
+  smartStopEnabled Boolean @default(false)
+  smartStopDescription String? @db.Text
+  smartStopStaticMessageEnabled Boolean @default(false)
+  smartStopStaticMessage String? @db.Text
+
+  /// Website embed widget config: { UI: { title, description }, chat: { primaryColor, title }, ... }
+  widgetSettings Json?
 
   /// At most one auto-connect agent per scoped account when true; enforced in base-agent router.
   autoConnect Boolean @default(false)
@@ -1593,6 +1682,7 @@ model BaseAgent {
   ConversationsWithActiveAgent Conversation[] @relation("ConversationActiveBaseAgent")
   BaseAgentSessions             BaseAgentSession[]
   AgentTools                    AgentTool[]
+  VoiceSessions                 VoiceSession[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1688,6 +1778,10 @@ model CalenderIntegration {
   calEventId  String
   calUsername String
   calApiKey   String
+
+  /// Slack channel id for Cal booking notifications (requires Slack integration).
+  slackNotificationChannelId   String?
+  slackNotificationChannelName String?
 
   // Relations
   businessId String
@@ -1813,8 +1907,11 @@ model VoiceSession {
   primaryAgentId String
   PrimaryAgent   PrimaryAgent @relation(fields: [primaryAgentId], references: [id], onDelete: Cascade)
 
-  agentId String
-  Agent   Agent  @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  agentId String?
+  Agent   Agent?  @relation(fields: [agentId], references: [id], onDelete: Cascade)
+
+  baseAgentId String?
+  BaseAgent   BaseAgent? @relation(fields: [baseAgentId], references: [id], onDelete: Cascade)
 
   leadCallId String? 
   LeadCall   LeadCall? @relation(fields: [leadCallId], references: [id], onDelete: Cascade)
@@ -1827,6 +1924,7 @@ model VoiceSession {
   @@index([agencyId])
   @@index([primaryAgentId])
   @@index([agentId])
+  @@index([baseAgentId])
   @@index([status])
   @@index([leadCallId])
 }
@@ -1878,6 +1976,9 @@ model Automation {
 
   primaryAgentId String
   PrimaryAgent   PrimaryAgent @relation(fields: [primaryAgentId], references: [id], onDelete: Cascade)
+
+  // Campaigns that have opted to run this automation alongside them.
+  Campaigns Campaign[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -2146,6 +2247,8 @@ enum LEAD_SOURCE {
   UNKNOWN
   INSTA_OS
   AIOS
+  CAL
+  WEBSITE_EMBED
 }
 
 /// Insta OS first-contact channel (use with leadSource = INSTA_OS). Set only on lead create.
@@ -2155,6 +2258,7 @@ enum LEAD_SUB_SOURCE {
   INSTA_DM
   WHATSAPP_DM
   GM_SCRAPER
+  CAL_BOOKING
 }
 
 // Meeting Enums
@@ -2374,6 +2478,7 @@ enum PROVIDER {
   DEEPGRAM
   WHATSAPP
   INSTAGRAM
+  SLACK
 }
 
 enum MESSAGE_ITEM_TYPE {
@@ -2433,11 +2538,17 @@ enum CONVERSATION_MESSAGE_STATUS {
   DRAFT
   SCHEDULED
   FAILED
+  REJECTED
 }
 
 enum REPLY_MODE {
   AUTO
   MANUAL
+}
+
+enum AGENT_MODE {
+  AUTO
+  DRAFT
 }
 
 enum LEAD_NOTE_TYPE {
@@ -2531,4 +2642,3 @@ model Knowledgebase {
   @@index([businessId])
   @@index([agencyId])
 }
-
