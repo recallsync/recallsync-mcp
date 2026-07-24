@@ -87,6 +87,8 @@ model User {
 
   Campaigns            Campaign[]
   CampaignLeads        CampaignLead[]
+  NumberPools          NumberPool[]
+  PoolPhoneNumbers     PoolPhoneNumber[]
   Assistant            Assistant[]
   Pipelines            Pipeline[]
   Opportunities        Opportunity[]
@@ -361,6 +363,11 @@ model Lead {
   // other fields
   ghlContactId String?
 
+  /// CRMBridge PMS patient id (opaque foreign key — not a local patient record).
+  crmPatientId String?
+  /// CRMBridge appointment id after booking writeback.
+  crmAppointmentId String?
+
   /// Stable browser id from website chat embed (localStorage on host page). Unique per business.
   embedVisitorId String?
 
@@ -398,6 +405,10 @@ model Lead {
   InstaOsDmOutboxes     InstaOsDmOutbox[]
   LeadJourneyEvents     LeadJourneyEvent[]
   LeadIgAccountConfigs  LeadIgAccountConfig[]
+  DentalBridgeBookings  DentalBridgeBooking[]
+  DentalBridgePatient   DentalBridgePatient?
+  GmbReviews            GmbReview[]
+  FunnelFormSubmissions FunnelFormSubmission[]
 
   @@index([agencyId])
   @@index([salesAgentId])
@@ -408,6 +419,7 @@ model Lead {
   @@index([ghlContactId])
   @@index([businessId, leadSource])
   @@index([businessId, leadSubSource])
+  @@index([businessId, crmPatientId])
   @@unique([businessId, embedVisitorId])
 }
 
@@ -601,6 +613,11 @@ model ConversationMessage {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  /// AES-encrypted chat body fields when Dental Bridge HIPAA mode is enabled.
+  isPhiEncrypted Boolean @default(false)
+  /// When set, cron purges this row after the retention window (creation + 14 days).
+  phiDeleteAt    DateTime?
+
   @@index([leadId])
   @@index([conversationId])
   @@index([conversationId, instagramAccountId, createdAt])
@@ -612,6 +629,7 @@ model ConversationMessage {
   @@index([businessId])
   @@index([agentId])
   @@index([rsRunId])
+  @@index([phiDeleteAt])
   @@unique([sourceInboundDedupKey])
 }
 
@@ -919,6 +937,9 @@ model LeadCall {
   campaignId String?
   Campaign   Campaign? @relation(fields: [campaignId], references: [id], onDelete: Cascade)
 
+  poolNumberId    String?
+  PoolPhoneNumber PoolPhoneNumber? @relation(fields: [poolNumberId], references: [id], onDelete: SetNull)
+
   // Metadata
   createdAt            DateTime              @default(now())
   updatedAt            DateTime              @updatedAt
@@ -930,6 +951,7 @@ model LeadCall {
   @@index([leadId])
   @@index([campaignId])
   @@index([businessId])
+  @@index([poolNumberId])
 }
 
 model Campaign {
@@ -962,6 +984,11 @@ model Campaign {
   // JSON array of CHANNEL strings + NONE for no channels. Empty = all of the agent's channels.
   channels Json?
 
+  /** Max new outbound lead pickups per local day (voice + SMS + WhatsApp). null = unlimited. */
+  dailyOutboundLimit Int?
+  /** Running count for today; reset at midnight in campaign.timeZone. */
+  outboundToday      Int @default(0)
+
   // Relations
   agencyId String
   Agency   User   @relation(fields: [agencyId], references: [id], onDelete: Cascade)
@@ -978,17 +1005,94 @@ model Campaign {
   automationId String?
   Automation   Automation? @relation(fields: [automationId], references: [id], onDelete: SetNull)
 
+  // Optional outbound caller-ID pool for voice rotation.
+  numberPoolId String?
+  NumberPool   NumberPool? @relation(fields: [numberPoolId], references: [id], onDelete: SetNull)
+
+  type              CAMPAIGN_TYPE @default(VOICE_REACTIVATION)
+  gmbReviewSettings Json?
+
   // Metadata
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   CampaignLeads CampaignLead[]
   LeadCalls     LeadCall[]
+  GmbReviews    GmbReview[]
 
   @@index([agencyId])
   @@index([businessId])
   @@index([primaryAgentId])
   @@index([automationId])
+  @@index([numberPoolId])
+  @@index([businessId, type, status])
+}
+
+model NumberPool {
+  id   String @id @default(uuid())
+  name String
+
+  defaultDailyCap        Int @default(50)
+  defaultConcurrentLimit Int @default(2)
+  defaultMinGapSeconds   Int @default(8)
+
+  agencyId String
+  Agency   User   @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+
+  businessId String
+  Business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  numbers   PoolPhoneNumber[]
+  campaigns Campaign[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([agencyId])
+  @@index([businessId])
+}
+
+model PoolPhoneNumber {
+  id String @id @default(uuid())
+
+  e164              String
+  provider          VOICE_POOL_PROVIDER
+  providerId        String
+  Provider          Provider @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  providerNumberRef String
+
+  status            POOL_NUMBER_STATUS @default(WARMING)
+  dailyCap          Int
+  concurrentLimit   Int
+  minGapSeconds     Int
+
+  callsToday      Int       @default(0)
+  concurrentCalls Int       @default(0)
+  lastCallAt      DateTime?
+
+  acceptanceRate Float?
+  pausedReason   String? @db.Text
+
+  poolId     String
+  NumberPool NumberPool @relation(fields: [poolId], references: [id], onDelete: Cascade)
+
+  agencyId String
+  Agency   User   @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+
+  businessId String
+  Business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  leadCalls LeadCall[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([poolId, e164])
+  @@index([poolId])
+  @@index([providerId])
+  @@index([agencyId])
+  @@index([businessId])
+  @@index([status])
 }
 
 model CampaignLead {
@@ -1015,6 +1119,8 @@ model CampaignLead {
   calledAt    DateTime?
   retriesLeft Int       @default(3)
   nextRetryAt DateTime?
+
+  GmbReviews GmbReview[]
 
   @@index([agencyId])
   @@index([businessId])
@@ -1288,6 +1394,7 @@ model Business {
   Knowledgebases       Knowledgebase[]
   InstagramAccounts    InstagramAccount[]
   WhatsAppAccounts     WhatsAppAccount[]
+  WhatsAppMessageTemplates WhatsAppMessageTemplate[]
   InstaOsAutomation    InstaOsAutomation[]
   DmTemplates          DmTemplate[]
   InstaOsEvents         InstaOsEvent[]
@@ -1297,8 +1404,455 @@ model Business {
   BaseAgents     BaseAgent[] @relation("BusinessBaseAgents")
   BaseAgentSessions     BaseAgentSession[]
   MiniAppSubscriptions  MiniAppSubscription[]
+  NumberPools           NumberPool[]
+  PoolPhoneNumbers      PoolPhoneNumber[]
+  DentalBridgeSettings  DentalBridgeSettings?
+  DentalBridgeBookings  DentalBridgeBooking[]
+  DentalBridgePatients  DentalBridgePatient[]
+  LocalPresenceSettings LocalPresenceSettings?
+  BusinessMailConnection BusinessMailConnection?
+  BusinessKeywords      BusinessKeyword[]
+  KeywordRankingSyncs   KeywordRankingSync[]
+  GmbReviews            GmbReview[]
+  LandingPages          LandingPage[]
+  Websites              Website[]
+  FunnelForms           FunnelForm[]
+  BusinessAssets        BusinessAsset[]
 
   @@index([agencyId])
+}
+
+/// Dental Bridge (DentWire) per-business settings — CRMBridge defaults, booking mode, HIPAA.
+model DentalBridgeSettings {
+  id         String   @id @default(uuid())
+  businessId String   @unique
+  Business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  hipaaMode   Boolean                  @default(false)
+  bookingMode DENTAL_BRIDGE_BOOKING_MODE @default(DIRECT)
+
+  /// CRMBridge clinic identifiers (credentials live on Provider CRM_BRIDGE).
+  crmPracticeId              String @default("")
+  defaultProviderId          String @default("")
+  defaultOperatoryId         String @default("")
+  defaultAppointmentReason   String @default("New Patient Exam")
+  defaultAppointmentLengthMinutes Int @default(60)
+  slotSearchDaysAhead        Int    @default(14)
+
+  /// Stripe deposit path (DFY manual key entry per business). Nullable — MySQL TEXT cannot use @default("").
+  stripeSecretKey      String? @db.Text
+  stripeWebhookSecret  String? @db.Text
+  stripeDepositAmountCents Int?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([businessId])
+}
+
+/// Shared Local Presence settings (GMB review URL, SEO defaults).
+model LocalPresenceSettings {
+  id         String   @id @default(uuid())
+  businessId String   @unique
+  Business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  googleReviewUrl      String? @db.Text
+  targetDomain         String?
+  defaultLocationCode  Int?
+  defaultLocationName  String?
+  seoTimezone          String  @default("UTC")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([businessId])
+}
+
+/// Multi-page website container — bound to a custom domain when connected.
+model Website {
+  id         String   @id @default(uuid())
+  businessId String
+  Business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  name   String
+  slug   String
+  /// Public hostname e.g. www.acmedental.com — globally unique when set.
+  hostname           String? @unique
+  hostnameVerified   Boolean @default(false)
+  settings           Json?
+
+  folders WebsiteFolder[]
+  pages   LandingPage[]
+  globalComponents WebsiteGlobalComponent[]
+
+  /// Assigned site-wide header/footer global component ids (no FK — avoids relation cycles).
+  headerGlobalComponentId String?
+  footerGlobalComponentId String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([businessId, slug])
+  @@index([businessId])
+}
+
+/// Nested folder within a website — slug segments appear in public URLs.
+model WebsiteFolder {
+  id        String  @id @default(uuid())
+  websiteId String
+  Website   Website @relation(fields: [websiteId], references: [id], onDelete: Cascade)
+  parentId  String?
+  Parent    WebsiteFolder?  @relation("WebsiteFolderTree", fields: [parentId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  Children  WebsiteFolder[] @relation("WebsiteFolderTree")
+
+  name      String
+  slug      String
+  sortOrder Int    @default(0)
+
+  pages LandingPage[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([websiteId, parentId])
+  @@index([websiteId])
+}
+
+enum WEBSITE_GLOBAL_COMPONENT_KIND {
+  HEADER
+  FOOTER
+  CTA
+  CUSTOM
+}
+
+/// Reusable section scoped to a website — resolved live on all pages.
+model WebsiteGlobalComponent {
+  id        String   @id @default(uuid())
+  websiteId String
+  Website   Website  @relation(fields: [websiteId], references: [id], onDelete: Cascade)
+
+  name    String
+  kind    WEBSITE_GLOBAL_COMPONENT_KIND @default(CUSTOM)
+  /// Full SectionNode JSON (section → rows → columns → elements)
+  section Json
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([websiteId])
+}
+
+/// AI-built landing pages (draft/publish, block JSON).
+model LandingPage {
+  id         String   @id @default(uuid())
+  businessId String
+  Business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  websiteId String
+  Website   Website @relation(fields: [websiteId], references: [id], onDelete: Cascade)
+  folderId  String?
+  Folder    WebsiteFolder? @relation(fields: [folderId], references: [id], onDelete: SetNull, onUpdate: NoAction)
+
+  title  String
+  slug   String
+  status LANDING_PAGE_STATUS @default(DRAFT)
+
+  /// Homepage for this website — serves `/` on the connected domain.
+  isHomePage    Boolean @default(false)
+  /// Canonical published path e.g. `/`, `/about`, `/services/service-1`
+  publishedPath String?
+
+  blocks Json
+  theme  Json
+
+  /// Live snapshot — updated only on publish; public /p/[id] reads this.
+  publishedBlocks Json?
+  publishedTitle  String?
+  publishedSlug   String?
+  publishedMetaTitle       String?
+  publishedMetaDescription String? @db.Text
+
+  metaTitle       String?
+  metaDescription String? @db.Text
+
+  publishedAt DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([websiteId, folderId])
+  @@index([websiteId, isHomePage])
+  @@index([websiteId, publishedPath])
+  @@index([businessId, status])
+  @@index([status])
+}
+
+/// Business-scoped media library (UploadThing-backed).
+model BusinessAsset {
+  id         String            @id @default(uuid())
+  businessId String
+  Business   Business          @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  name             String
+  originalFileName String
+  fileUrl          String
+  fileKey          String
+  mimeType         String
+  type             BusinessAssetType
+  fileSizeBytes    Int               @default(0)
+
+  uploadedByUserId String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([businessId, type, createdAt])
+  @@index([businessId])
+}
+
+/// Reusable funnel form definitions (fields, webhooks, submissions).
+model FunnelForm {
+  id                 String   @id @default(uuid())
+  businessId         String
+  Business           Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  name               String
+  isActive           Boolean  @default(true)
+  externalWebhookUrl String?  @db.Text
+  webhookToken       String   @unique
+
+  fields      FunnelFormField[]
+  submissions FunnelFormSubmission[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([businessId, name])
+  @@index([businessId])
+}
+
+model FunnelFormField {
+  id     String     @id @default(uuid())
+  formId String
+  Form   FunnelForm @relation(fields: [formId], references: [id], onDelete: Cascade)
+
+  key         String
+  label       String
+  type        FUNNEL_FORM_FIELD_TYPE
+  required    Boolean @default(false)
+  placeholder String?
+  sortOrder   Int     @default(0)
+
+  @@unique([formId, key])
+  @@index([formId])
+}
+
+model FunnelFormSubmission {
+  id         String     @id @default(uuid())
+  formId     String
+  Form       FunnelForm @relation(fields: [formId], references: [id], onDelete: Cascade)
+  businessId String
+
+  landingPageId String?
+  data          Json
+  leadId        String?
+  Lead          Lead?   @relation(fields: [leadId], references: [id], onDelete: SetNull)
+
+  webhookStatus FUNNEL_WEBHOOK_STATUS @default(PENDING)
+  webhookError  String?               @db.Text
+
+  createdAt DateTime @default(now())
+
+  @@index([formId, createdAt])
+  @@index([businessId, createdAt])
+}
+
+/// Per-business Gmail or Outlook mailbox for review request emails.
+model BusinessMailConnection {
+  id         String               @id @default(uuid())
+  businessId String               @unique
+  Business   Business             @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  provider       BusinessMailProvider
+  accessToken    String?   @db.Text
+  refreshToken   String?   @db.Text
+  tokenExpiresAt DateTime?
+  accountEmail   String?
+  accountId      String?
+  connectedAt    DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([businessId])
+}
+
+/// GMB review request / collection (Lead-scoped).
+model GmbReview {
+  id         String       @id @default(uuid())
+  businessId String
+  Business   Business     @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  leadId     String
+  Lead       Lead         @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  campaignId     String?
+  Campaign       Campaign?     @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+  campaignLeadId String?
+  CampaignLead   CampaignLead? @relation(fields: [campaignLeadId], references: [id], onDelete: SetNull)
+
+  status          ReviewStatus @default(QUEUED)
+  rating          Int?
+  content         String?      @db.Text
+  requestedAt     DateTime?
+  requestReason   String?      @db.Text
+  requestCount    Int          @default(0)
+  failureCount    Int          @default(0)
+  pendingSubject  String?
+  pendingBodyHtml String?      @db.Text
+  respondedAt     DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([businessId, status, createdAt])
+  @@index([leadId])
+  @@index([campaignId])
+}
+
+model BusinessKeyword {
+  id         String   @id @default(uuid())
+  businessId String
+  Business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  keyword      String
+  targetDomain String
+  locationCode Int
+  locationName String
+
+  rankings BusinessKeywordRanking[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([businessId, keyword, locationCode])
+  @@index([businessId])
+}
+
+model BusinessKeywordRanking {
+  id        String          @id @default(uuid())
+  keywordId String
+  keyword   BusinessKeyword @relation(fields: [keywordId], references: [id], onDelete: Cascade)
+  syncId    String?
+  sync      KeywordRankingSync? @relation(fields: [syncId], references: [id], onDelete: SetNull)
+
+  source       RankingSource @default(GOOGLE_ORGANIC)
+  provider     String        @default("dataforseo")
+  position     Int?
+  rankingUrl   String?       @map("ranking_url") @db.Text
+  rankingTitle String?
+  topDomains   Json?
+
+  checkedAt DateTime
+  checkedOn DateTime @db.Date
+  device    String   @default("desktop")
+  error     String?  @db.Text
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([keywordId, source, checkedOn])
+  @@index([keywordId, checkedAt])
+  @@index([syncId])
+}
+
+model KeywordRankingSync {
+  id         String   @id @default(uuid())
+  businessId String
+  Business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  source       RankingSource @default(GOOGLE_ORGANIC)
+  provider     String        @default("dataforseo")
+  startedAt    DateTime
+  finishedAt   DateTime?
+  totalCount   Int
+  successCount Int           @default(0)
+  failedCount  Int           @default(0)
+  skippedCount Int           @default(0)
+
+  rankings BusinessKeywordRanking[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([businessId, startedAt])
+}
+
+/// Async CRMBridge patient writeback — optional 1:1 with Lead.
+model DentalBridgePatient {
+  id         String   @id @default(uuid())
+  businessId String
+  Business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  leadId     String   @unique
+  Lead       Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  status DENTAL_BRIDGE_PATIENT_STATUS @default(QUEUED)
+
+  firstName String
+  lastName  String
+  email     String?
+  phone     String?
+
+  crmPatientId   String?
+  /// CRMBridge async writeback id from CreateNewPatient.
+  crmWritebackId String?
+  bridgeMessage  String? @db.Text
+  bridgeStatus   String?
+  writebackError String? @db.Text
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([businessId])
+  @@index([businessId, status])
+  @@index([crmWritebackId])
+}
+
+/// Pending booking hold (Stripe deposit path) before PMS writeback.
+model DentalBridgeBooking {
+  id         String   @id @default(uuid())
+  businessId String
+  Business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  leadId     String
+  Lead       Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  status DENTAL_BRIDGE_BOOKING_STATUS @default(PENDING_PAYMENT)
+
+  appointmentDate     String
+  timeHour            Int
+  timeMin             Int
+  providerId          String
+  operatoryId         String
+  appointmentReason   String
+  appointmentLengthMinutes Int @default(60)
+
+  stripeInvoiceId String?
+
+  crmPatientId      String?
+  crmAppointmentId  String?
+  /// CRMBridge async writeback id from CreateNewAppointment (poll via GetWritebackStatus cron).
+  crmWritebackId    String?
+  /// Latest Message from CRMBridge queue/status responses.
+  bridgeMessage     String? @db.Text
+  /// Latest Status from CRMBridge GetWritebackStatus (e.g. InProgress, Completed, Failed).
+  bridgeStatus      String?
+  writebackError    String? @db.Text
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([businessId, leadId])
+  @@index([businessId, status])
+  @@index([stripeInvoiceId])
+  @@index([crmWritebackId])
 }
 
 /// Per–mini-app billing and usage (Recall core subscription stays on `Business`).
@@ -1412,10 +1966,51 @@ model WhatsAppAccount {
   BaseAgents         BaseAgent[] @relation("WhatsAppAccountBaseAgents")
   WorkflowAgents     Agent[]     @relation("WhatsAppAccountWorkflowAgents")
   Conversations      Conversation[]
+  MessageTemplates   WhatsAppMessageTemplate[]
 
   @@unique([businessId, phoneNumberId])
   @@index([businessId])
   @@index([wabaId])
+}
+
+enum WHATSAPP_TEMPLATE_STATUS {
+  DRAFT
+  PENDING
+  APPROVED
+  REJECTED
+  PAUSED
+}
+
+model WhatsAppMessageTemplate {
+  id                String                   @id @default(uuid())
+  businessId        String
+  Business          Business                 @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  whatsAppAccountId String
+  WhatsAppAccount   WhatsAppAccount          @relation(fields: [whatsAppAccountId], references: [id], onDelete: Cascade)
+
+  name            String
+  language        String                   @default("en_US")
+  category        String?
+  status          WHATSAPP_TEMPLATE_STATUS @default(PENDING)
+
+  headerType     String?
+  headerContent  String?
+  headerMediaUrl String?
+  bodyText       String                   @db.Text
+  footerText     String?
+  buttons        Json?
+  sampleValues   Json?
+
+  metaTemplateId  String?
+  rejectionReason String?
+  qualityScore    String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([businessId, whatsAppAccountId, name, language])
+  @@index([businessId, status])
+  @@index([whatsAppAccountId])
 }
 
 // ─── Insta OS Models ────────────────────────────────────────────────────────
@@ -1641,6 +2236,9 @@ model BaseAgent {
   /// When true, the agent gets booking tools from the MCP server (calendar booking).
   /// Standard agents: applies to the single-prompt turn. Flow agents: opt-in per objective node.
   bookingEnabled Boolean @default(false)
+
+  /// When true, queue a CRMBridge patient writeback when a new lead is created on agent trigger.
+  enableAutoPatientCreation Boolean @default(false)
 
   /// When true, the agent receives a `smart_stop` tool that can pause AI replies
   /// by switching the conversation to MANUAL when the model detects a configured
@@ -2022,6 +2620,8 @@ model Provider {
 
   Business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
 
+  PoolPhoneNumbers PoolPhoneNumber[]
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -2213,6 +2813,36 @@ enum MINI_APP_SUBSCRIPTION_PLAN {
 
 enum MINI_APP_SOURCE {
   INSTA_OS
+  REACTIVATION_OS
+  DENTAL_BRIDGE
+}
+
+enum DENTAL_BRIDGE_BOOKING_MODE {
+  DIRECT
+  STRIPE_DEPOSIT
+}
+
+enum DENTAL_BRIDGE_PATIENT_STATUS {
+  QUEUED
+  IN_PROGRESS
+  SUCCESS
+  FAILED
+}
+
+enum DENTAL_BRIDGE_BOOKING_STATUS {
+  PENDING_PAYMENT
+  /// Slot saved locally; PMS patient writeback not complete yet.
+  PENDING_PATIENT
+  PAID
+  QUEUED
+  IN_PROGRESS
+  SUCCESS
+  FAILED
+  /// Patient writeback failed while a local slot was held — staff action needed.
+  PATIENT_PENDING_FAILED
+  /// Patient ready but PMS appointment create failed — staff action needed.
+  MANUAL_REQUIRED
+  CANCELLED
 }
 
 enum PLAN_TERM {
@@ -2246,9 +2876,32 @@ enum LEAD_QUALITY {
 enum LEAD_SOURCE {
   UNKNOWN
   INSTA_OS
+  REACTIVATION_OS
+  DENTAL_BRIDGE
   AIOS
   CAL
   WEBSITE_EMBED
+  LANDING_PAGE
+}
+
+enum LANDING_PAGE_STATUS {
+  DRAFT
+  PUBLISHED
+}
+
+enum FUNNEL_FORM_FIELD_TYPE {
+  TEXT
+  EMAIL
+  PHONE
+  TEXTAREA
+  NUMBER
+}
+
+enum FUNNEL_WEBHOOK_STATUS {
+  PENDING
+  SENT
+  FAILED
+  SKIPPED
 }
 
 /// Insta OS first-contact channel (use with leadSource = INSTA_OS). Set only on lead create.
@@ -2259,6 +2912,7 @@ enum LEAD_SUB_SOURCE {
   WHATSAPP_DM
   GM_SCRAPER
   CAL_BOOKING
+  IMPORTED
 }
 
 // Meeting Enums
@@ -2319,6 +2973,28 @@ enum CAMPAIGN_STATUS {
   FAILED
 }
 
+enum CAMPAIGN_TYPE {
+  VOICE_REACTIVATION
+  GMB_REVIEW
+}
+
+enum ReviewStatus {
+  QUEUED
+  REQUESTED
+  RECEIVED
+  DECLINED
+  FAILED
+}
+
+enum RankingSource {
+  GOOGLE_ORGANIC
+}
+
+enum BusinessMailProvider {
+  GOOGLE
+  OUTLOOK
+}
+
 enum CAMPAIGN_LEAD_STATUS {
   PENDING
   RETRYING
@@ -2331,6 +3007,23 @@ enum CAMPAIGN_LEAD_QUALITY {
   LOW
   MEDIUM
   HIGH
+}
+
+enum VOICE_POOL_PROVIDER {
+  VAPI
+  RETELL
+  ELEVEN_LABS
+  LIVEKIT
+  TWILIO
+}
+
+enum POOL_NUMBER_STATUS {
+  ACTIVE
+  WARMING
+  PAUSED
+  SUSPECTED
+  BLACKLISTED
+  REMOVED
 }
 
 enum CAMPAIGN_LEAD_RESULT {
@@ -2479,6 +3172,16 @@ enum PROVIDER {
   WHATSAPP
   INSTAGRAM
   SLACK
+  CRM_BRIDGE
+  DATAFORSEO
+  UPLOADTHING
+}
+
+enum BusinessAssetType {
+  IMAGE
+  AUDIO
+  VIDEO
+  FILE
 }
 
 enum MESSAGE_ITEM_TYPE {

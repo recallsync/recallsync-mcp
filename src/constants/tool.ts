@@ -141,4 +141,16 @@ export const API_ENDPOINTS = {
     UPSERT_VALUE: "/custom-field/value", // POST (single or { values: [] } bulk)
     DELETE_VALUE: "/custom-field/value", // DELETE, append `/{id}`
   },
+  FUNNEL_PAGE: {
+    GET_FUNNEL_PAGES: "/funnel-page",
+    GET_FUNNEL_PAGE_BY_ID: "/funnel-page", // GET, append `/{id}`
+    CREATE_FUNNEL_PAGE: "/funnel-page", // POST
+    UPDATE_FUNNEL_PAGE: "/funnel-page", // PATCH, append `/{id}`
+    DELETE_FUNNEL_PAGE: "/funnel-page", // DELETE, append `/{id}`
+    PUBLISH_FUNNEL_PAGE: "/funnel-page", // POST, append `/{id}/publish`
+    UNPUBLISH_FUNNEL_PAGE: "/funnel-page", // POST, append `/{id}/unpublish`
+  },
+  ASSET: {
+    GET_ASSETS: "/asset",
+  },
 } as const;

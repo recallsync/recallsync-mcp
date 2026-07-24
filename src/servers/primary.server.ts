@@ -152,6 +152,17 @@ import {
   handleUpdateConversationMessage,
   handleDeleteConversationMessage,
 } from "../tools/agent.js";
+import {
+  funnelPageTools,
+  handleCreateFunnelPage,
+  handleDeleteFunnelPage,
+  handleGetFunnelPage,
+  handleListBusinessAssets,
+  handleListFunnelPages,
+  handlePublishFunnelPage,
+  handleUnpublishFunnelPage,
+  handleUpdateFunnelPage,
+} from "../tools/funnel-page.js";
 
 export const primaryServer = new Server(
   {
@@ -184,6 +195,7 @@ primaryServer.setRequestHandler(ListToolsRequestSchema, async () => {
       ...callTools,
       ...customFieldTools,
       ...agentTools,
+      ...funnelPageTools,
     ],
   };
 });
@@ -401,6 +413,22 @@ primaryServer.setRequestHandler(CallToolRequestSchema, async (request) => {
       return handleUpdateConversationMessage(request);
     case "delete-conversation-message":
       return handleDeleteConversationMessage(request);
+    case "list-funnel-pages":
+      return handleListFunnelPages(request);
+    case "get-funnel-page":
+      return handleGetFunnelPage(request);
+    case "create-funnel-page":
+      return handleCreateFunnelPage(request);
+    case "update-funnel-page":
+      return handleUpdateFunnelPage(request);
+    case "publish-funnel-page":
+      return handlePublishFunnelPage(request);
+    case "unpublish-funnel-page":
+      return handleUnpublishFunnelPage(request);
+    case "delete-funnel-page":
+      return handleDeleteFunnelPage(request);
+    case "list-business-assets":
+      return handleListBusinessAssets(request);
     case "update-note":
       return handleUpdateNote(request);
     case "delete-note":

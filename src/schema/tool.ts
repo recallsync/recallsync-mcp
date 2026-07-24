@@ -1070,3 +1070,74 @@ export const DeleteCustomFieldValueSchema = z.object({
 export type DeleteCustomFieldValueRequest = z.infer<
   typeof DeleteCustomFieldValueSchema
 >;
+
+// Funnel page schemas
+export const GetFunnelPagesSchema = z
+  .object({
+    status: z.enum(["DRAFT", "PUBLISHED"]).optional(),
+  })
+  .merge(ListQuerySchema);
+export type GetFunnelPagesRequest = z.infer<typeof GetFunnelPagesSchema>;
+
+export const GetFunnelPageByIdSchema = z.object({
+  id: z.string().min(1, "Funnel page ID is required"),
+});
+export type GetFunnelPageByIdRequest = z.infer<typeof GetFunnelPageByIdSchema>;
+
+export const CreateFunnelPageSchema = z.object({
+  title: z.string().min(1, "Title is required").max(120),
+  slug: z
+    .string()
+    .min(1)
+    .max(80)
+    .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, "Use lowercase letters, numbers, and hyphens")
+    .optional(),
+});
+export type CreateFunnelPageRequest = z.infer<typeof CreateFunnelPageSchema>;
+
+/** Loose PageDocumentV2 — validated server-side. */
+export const PageDocumentV2Schema = z
+  .object({
+    version: z.literal(2),
+    sections: z.array(z.record(z.unknown())),
+  })
+  .passthrough();
+
+export const UpdateFunnelPageSchema = z.object({
+  id: z.string().min(1, "Funnel page ID is required"),
+  title: z.string().min(1).max(120).optional(),
+  slug: z
+    .string()
+    .min(1)
+    .max(80)
+    .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, "Use lowercase letters, numbers, and hyphens")
+    .optional(),
+  document: PageDocumentV2Schema.optional(),
+  blocks: PageDocumentV2Schema.optional(),
+  metaTitle: z.string().max(120).nullable().optional(),
+  metaDescription: z.string().max(320).nullable().optional(),
+});
+export type UpdateFunnelPageRequest = z.infer<typeof UpdateFunnelPageSchema>;
+
+export const PublishFunnelPageSchema = z.object({
+  id: z.string().min(1, "Funnel page ID is required"),
+});
+export type PublishFunnelPageRequest = z.infer<typeof PublishFunnelPageSchema>;
+
+export const UnpublishFunnelPageSchema = z.object({
+  id: z.string().min(1, "Funnel page ID is required"),
+});
+export type UnpublishFunnelPageRequest = z.infer<typeof UnpublishFunnelPageSchema>;
+
+export const DeleteFunnelPageSchema = z.object({
+  id: z.string().min(1, "Funnel page ID is required"),
+});
+export type DeleteFunnelPageRequest = z.infer<typeof DeleteFunnelPageSchema>;
+
+export const ListBusinessAssetsSchema = z.object({
+  type: z.enum(["IMAGE", "AUDIO", "VIDEO", "FILE"]).optional(),
+  search: z.string().optional(),
+  limit: z.number().int().min(1).max(100).optional(),
+  cursor: z.string().optional(),
+});
+export type ListBusinessAssetsRequest = z.infer<typeof ListBusinessAssetsSchema>;
