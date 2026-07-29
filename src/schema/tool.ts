@@ -1141,3 +1141,51 @@ export const ListBusinessAssetsSchema = z.object({
   cursor: z.string().optional(),
 });
 export type ListBusinessAssetsRequest = z.infer<typeof ListBusinessAssetsSchema>;
+
+export const WebsiteIdSchema = z.object({
+  websiteId: z.string().min(1, "Website ID is required"),
+});
+export type WebsiteIdRequest = z.infer<typeof WebsiteIdSchema>;
+
+export const InvokeWebsiteActionSchema = z.object({
+  websiteId: z.string().min(1, "Website ID is required"),
+  action: z.string().min(1, "Action key is required"),
+  body: z.record(z.unknown()).optional(),
+});
+export type InvokeWebsiteActionRequest = z.infer<typeof InvokeWebsiteActionSchema>;
+
+export const SetWebsiteSchemaSqlSchema = z
+  .object({
+    websiteId: z.string().min(1, "Website ID is required"),
+    schemaSql: z.string().min(1).optional(),
+    schemaVersion: z.string().optional(),
+    applyDefault: z.boolean().optional(),
+  })
+  .refine((data) => data.applyDefault === true || Boolean(data.schemaSql?.trim()), {
+    message: "schemaSql is required unless applyDefault is true",
+  });
+export type SetWebsiteSchemaSqlRequest = z.infer<typeof SetWebsiteSchemaSqlSchema>;
+
+export const UpsertWebsiteActionSchema = z.object({
+  websiteId: z.string().min(1, "Website ID is required"),
+  key: z.string().min(1, "Action key is required"),
+  label: z.string().optional(),
+  enabled: z.boolean().optional(),
+  config: z.record(z.unknown()),
+});
+export type UpsertWebsiteActionRequest = z.infer<typeof UpsertWebsiteActionSchema>;
+
+export const UpsertWebsiteCustomPageSchema = z.object({
+  websiteId: z.string().min(1, "Website ID is required"),
+  path: z.string().min(1, "Path is required"),
+  title: z.string().min(1, "Title is required"),
+  document: z.record(z.unknown()),
+  meta: z
+    .object({
+      title: z.string().optional(),
+      description: z.string().optional(),
+    })
+    .optional(),
+  source: z.enum(["AGENT", "IMPORT", "USER"]).optional(),
+});
+export type UpsertWebsiteCustomPageRequest = z.infer<typeof UpsertWebsiteCustomPageSchema>;

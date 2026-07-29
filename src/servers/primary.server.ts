@@ -163,6 +163,19 @@ import {
   handleUnpublishFunnelPage,
   handleUpdateFunnelPage,
 } from "../tools/funnel-page.js";
+import {
+  websiteAppTools,
+  handleGetWebsiteAppCapabilities,
+  handleGetWebsiteSchemaSql,
+  handleInvokeWebsiteAction,
+  handleListWebsiteActions,
+  handleListWebsiteCustomPages,
+  handleListWebsiteProducts,
+  handleListWebsites,
+  handleSetWebsiteSchemaSql,
+  handleUpsertWebsiteAction,
+  handleUpsertWebsiteCustomPage,
+} from "../tools/website-app.js";
 
 export const primaryServer = new Server(
   {
@@ -196,6 +209,7 @@ primaryServer.setRequestHandler(ListToolsRequestSchema, async () => {
       ...customFieldTools,
       ...agentTools,
       ...funnelPageTools,
+      ...websiteAppTools,
     ],
   };
 });
@@ -429,6 +443,26 @@ primaryServer.setRequestHandler(CallToolRequestSchema, async (request) => {
       return handleDeleteFunnelPage(request);
     case "list-business-assets":
       return handleListBusinessAssets(request);
+    case "list-websites":
+      return handleListWebsites(request);
+    case "get-website-app-capabilities":
+      return handleGetWebsiteAppCapabilities(request);
+    case "list-website-actions":
+      return handleListWebsiteActions(request);
+    case "list-website-custom-pages":
+      return handleListWebsiteCustomPages(request);
+    case "get-website-schema-sql":
+      return handleGetWebsiteSchemaSql(request);
+    case "set-website-schema-sql":
+      return handleSetWebsiteSchemaSql(request);
+    case "upsert-website-action":
+      return handleUpsertWebsiteAction(request);
+    case "upsert-website-custom-page":
+      return handleUpsertWebsiteCustomPage(request);
+    case "list-website-products":
+      return handleListWebsiteProducts(request);
+    case "invoke-website-action":
+      return handleInvokeWebsiteAction(request);
     case "update-note":
       return handleUpdateNote(request);
     case "delete-note":

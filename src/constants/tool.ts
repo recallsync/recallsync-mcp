@@ -153,4 +153,13 @@ export const API_ENDPOINTS = {
   ASSET: {
     GET_ASSETS: "/asset",
   },
+  WEBSITE_APP: {
+    LIST_WEBSITES: "/website-app/websites",
+    CAPABILITIES: "/website-app",
+    ACTIONS: "/website-app",
+    CUSTOM_PAGES: "/website-app",
+    SCHEMA_SQL: "/website-app",
+    PRODUCTS: "/website-app",
+    INVOKE: "/website-app",
+  },
 } as const;
