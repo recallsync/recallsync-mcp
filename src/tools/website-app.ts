@@ -168,6 +168,18 @@ export const websiteAppTools = [
     },
   },
   {
+    name: "import-commerce-v1-actions",
+    description:
+      "Install all commerce-v1 invoke actions (cart, checkout, auth, admin, Stripe) from the reference app pack into Recall DB. No repo changes — config-in-DB only. Requires Supabase connected on the website.",
+    arguments: [],
+    inputSchema: {
+      type: "object",
+      properties: { websiteId: { type: "string" } },
+      required: ["websiteId"],
+      additionalProperties: false,
+    },
+  },
+  {
     name: "upsert-website-custom-page",
     description:
       "Upsert a custom page (PageDocumentV2 JSON) at a path like /shop or /admin/products. Not editable in visual builder.",
@@ -523,6 +535,29 @@ export async function handleUpsertWebsiteAction(request: CallToolRequest) {
     const msg = err instanceof Error ? err.message : String(err);
     return {
       content: [{ type: "text" as const, text: `Failed to execute upsert-website-action: ${msg}` }],
+      isError: true,
+    };
+  }
+}
+
+export async function handleImportCommerceV1Actions(request: CallToolRequest) {
+  const parsed = WebsiteIdSchema.safeParse(request.params.arguments ?? {});
+  if (!parsed.success) {
+    return { content: [{ type: "text" as const, text: formatZodErrors(parsed) }], isError: true };
+  }
+  try {
+    const response = await authedFetch(
+      request,
+      `${API_ENDPOINTS.WEBSITE_APP.ACTIONS}/${parsed.data.websiteId}/actions/import-commerce-v1`,
+      { method: "POST", body: JSON.stringify({}) }
+    );
+    return jsonOrError("import-commerce-v1-actions failed", response);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return {
+      content: [
+        { type: "text" as const, text: `Failed to execute import-commerce-v1-actions: ${msg}` },
+      ],
       isError: true,
     };
   }

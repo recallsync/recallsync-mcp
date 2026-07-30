@@ -178,6 +178,7 @@ import {
   handleListWebsites,
   handleSetWebsiteSchemaSql,
   handleEnsureWebsiteSchemaSql,
+  handleImportCommerceV1Actions,
   handleUpsertWebsiteAction,
   handleUpsertWebsiteCustomPage,
 } from "../tools/website-app.js";
@@ -464,6 +465,8 @@ primaryServer.setRequestHandler(CallToolRequestSchema, async (request) => {
       return handleEnsureWebsiteSchemaSql(request);
     case "upsert-website-action":
       return handleUpsertWebsiteAction(request);
+    case "import-commerce-v1-actions":
+      return handleImportCommerceV1Actions(request);
     case "upsert-website-custom-page":
       return handleUpsertWebsiteCustomPage(request);
     case "list-website-products":
