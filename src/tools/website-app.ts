@@ -2,6 +2,10 @@ import { CallToolRequest } from "@modelcontextprotocol/sdk/types.js";
 import { API_ENDPOINTS } from "../constants/tool.js";
 import { getApiKey, getBaseUrl } from "../utils/auth.util.js";
 import {
+  ExportWebsiteAppPackSchema,
+  GetWebsiteCustomPageSchema,
+  ImportWebsiteAppPackIntoWebsiteSchema,
+  ImportWebsiteAppPackSchema,
   InvokeWebsiteActionSchema,
   SetWebsiteSchemaSqlSchema,
   UpsertWebsiteActionSchema,
@@ -190,6 +194,76 @@ export const websiteAppTools = [
         body: { type: "object", additionalProperties: true },
       },
       required: ["websiteId", "action"],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: "get-website-custom-page",
+    description:
+      "Get a custom app page by path (full PageDocumentV2). Example path: /admin or /admin/products.",
+    arguments: [],
+    inputSchema: {
+      type: "object",
+      properties: {
+        websiteId: { type: "string" },
+        path: { type: "string" },
+      },
+      required: ["websiteId", "path"],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: "export-website-app-pack",
+    description:
+      "Export a webapp bundle (marketing pages + custom pages + actions + schema SQL metadata) as recallsync/webapp JSON v2.",
+    arguments: [],
+    inputSchema: {
+      type: "object",
+      properties: {
+        websiteId: { type: "string" },
+        packId: { type: "string", description: "e.g. commerce-v1" },
+        packVersion: { type: "string" },
+        packDescription: { type: "string" },
+      },
+      required: ["websiteId"],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: "import-website-app-pack",
+    description:
+      "Import a recallsync/webapp v2 bundle. Creates a new website unless websiteId is set (then upserts into that site).",
+    arguments: [],
+    inputSchema: {
+      type: "object",
+      properties: {
+        bundle: { type: "object", description: "Full recallsync/webapp JSON" },
+        websiteId: { type: "string", description: "Target existing website (optional)" },
+        name: { type: "string" },
+        slug: { type: "string" },
+        publishPages: { type: "boolean" },
+        schemaSqlOnlyIfEmpty: { type: "boolean" },
+        seedDemoProducts: { type: "boolean" },
+      },
+      required: ["bundle"],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: "import-website-app-pack-into-website",
+    description:
+      "Import a webapp bundle into an existing website (idempotent upsert of actions, custom pages, marketing pages).",
+    arguments: [],
+    inputSchema: {
+      type: "object",
+      properties: {
+        websiteId: { type: "string" },
+        bundle: { type: "object" },
+        publishPages: { type: "boolean" },
+        schemaSqlOnlyIfEmpty: { type: "boolean" },
+        seedDemoProducts: { type: "boolean" },
+      },
+      required: ["websiteId", "bundle"],
       additionalProperties: false,
     },
   },
@@ -423,6 +497,106 @@ export async function handleInvokeWebsiteAction(request: CallToolRequest) {
     const msg = err instanceof Error ? err.message : String(err);
     return {
       content: [{ type: "text" as const, text: `Failed to execute invoke-website-action: ${msg}` }],
+      isError: true,
+    };
+  }
+}
+
+export async function handleGetWebsiteCustomPage(request: CallToolRequest) {
+  const parsed = GetWebsiteCustomPageSchema.safeParse(request.params.arguments ?? {});
+  if (!parsed.success) {
+    return { content: [{ type: "text" as const, text: formatZodErrors(parsed) }], isError: true };
+  }
+  try {
+    const params = new URLSearchParams({ path: parsed.data.path });
+    const response = await authedFetch(
+      request,
+      `${API_ENDPOINTS.WEBSITE_APP.CUSTOM_PAGES}/${parsed.data.websiteId}/custom-pages?${params}`
+    );
+    return jsonOrError("get-website-custom-page failed", response);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return {
+      content: [{ type: "text" as const, text: `Failed to execute get-website-custom-page: ${msg}` }],
+      isError: true,
+    };
+  }
+}
+
+export async function handleExportWebsiteAppPack(request: CallToolRequest) {
+  const parsed = ExportWebsiteAppPackSchema.safeParse(request.params.arguments ?? {});
+  if (!parsed.success) {
+    return { content: [{ type: "text" as const, text: formatZodErrors(parsed) }], isError: true };
+  }
+  try {
+    const params = new URLSearchParams();
+    if (parsed.data.packId) params.set("packId", parsed.data.packId);
+    if (parsed.data.packVersion) params.set("packVersion", parsed.data.packVersion);
+    if (parsed.data.packDescription) params.set("packDescription", parsed.data.packDescription);
+    const qs = params.toString();
+    const response = await authedFetch(
+      request,
+      `${API_ENDPOINTS.WEBSITE_APP.APP_PACK_EXPORT}/${parsed.data.websiteId}/app-pack/export${qs ? `?${qs}` : ""}`
+    );
+    return jsonOrError("export-website-app-pack failed", response);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return {
+      content: [{ type: "text" as const, text: `Failed to execute export-website-app-pack: ${msg}` }],
+      isError: true,
+    };
+  }
+}
+
+export async function handleImportWebsiteAppPack(request: CallToolRequest) {
+  const parsed = ImportWebsiteAppPackSchema.safeParse(request.params.arguments ?? {});
+  if (!parsed.success) {
+    return { content: [{ type: "text" as const, text: formatZodErrors(parsed) }], isError: true };
+  }
+  try {
+    const response = await authedFetch(request, API_ENDPOINTS.WEBSITE_APP.APP_PACK_IMPORT, {
+      method: "POST",
+      body: JSON.stringify(parsed.data),
+    });
+    return jsonOrError("import-website-app-pack failed", response);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return {
+      content: [{ type: "text" as const, text: `Failed to execute import-website-app-pack: ${msg}` }],
+      isError: true,
+    };
+  }
+}
+
+export async function handleImportWebsiteAppPackIntoWebsite(request: CallToolRequest) {
+  const parsed = ImportWebsiteAppPackIntoWebsiteSchema.safeParse(request.params.arguments ?? {});
+  if (!parsed.success) {
+    return { content: [{ type: "text" as const, text: formatZodErrors(parsed) }], isError: true };
+  }
+  try {
+    const response = await authedFetch(
+      request,
+      `${API_ENDPOINTS.WEBSITE_APP.APP_PACK_EXPORT}/${parsed.data.websiteId}/app-pack/import`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          bundle: parsed.data.bundle,
+          publishPages: parsed.data.publishPages,
+          schemaSqlOnlyIfEmpty: parsed.data.schemaSqlOnlyIfEmpty,
+          seedDemoProducts: parsed.data.seedDemoProducts,
+        }),
+      }
+    );
+    return jsonOrError("import-website-app-pack-into-website failed", response);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return {
+      content: [
+        {
+          type: "text" as const,
+          text: `Failed to execute import-website-app-pack-into-website: ${msg}`,
+        },
+      ],
       isError: true,
     };
   }

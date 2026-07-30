@@ -161,5 +161,7 @@ export const API_ENDPOINTS = {
     SCHEMA_SQL: "/website-app",
     PRODUCTS: "/website-app",
     INVOKE: "/website-app",
+    APP_PACK_EXPORT: "/website-app",
+    APP_PACK_IMPORT: "/website-app/app-pack/import",
   },
 } as const;

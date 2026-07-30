@@ -165,8 +165,12 @@ import {
 } from "../tools/funnel-page.js";
 import {
   websiteAppTools,
+  handleExportWebsiteAppPack,
   handleGetWebsiteAppCapabilities,
+  handleGetWebsiteCustomPage,
   handleGetWebsiteSchemaSql,
+  handleImportWebsiteAppPack,
+  handleImportWebsiteAppPackIntoWebsite,
   handleInvokeWebsiteAction,
   handleListWebsiteActions,
   handleListWebsiteCustomPages,
@@ -463,6 +467,14 @@ primaryServer.setRequestHandler(CallToolRequestSchema, async (request) => {
       return handleListWebsiteProducts(request);
     case "invoke-website-action":
       return handleInvokeWebsiteAction(request);
+    case "get-website-custom-page":
+      return handleGetWebsiteCustomPage(request);
+    case "export-website-app-pack":
+      return handleExportWebsiteAppPack(request);
+    case "import-website-app-pack":
+      return handleImportWebsiteAppPack(request);
+    case "import-website-app-pack-into-website":
+      return handleImportWebsiteAppPackIntoWebsite(request);
     case "update-note":
       return handleUpdateNote(request);
     case "delete-note":

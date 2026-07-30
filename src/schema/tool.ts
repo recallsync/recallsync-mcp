@@ -1189,3 +1189,39 @@ export const UpsertWebsiteCustomPageSchema = z.object({
   source: z.enum(["AGENT", "IMPORT", "USER"]).optional(),
 });
 export type UpsertWebsiteCustomPageRequest = z.infer<typeof UpsertWebsiteCustomPageSchema>;
+
+export const GetWebsiteCustomPageSchema = z.object({
+  websiteId: z.string().min(1, "Website ID is required"),
+  path: z.string().min(1, "Path is required"),
+});
+export type GetWebsiteCustomPageRequest = z.infer<typeof GetWebsiteCustomPageSchema>;
+
+export const ExportWebsiteAppPackSchema = z.object({
+  websiteId: z.string().min(1, "Website ID is required"),
+  packId: z.string().optional(),
+  packVersion: z.string().optional(),
+  packDescription: z.string().optional(),
+});
+export type ExportWebsiteAppPackRequest = z.infer<typeof ExportWebsiteAppPackSchema>;
+
+export const ImportWebsiteAppPackSchema = z.object({
+  bundle: z.record(z.unknown()),
+  websiteId: z.string().optional(),
+  name: z.string().optional(),
+  slug: z.string().optional(),
+  publishPages: z.boolean().optional(),
+  schemaSqlOnlyIfEmpty: z.boolean().optional(),
+  seedDemoProducts: z.boolean().optional(),
+});
+export type ImportWebsiteAppPackRequest = z.infer<typeof ImportWebsiteAppPackSchema>;
+
+export const ImportWebsiteAppPackIntoWebsiteSchema = z.object({
+  websiteId: z.string().min(1, "Website ID is required"),
+  bundle: z.record(z.unknown()),
+  publishPages: z.boolean().optional(),
+  schemaSqlOnlyIfEmpty: z.boolean().optional(),
+  seedDemoProducts: z.boolean().optional(),
+});
+export type ImportWebsiteAppPackIntoWebsiteRequest = z.infer<
+  typeof ImportWebsiteAppPackIntoWebsiteSchema
+>;
