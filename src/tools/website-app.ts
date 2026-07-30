@@ -104,7 +104,7 @@ export const websiteAppTools = [
   {
     name: "get-website-schema-sql",
     description:
-      "Get Supabase DDL stored in Recall for this website (schemaSql, schemaVersion). Run manually in Supabase SQL editor.",
+      "Get Supabase DDL stored in Recall for this website (settings.webapp or connection). Returns schemaSql, schemaVersion, hasSchemaSql.",
     arguments: [],
     inputSchema: {
       type: "object",
@@ -116,7 +116,7 @@ export const websiteAppTools = [
   {
     name: "set-website-schema-sql",
     description:
-      "Save Supabase DDL in Recall DB for this website. Set applyDefault=true to store platform default commerce schema if empty.",
+      "Save Supabase DDL for a website (settings.webapp + connection when connected). Pass schemaSql + optional schemaVersion, OR applyDefault=true to store the platform commerce reference DDL (only if empty). Use before export so bundles include schema SQL.",
     arguments: [],
     inputSchema: {
       type: "object",
@@ -126,8 +126,24 @@ export const websiteAppTools = [
         schemaVersion: { type: "string", description: "e.g. commerce-v1" },
         applyDefault: {
           type: "boolean",
-          description: "If true, saves default commerce DDL (ignores schemaSql)",
+          description:
+            "If true, stores platform commerce reference DDL when empty (API/MCP only — for seeding reference sites like Acme Shop)",
         },
+      },
+      required: ["websiteId"],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: "ensure-website-schema-sql",
+    description:
+      "Ensure a website has schema SQL stored for export/onboarding. Returns current state; if hasSchemaSql is false, applies default commerce DDL (same as set-website-schema-sql applyDefault=true).",
+    arguments: [],
+    inputSchema: {
+      type: "object",
+      properties: {
+        websiteId: { type: "string" },
+        schemaVersion: { type: "string", description: "Used when applying default, default commerce-v1" },
       },
       required: ["websiteId"],
       additionalProperties: false,
@@ -389,6 +405,95 @@ export async function handleSetWebsiteSchemaSql(request: CallToolRequest) {
     const msg = err instanceof Error ? err.message : String(err);
     return {
       content: [{ type: "text" as const, text: `Failed to execute set-website-schema-sql: ${msg}` }],
+      isError: true,
+    };
+  }
+}
+
+export async function handleEnsureWebsiteSchemaSql(request: CallToolRequest) {
+  const parsed = WebsiteIdSchema.safeParse(request.params.arguments ?? {});
+  if (!parsed.success) {
+    return { content: [{ type: "text" as const, text: formatZodErrors(parsed) }], isError: true };
+  }
+  try {
+    const getResponse = await authedFetch(
+      request,
+      `${API_ENDPOINTS.WEBSITE_APP.SCHEMA_SQL}/${parsed.data.websiteId}/schema-sql`
+    );
+    if (!getResponse.ok) {
+      return jsonOrError("ensure-website-schema-sql failed (get)", getResponse);
+    }
+    const current = (await getResponse.json()) as {
+      hasSchemaSql?: boolean;
+      schemaSql?: string | null;
+      schemaVersion?: string | null;
+    };
+
+    if (current.hasSchemaSql) {
+      return {
+        content: [
+          {
+            type: "text" as const,
+            text: JSON.stringify(
+              {
+                ok: true,
+                alreadySet: true,
+                schemaVersion: current.schemaVersion,
+                schemaSqlLength: current.schemaSql?.length ?? 0,
+              },
+              null,
+              2
+            ),
+          },
+        ],
+      };
+    }
+
+    const setResponse = await authedFetch(
+      request,
+      `${API_ENDPOINTS.WEBSITE_APP.SCHEMA_SQL}/${parsed.data.websiteId}/schema-sql`,
+      {
+        method: "POST",
+        body: JSON.stringify({ applyDefault: true }),
+      }
+    );
+    if (!setResponse.ok) {
+      return jsonOrError("ensure-website-schema-sql failed (apply)", setResponse);
+    }
+    const applied = await setResponse.json();
+
+    const afterResponse = await authedFetch(
+      request,
+      `${API_ENDPOINTS.WEBSITE_APP.SCHEMA_SQL}/${parsed.data.websiteId}/schema-sql`
+    );
+    const after = afterResponse.ok
+      ? ((await afterResponse.json()) as { hasSchemaSql?: boolean; schemaVersion?: string | null })
+      : null;
+
+    return {
+      content: [
+        {
+          type: "text" as const,
+          text: JSON.stringify(
+            {
+              ok: true,
+              alreadySet: false,
+              applied,
+              hasSchemaSql: after?.hasSchemaSql ?? true,
+              schemaVersion: after?.schemaVersion ?? null,
+            },
+            null,
+            2
+          ),
+        },
+      ],
+    };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return {
+      content: [
+        { type: "text" as const, text: `Failed to execute ensure-website-schema-sql: ${msg}` },
+      ],
       isError: true,
     };
   }
