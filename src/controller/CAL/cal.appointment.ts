@@ -28,7 +28,11 @@ import {
   slotsToAIString,
   createDateTimeWithTimezone,
 } from "../../utils/cal.utils.js";
-import { bookMeeting, updateMeeting } from "../../utils/meeting-book.js";
+import {
+  bookMeeting,
+  findMeetingForBusiness,
+  updateMeeting,
+} from "../../utils/meeting-book.js";
 import { LeadWithBizz, triggerEvent } from "../../utils/integration.util.js";
 import { prisma } from "../../lib/prisma.js";
 import { formatInTimeZone, toZonedTime } from "date-fns-tz";
@@ -401,9 +405,11 @@ export const rescheduleAppointment = async ({
         const newMeetingId = data.data.uid;
 
         // Check if meeting exists before updating
-        const existingMeeting = await tx.meeting.findUnique({
-          where: { meetingId: rescheduleOrCancelId },
-        });
+        const existingMeeting = await findMeetingForBusiness(
+          tx,
+          businessId,
+          rescheduleOrCancelId
+        );
         let updatedMeeting;
         if (existingMeeting) {
           updatedMeeting = await tx.meeting.update({
@@ -540,14 +546,17 @@ export const cancelAppointment = async ({
           });
         }
         // Check if meeting exists before updating
-        const existingMeeting = await tx.meeting.findUnique({
-          where: { meetingId: rescheduleOrCancelId },
-        });
+        const existingMeeting = await findMeetingForBusiness(
+          tx,
+          businessId,
+          rescheduleOrCancelId
+        );
 
         let updatedMeeting;
 
         if (existingMeeting) {
           updatedMeeting = await updateMeeting({
+            businessId,
             meetingId: rescheduleOrCancelId,
             status: "CANCELLED",
             transaction: tx,

@@ -22,7 +22,11 @@ import {
   SYSTEM_EVENT,
   SYSTEM_EVENT_STATUS,
 } from "../../generated/client/index.js";
-import { bookMeeting, updateMeeting } from "../../utils/meeting-book.js";
+import {
+  bookMeeting,
+  findMeetingForBusiness,
+  updateMeeting,
+} from "../../utils/meeting-book.js";
 import { prisma } from "../../lib/prisma.js";
 import { LeadWithBizz, triggerEvent } from "../../utils/integration.util.js";
 
@@ -597,21 +601,33 @@ export const updateAppointment = async (props: UpdateGHLAppointment) => {
         }
 
         // Check if meeting exists before updating
-        const existingMeeting = await tx.meeting.findUnique({
-          where: {
-            meetingId: props.rescheduleOrCancelId,
-          },
-        });
+        const existingMeeting = await findMeetingForBusiness(
+          tx,
+          businessId,
+          props.rescheduleOrCancelId
+        );
 
         let updatedMeeting;
 
         if (existingMeeting) {
-          updatedMeeting = await updateMeeting({
-            meetingId: appointmentData.id,
-            newStartTime: new Date(appointmentData.startTime),
-            status: props.type === "cancel" ? "CANCELLED" : "UPCOMING",
-            transaction: tx,
-          });
+          if (props.type === "cancel") {
+            updatedMeeting = await updateMeeting({
+              businessId,
+              meetingId: props.rescheduleOrCancelId,
+              status: "CANCELLED",
+              transaction: tx,
+            });
+          } else {
+            updatedMeeting = await tx.meeting.update({
+              where: { id: existingMeeting.id },
+              data: {
+                meetingId: appointmentData.id,
+                startTime: new Date(appointmentData.startTime).toISOString(),
+                status: "UPCOMING",
+                updatedAt: new Date(),
+              },
+            });
+          }
         } else {
           updatedMeeting = await tx.meeting.create({
             data: {

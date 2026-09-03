@@ -8,6 +8,29 @@ import {
 import { prisma } from "../lib/prisma.js";
 import { triggerEvent } from "./integration.util.js";
 
+type MeetingDbClient = {
+  meeting: {
+    findUnique: typeof prisma.meeting.findUnique;
+    create: typeof prisma.meeting.create;
+    update: typeof prisma.meeting.update;
+  };
+};
+
+export async function findMeetingForBusiness(
+  transaction: MeetingDbClient,
+  businessId: string,
+  meetingId: string
+) {
+  return transaction.meeting.findUnique({
+    where: {
+      businessId_meetingId: {
+        businessId,
+        meetingId,
+      },
+    },
+  });
+}
+
 interface BookMeetingInput {
   businessId?: string;
   meetingId: string;
@@ -94,18 +117,20 @@ export const bookMeeting = async ({
 };
 
 interface UpdateMeetingInput {
+  businessId: string;
   meetingId: string;
   newStartTime?: Date;
   status: MEETING_STATUS;
-  transaction?: any;
+  transaction?: MeetingDbClient;
 }
 export const updateMeeting = async ({
+  businessId,
   meetingId,
   newStartTime,
   status,
   transaction = prisma,
 }: UpdateMeetingInput) => {
-  console.log("update meeting", { meetingId, newStartTime, status });
+  console.log("update meeting", { businessId, meetingId, newStartTime, status });
   try {
     const payload = newStartTime
       ? {
@@ -120,7 +145,10 @@ export const updateMeeting = async ({
 
     const data = await transaction.meeting.update({
       where: {
-        meetingId: meetingId,
+        businessId_meetingId: {
+          businessId,
+          meetingId,
+        },
       },
 
       data: {

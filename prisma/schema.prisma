@@ -766,7 +766,7 @@ model AgentTool {
 
 model Meeting {
   id        String @id @default(uuid())
-  meetingId String @unique
+  meetingId String
 
   startTime     String
   messageOfLead String         @db.Text
@@ -796,6 +796,7 @@ model Meeting {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  @@unique([businessId, meetingId])
   @@index([agencyId])
   @@index([salesAgentId])
   @@index([businessId])
