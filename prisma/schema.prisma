@@ -93,6 +93,14 @@ model User {
   Pipelines            Pipeline[]
   Opportunities        Opportunity[]
   Stages               Stage[]
+  AgencyCompanies         Company[]      @relation("AgencyToCompany")
+  SalesAgentCompanies     Company[]      @relation("SalesAgentToCompany")
+  SalesAgentOpportunities Opportunity[]  @relation("SalesAgentToOpportunity")
+  QuotesCreated           Quote[]        @relation("QuoteCreatedBy")
+  ContractsCreated        Contract[]     @relation("ContractCreatedBy")
+  AgencyCustomObjects     CustomObject[] @relation("AgencyToCustomObject")
+  AgencyAssociationDefinitions AssociationDefinition[] @relation("AgencyToAssociationDefinition")
+  AgencyCustomMenuLinks   CustomMenuLink[] @relation("AgencyToCustomMenuLink")
   Events               Event[]
   AgentFollowUps       FollowUp[]            @relation("SalesAgentToFollowUp")
   AgencyFollowUps      FollowUp[]            @relation("AgencyToFollowUp")
@@ -102,11 +110,10 @@ model User {
   AgencyBusinesses     Business[]            @relation("BusinessAgency")
   ManagerBusinesses    BusinessManager[]
   preferenceId         String?
-  Agents               Agent[]
   PrimaryAgents        PrimaryAgent[]
-  ChatSessions         ChatSession[]
   VoiceSessions        VoiceSession[]
   Automations          Automation[]
+  AutomationEnrollments AutomationEnrollment[]
   Knowledgebases       Knowledgebase[]
   BaseAgentsAsAgency   BaseAgent[]
 
@@ -381,6 +388,10 @@ model Lead {
   salesAgentId String?
   SalesAgent   User?   @relation("SalesAgentToLead", fields: [salesAgentId], references: [id], onDelete: SetNull)
 
+  /// Sales account this person belongs to (not the tenant Business).
+  companyId String?
+  Company   Company? @relation(fields: [companyId], references: [id], onDelete: SetNull)
+
   isTestLead     Boolean  @default(false)
   // Metadata Fields
   createdAt      DateTime @default(now())
@@ -391,14 +402,14 @@ model Lead {
   CampaignLead         CampaignLead[]
   LeadTags             LeadTag[]
   LeadNotes            LeadNote[]
-  Opportunity          Opportunity[]
+  PrimaryOpportunities Opportunity[]         @relation("OpportunityPrimaryLead")
+  OpportunityContacts  OpportunityContact[]
   FollowUp             FollowUp[]
   Conversation         Conversation?
   ConversationMessages ConversationMessage[]
-  ChatSessions         ChatSession[]
   VoiceSessions        VoiceSession[]
   BaseAgentSessions    BaseAgentSession[]
-  AutomationSessions   AutomationSession[]
+  AutomationEnrollments AutomationEnrollment[]
   CustomFieldValue     CustomFieldValue[]
   ChatLogs             ChatLog[]
   InstaOsEvents         InstaOsEvent[]
@@ -413,6 +424,7 @@ model Lead {
   @@index([agencyId])
   @@index([salesAgentId])
   @@index([businessId])
+  @@index([companyId])
   @@index([status])
   @@index([phone])
   @@index([email])
@@ -602,9 +614,6 @@ model ConversationMessage {
   conversationId String
   Conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
 
-  agentId String?
-  Agent   Agent?  @relation(fields: [agentId], references: [id], onDelete: Cascade)
-
   /// IG account that sent/received this message (channel INSTAGRAM only).
   instagramAccountId String?
   InstagramAccount   InstagramAccount? @relation(fields: [instagramAccountId], references: [id], onDelete: SetNull)
@@ -627,7 +636,6 @@ model ConversationMessage {
   @@index([callId])
   @@index([agencyId])
   @@index([businessId])
-  @@index([agentId])
   @@index([rsRunId])
   @@index([phiDeleteAt])
   @@unique([sourceInboundDedupKey])
@@ -697,13 +705,10 @@ model PrimaryAgent {
   NextPrimaryAgent   PrimaryAgent?  @relation("NextPrimaryAgents", fields: [nextPrimaryAgentId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   NextPrimaryAgents  PrimaryAgent[] @relation("NextPrimaryAgents")
 
-  Agents             Agent[]
   Conversations      Conversation[]
   PrimaryAgentAssets PrimaryAgentAsset[]
-  ChatSessions       ChatSession[]
   VoiceSessions      VoiceSession[]
   Campaigns          Campaign[]
-  AutomationSessions AutomationSession[]
   Automations        Automation[]
   Knowledgebases     Knowledgebase[]
   BaseAgents  BaseAgent[] @relation("PrimaryAgentBaseAgents")
@@ -742,114 +747,11 @@ model PrimaryAgentAsset {
   @@index([primaryAgentId])
 }
 
-model Agent {
-  id String @id @default(uuid())
-
-  name        String
-  description String? @db.Text
-
-  // n8n config 
-  n8nUrl        String  @default("")
-  n8nToken      String  @default("")
-  // n8n workflow id
-  n8nWorkflowId String?
-
-  // agent settings
-  settings Json
-  isActive Boolean    @default(false)
-  agentMode AGENT_MODE @default(AUTO)
-  provider PROVIDER?
-
-  // sequence config
-  sequenceActive Boolean @default(false)
-  sequenceConfig Json?   @default("{}") // sequence config json 
-
-  // followup config 
-  followupActive Boolean @default(false)
-  followupConfig Json?   @default("{}") // followup config json 
-
-  channel CHANNEL    @default(EMAIL)
-  type    AGENT_TYPE @default(INTEGRATED)
-
-  // integrated channel config 
-  flow           Json?            @default("{\"nodes\":[{\"id\":\"start-1\",\"type\":\"start\",\"position\":{\"x\":100,\"y\":200},\"data\":{\"label\":\"Start\",\"description\":\"Conversation starts here\"}}],\"edges\":[]}") // react flow json 
-  flowSettings   Json?            @default("{}") // react flow settings json 
-  /// Draft builder state (Save draft); Publish copies into flow/flowSettings
-  currentFlow         Json? @default("{\"nodes\":[{\"id\":\"start-1\",\"type\":\"start\",\"position\":{\"x\":100,\"y\":200},\"data\":{\"label\":\"Start\",\"description\":\"Conversation starts here\"}}],\"edges\":[]}") // react flow draft json
-  currentFlowSettings Json?
-  voiceAgentType VOICE_AGENT_TYPE @default(CONVERSATION_PATHWAY)
-
-  // VAPI
-  vapiPhoneNumberId String?
-  vapiAssistantId   String?
-
-  //ELEVEN_LABS
-  elevenlabsAgentId       String?
-  elevenlabsPhoneNumberId String?
-
-  // RETELL
-  retellAgentId     String?
-  retellPhoneNumber String?
-
-  //TWILIO
-  twilioPhoneNumber String?
-  // Relations
-  businessId        String
-  Business          Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
-
-  agencyId String
-  Agency   User   @relation(fields: [agencyId], references: [id], onDelete: Cascade)
-
-  primaryAgentId String
-  PrimaryAgent   PrimaryAgent  @relation(fields: [primaryAgentId], references: [id], onDelete: Cascade)
-  ChatSessions   ChatSession[]
-  VoiceSessions  VoiceSession[]
-
-  useN8N       Boolean @default(false)
-  // Smart Trigger - auto-create / chat session without a dedicated agent trigger
-  smartTrigger Boolean @default(false)
-
-  /// Auto-attach primary agent and run on inbound DM (WhatsApp / Instagram direct channels).
-  autoConnect Boolean @default(false)
-
-  /// Native Instagram: scoped inbox when provider is INSTAGRAM (required). Null for GHL/N8N.
-  instagramAccountId String?
-  InstagramAccount   InstagramAccount? @relation("InstagramAccountWorkflowAgents", fields: [instagramAccountId], references: [id], onDelete: SetNull)
-
-  /// Native WhatsApp / WP_VOICE_CALL: scoped line when provider is WHATSAPP or channel WP_VOICE_CALL (required). Null for GHL/N8N.
-  whatsAppAccountId String?
-  WhatsAppAccount   WhatsAppAccount? @relation("WhatsAppAccountWorkflowAgents", fields: [whatsAppAccountId], references: [id], onDelete: SetNull)
-
-  // Structured outputs for VOICE_CALL agents (all providers)
-  structuredOutputs Json? @default("[]")
-
-  // Field mapping for GHL custom fields
-  fieldMapping Json? @default("[]")
-
-  /// Website voice embed: { UI: { title, description, startButtonLabel, endButtonLabel }, ... }
-  widgetSettings Json?
-
-  // Metadata
-  createdAt            DateTime              @default(now())
-  updatedAt            DateTime              @updatedAt
-  AgentTools           AgentTool[]
-  ConversationMessages ConversationMessage[]
-
-  @@index([businessId])
-  @@index([agencyId])
-  @@index([primaryAgentId])
-  @@index([createdAt])
-  @@index([businessId, autoConnect, channel])
-  @@index([instagramAccountId])
-  @@index([whatsAppAccountId])
-}
-
 model AgentTool {
   id String @id @default(uuid())
 
   definition Json
 
-  Agents      Agent[]
   BaseAgents  BaseAgent[]
 
   businessId String
@@ -870,6 +772,9 @@ model Meeting {
   messageOfLead String         @db.Text
   meetingUrl    String?
   status        MEETING_STATUS @default(UPCOMING)
+
+  rescheduleReason   String? @db.Text
+  cancellationReason String? @db.Text
 
   // Relations
   salesAgentId String?
@@ -1001,7 +906,7 @@ model Campaign {
   primaryAgentId String?
   PrimaryAgent   PrimaryAgent? @relation(fields: [primaryAgentId], references: [id], onDelete: Cascade)
 
-  // Optional outbound automation (cadence) run alongside this campaign.
+  /// Optional post-outreach journey — enrolled when campaign picks up a lead.
   automationId String?
   Automation   Automation? @relation(fields: [automationId], references: [id], onDelete: SetNull)
 
@@ -1128,9 +1033,16 @@ model CampaignLead {
   @@index([leadId])
 }
 
+enum PIPELINE_STAGE_COLOR_MODE {
+  NONE
+  DOT
+  BACKGROUND
+}
+
 model Pipeline {
   id   String @id @default(uuid())
   name String
+  stageColorMode PIPELINE_STAGE_COLOR_MODE @default(DOT)
 
   // Relations
   agencyId String
@@ -1153,6 +1065,7 @@ model Stage {
   id    String @id @default(uuid())
   name  String
   order Int    @default(0)
+  color String @default("")
 
   Pipeline   Pipeline @relation(fields: [pipelineId], references: [id], onDelete: Cascade)
   pipelineId String
@@ -1172,26 +1085,71 @@ model Stage {
   @@index([businessId])
 }
 
+/// Sales account (GHL Company). Not the tenant `Business`.
+model Company {
+  id String @id @default(uuid())
+  name String
+
+  email    String  @default("")
+  phone    String  @default("")
+  website  String  @default("")
+  industry String  @default("")
+
+  address String? @db.Text
+  city    String  @default("")
+  state   String  @default("")
+  zipCode String  @default("")
+  country String  @default("")
+
+  salesAgentId String?
+  SalesAgent   User?   @relation("SalesAgentToCompany", fields: [salesAgentId], references: [id], onDelete: SetNull)
+
+  agencyId String
+  Agency   User   @relation("AgencyToCompany", fields: [agencyId], references: [id], onDelete: Cascade)
+
+  businessId String
+  Business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  Leads         Lead[]
+  Opportunities Opportunity[]
+  CustomFieldValues CompanyCustomFieldValue[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([agencyId])
+  @@index([businessId])
+  @@index([salesAgentId])
+  @@index([name])
+}
+
 model Opportunity {
-  id           String             @id @default(uuid())
-  name         String
-  description  String?            @db.Text
-  status       OPPORTUNITY_STATUS @default(OPEN)
-  source       String             @default("")
-  value        Float?
-  businessName String?
+  id          String             @id @default(uuid())
+  name        String
+  description String?            @db.Text
+  status      OPPORTUNITY_STATUS @default(OPEN)
+  lostReason  String             @default("")
+  source      String             @default("")
+  value       Float?
 
   order Int @default(0)
 
-  // Relations
   stageId String
   Stage   Stage  @relation(fields: [stageId], references: [id], onDelete: Cascade)
 
   pipelineId String
   Pipeline   Pipeline @relation(fields: [pipelineId], references: [id], onDelete: Cascade)
 
-  leadId String
-  Lead   Lead   @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  /// Required. The company owns the deal.
+  companyId String
+  Company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  /// Optional main point of contact. People come and go; the deal stays.
+  primaryLeadId String?
+  PrimaryLead   Lead?   @relation("OpportunityPrimaryLead", fields: [primaryLeadId], references: [id], onDelete: SetNull)
+
+  salesAgentId String?
+  SalesAgent   User?   @relation("SalesAgentToOpportunity", fields: [salesAgentId], references: [id], onDelete: SetNull)
 
   agencyId String
   Agency   User   @relation(fields: [agencyId], references: [id], onDelete: Cascade)
@@ -1199,16 +1157,708 @@ model Opportunity {
   businessId String
   Business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
 
+  Contacts OpportunityContact[]
+  DiscoveryRecord DiscoveryRecord?
+  CustomFieldValues OpportunityCustomFieldValue[]
+  Quotes Quote[]
+  Contracts Contract[]
+
   addedToStageAt DateTime @default(now())
 
-  // Metadata
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([stageId])
-  @@index([leadId])
-  @@index([agencyId])
   @@index([pipelineId])
+  @@index([companyId])
+  @@index([primaryLeadId])
+  @@index([salesAgentId])
+  @@index([agencyId])
+  @@index([businessId])
+}
+
+/// Extra touchpoints on a deal. Primary lead is not stored here.
+model OpportunityContact {
+  id String @id @default(uuid())
+
+  role String @default("")
+
+  opportunityId String
+  Opportunity   Opportunity @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+
+  leadId String
+  Lead   Lead   @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([opportunityId, leadId])
+  @@index([opportunityId])
+  @@index([leadId])
+}
+
+/// Per-business UI labels for system objects. Schema keys never change.
+model BusinessObjectConfig {
+  id       String        @id @default(uuid())
+  object   SYSTEM_OBJECT
+  singular String
+  plural   String
+
+  businessId String
+  Business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([businessId, object])
+  @@index([businessId])
+}
+
+enum CUSTOM_OBJECT_FIELD_TYPE {
+  TEXT
+  TEXTAREA
+  TEXT_LIST
+  NUMBER
+  PHONE
+  MONETARY
+  SINGLE_SELECT
+  MULTI_SELECT
+  RADIO
+  CHECKBOX
+  FILE
+  DATE
+}
+
+enum CUSTOM_OBJECT_RECORD_LIFECYCLE {
+  NONE
+  OPPORTUNITY_SINGLE_DRAFT
+}
+
+model CustomObject {
+  id          String  @id @default(uuid())
+  singular    String
+  plural      String
+  slug        String
+  description String  @default("")
+  icon        String  @default("box")
+  showInMenu  Boolean @default(true)
+  isSystem    Boolean @default(false)
+
+  recordLifecycle CUSTOM_OBJECT_RECORD_LIFECYCLE @default(NONE)
+
+  lifecycleStatusFieldId String? @unique
+  LifecycleStatusField   CustomObjectField? @relation("CustomObjectLifecycleStatusField", fields: [lifecycleStatusFieldId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  lifecycleAssociationDefinitionId String? @unique
+  LifecycleAssociationDefinition   AssociationDefinition? @relation("CustomObjectLifecycleAssociation", fields: [lifecycleAssociationDefinitionId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  agencyId String
+  Agency   User   @relation("AgencyToCustomObject", fields: [agencyId], references: [id], onDelete: Cascade)
+
+  businessId String
+  Business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  Fields  CustomObjectField[]
+  Records CustomObjectRecord[]
+  AssociationDefinitionsA AssociationDefinition[] @relation("AssociationDefinitionA")
+  AssociationDefinitionsB AssociationDefinition[] @relation("AssociationDefinitionB")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([businessId, slug])
+  @@index([agencyId])
+  @@index([businessId])
+}
+
+model CustomObjectField {
+  id         String                    @id @default(uuid())
+  key        String
+  label      String
+  type       CUSTOM_OBJECT_FIELD_TYPE
+  options    Json?
+  isPrimary  Boolean                   @default(false)
+  isUnique   Boolean                   @default(false)
+  isSystem   Boolean                   @default(false)
+  order      Int                       @default(0)
+
+  customObjectId String
+  CustomObject   CustomObject @relation(fields: [customObjectId], references: [id], onDelete: Cascade)
+
+  LifecycleStatusForObject CustomObject? @relation("CustomObjectLifecycleStatusField")
+
+  Values CustomObjectRecordValue[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([customObjectId, key])
+  @@index([customObjectId])
+}
+
+model CustomObjectRecord {
+  id           String @id @default(uuid())
+  primaryValue String @default("")
+
+  customObjectId String
+  CustomObject   CustomObject @relation(fields: [customObjectId], references: [id], onDelete: Cascade)
+
+  agencyId String
+  businessId String
+  Business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  Values CustomObjectRecordValue[]
+  DiscoveryRecord DiscoveryRecord?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([customObjectId])
+  @@index([businessId])
+  @@index([customObjectId, primaryValue])
+}
+
+model CustomObjectRecordValue {
+  id    String  @id @default(uuid())
+  value String? @db.Text
+
+  recordId String
+  Record   CustomObjectRecord @relation(fields: [recordId], references: [id], onDelete: Cascade)
+
+  fieldId String
+  Field   CustomObjectField @relation(fields: [fieldId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([recordId, fieldId])
+  @@index([recordId])
+  @@index([fieldId])
+}
+
+enum ASSOCIATION_OBJECT_KIND {
+  CUSTOM
+  LEAD
+  COMPANY
+  OPPORTUNITY
+}
+
+enum ASSOCIATION_CARDINALITY {
+  ONE
+  MANY
+}
+
+/// What can link, labels, and cardinality on each side. Links are AssociationLink.
+model AssociationDefinition {
+  id    String @id @default(uuid())
+  label String
+
+  aKind           ASSOCIATION_OBJECT_KIND
+  aCustomObjectId String?
+  ACustomObject   CustomObject?           @relation("AssociationDefinitionA", fields: [aCustomObjectId], references: [id], onDelete: Cascade)
+  aLabel          String                  @default("")
+  aMax            ASSOCIATION_CARDINALITY
+
+  bKind           ASSOCIATION_OBJECT_KIND
+  bCustomObjectId String?
+  BCustomObject   CustomObject?           @relation("AssociationDefinitionB", fields: [bCustomObjectId], references: [id], onDelete: Cascade)
+  bLabel          String                  @default("")
+  bMax            ASSOCIATION_CARDINALITY
+
+  isSystem Boolean @default(false)
+
+  agencyId String
+  Agency   User   @relation("AgencyToAssociationDefinition", fields: [agencyId], references: [id], onDelete: Cascade)
+
+  businessId String
+  Business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  Links AssociationLink[]
+
+  LifecycleAssociationForObject CustomObject? @relation("CustomObjectLifecycleAssociation")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([businessId])
+  @@index([agencyId])
+  @@index([aCustomObjectId])
+  @@index([bCustomObjectId])
+}
+
+/// One linked pair for a definition. Record ids are polymorphic (kind lives on the definition).
+model AssociationLink {
+  id String @id @default(uuid())
+
+  definitionId String
+  Definition   AssociationDefinition @relation(fields: [definitionId], references: [id], onDelete: Cascade)
+
+  aRecordId String
+  bRecordId String
+
+  createdAt DateTime @default(now())
+
+  @@unique([definitionId, aRecordId, bRecordId])
+  @@index([definitionId, aRecordId])
+  @@index([definitionId, bRecordId])
+}
+
+enum DISCOVERY_FIELD_OBJECT {
+  DISCOVERY
+  COMPANY
+  OPPORTUNITY
+  LEAD
+}
+
+enum OBJECT_CUSTOM_FIELD_OWNER {
+  COMPANY
+  OPPORTUNITY
+  PRODUCT
+}
+
+enum PRODUCT_PRICE_TYPE {
+  ONE_TIME
+  RECURRING
+}
+
+model Product {
+  id          String @id @default(uuid())
+  title       String
+  description String @db.Text
+  imageUrl    String @default("")
+  sku         String @default("")
+
+  priceType      PRODUCT_PRICE_TYPE @default(ONE_TIME)
+  amount         Decimal            @db.Decimal(12, 2)
+  currency       String             @default("AUD")
+  compareAtPrice Decimal?           @db.Decimal(12, 2)
+
+  active Boolean @default(true)
+
+  agencyId   String
+  businessId String
+  Business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  CustomFieldValues ProductCustomFieldValue[]
+  QuoteLineItems QuoteLineItem[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([businessId])
+  @@index([agencyId])
+  @@index([businessId, title])
+}
+
+model ProductCustomFieldValue {
+  id    String  @id @default(uuid())
+  value String? @db.Text
+
+  productId String
+  Product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  fieldId String
+  Field   ObjectCustomField @relation(fields: [fieldId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([productId, fieldId])
+  @@index([productId])
+  @@index([fieldId])
+}
+
+enum DOCUMENT_TEMPLATE_KIND {
+  QUOTE
+  CONTRACT
+}
+
+enum DOCUMENT_TEMPLATE_STATUS {
+  DRAFT
+  PUBLISHED
+}
+
+enum QUOTE_STATUS {
+  DRAFT
+  SENT
+  CHANGES_REQUESTED
+  APPROVED
+  DECLINED
+  EXPIRED
+  SUPERSEDED
+}
+
+enum CONTRACT_STATUS {
+  DRAFT
+  SENT
+  SIGNED
+  DECLINED
+  EXPIRED
+}
+
+/// Shared document template for quotes, contracts, and future kinds.
+model DocumentTemplate {
+  id          String                   @id @default(uuid())
+  name        String
+  description String                   @default("")
+  kind        DOCUMENT_TEMPLATE_KIND
+  status      DOCUMENT_TEMPLATE_STATUS @default(DRAFT)
+  /// Block layout JSON ({ schemaVersion, pages: [...] })
+  layout      Json?
+
+  agencyId   String
+  businessId String
+  Business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  Quotes Quote[]
+  Contracts Contract[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([businessId])
+  @@index([agencyId])
+  @@index([businessId, kind])
+}
+
+model Quote {
+  id          String       @id @default(uuid())
+  quoteNumber String
+  version     Int          @default(1)
+  status      QUOTE_STATUS @default(DRAFT)
+
+  opportunityId String
+  Opportunity   Opportunity @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+
+  /// Groups all versions of one deal quote (first version sets to its own id).
+  rootQuoteId String
+
+  supersededById String?
+
+  documentTemplateId String?
+  DocumentTemplate   DocumentTemplate? @relation(fields: [documentTemplateId], references: [id], onDelete: SetNull)
+
+  currency            String  @default("AUD")
+  contractTermMonths  Int?
+  discountAmount      Decimal @default(0) @db.Decimal(12, 2)
+  discountPercent     Decimal @default(0) @db.Decimal(5, 2)
+  validUntil          DateTime?
+  notes               String?  @db.Text
+
+  financeSelected     Boolean @default(false)
+  financeTermMonths   Int?
+  financeAmountEx     Decimal? @db.Decimal(12, 2)
+  upfrontAmountEx     Decimal? @db.Decimal(12, 2)
+
+  mrrEx           Decimal @default(0) @db.Decimal(12, 2)
+  oneOffEx        Decimal @default(0) @db.Decimal(12, 2)
+  internalCostEx  Decimal @default(0) @db.Decimal(12, 2)
+  grossProfitEx   Decimal @default(0) @db.Decimal(12, 2)
+  marginPct       Decimal @default(0) @db.Decimal(5, 2)
+
+  /// Frozen render at send time (future milestone).
+  documentSnapshot Json?
+  mergedContextSnapshot Json?
+
+  createdByUserId String?
+  CreatedBy       User?   @relation("QuoteCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+
+  agencyId   String
+  businessId String
+  Business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  LineItems QuoteLineItem[]
+  Contracts Contract[]
+
+  sentAt     DateTime?
+  approvedAt DateTime?
+
+  /// First view + approval IP/location for the PDF certificate page.
+  sendLinkAudit Json?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([businessId, quoteNumber, version])
+  @@index([businessId])
+  @@index([opportunityId])
+  @@index([rootQuoteId])
+  @@index([status])
+  @@index([documentTemplateId])
+}
+
+model QuoteLineItem {
+  id String @id @default(uuid())
+
+  quoteId String
+  Quote   Quote @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+
+  productId String?
+  Product   Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
+
+  title         String
+  description   String?          @db.Text
+  sku           String           @default("")
+  priceType     PRODUCT_PRICE_TYPE
+  unitAmount    Decimal          @db.Decimal(12, 2)
+  internalCost  Decimal          @default(0) @db.Decimal(12, 2)
+  quantity      Int              @default(1)
+  sortOrder     Int              @default(0)
+
+  siteRecordId String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([quoteId])
+  @@index([productId])
+}
+
+model Contract {
+  id             String          @id @default(uuid())
+  contractNumber String
+  version        Int             @default(1)
+  status         CONTRACT_STATUS @default(DRAFT)
+
+  opportunityId String
+  Opportunity   Opportunity @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+
+  rootContractId String
+
+  /// Optional approved quote used for merge fields (line items, totals).
+  quoteId String?
+  Quote   Quote?  @relation(fields: [quoteId], references: [id], onDelete: SetNull)
+
+  documentTemplateId String?
+  DocumentTemplate   DocumentTemplate? @relation(fields: [documentTemplateId], references: [id], onDelete: SetNull)
+
+  currency String  @default("AUD")
+  notes    String? @db.Text
+
+  documentSnapshot      Json?
+  mergedContextSnapshot Json?
+  /// Fillable field responses keyed by block id.
+  fieldResponses        Json?
+
+  createdByUserId String?
+  CreatedBy       User?   @relation("ContractCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+
+  agencyId   String
+  businessId String
+  Business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  sentAt   DateTime?
+  signedAt DateTime?
+
+  /// First view + signature IP/location for the PDF certificate page.
+  sendLinkAudit Json?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([businessId, contractNumber, version])
+  @@index([businessId])
+  @@index([opportunityId])
+  @@index([rootContractId])
+  @@index([status])
+  @@index([documentTemplateId])
+  @@index([quoteId])
+}
+
+/// Layout for a Discovery worksheet. Many per business (Website Development, Hosting, …).
+model DiscoveryTemplate {
+  id          String @id @default(uuid())
+  name        String
+  description String @default("")
+
+  /// The canvas. Source of truth. One document, replaced on save.
+  layout Json?
+
+  agencyId   String
+  businessId String
+  Business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  /// Legacy row tables. Read fallback only until layouts are saved as JSON.
+  Rows    DiscoveryRow[]
+  Records DiscoveryRecord[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([businessId])
+  @@index([agencyId])
+}
+
+model DiscoveryRow {
+  id    String @id @default(uuid())
+  order Int    @default(0)
+
+  templateId String
+  Template   DiscoveryTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+
+  Columns DiscoveryColumn[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([templateId])
+}
+
+model DiscoveryColumn {
+  id    String @id @default(uuid())
+  order Int    @default(0)
+
+  rowId String
+  Row   DiscoveryRow @relation(fields: [rowId], references: [id], onDelete: Cascade)
+
+  Placements DiscoveryFieldPlacement[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([rowId])
+}
+
+/// A cell on the template. Points at an existing field; never creates one.
+model DiscoveryFieldPlacement {
+  id            String                 @id @default(uuid())
+  object        DISCOVERY_FIELD_OBJECT
+  nativeKey     String                 @default("")
+  customFieldId String                 @default("")
+  /// Extra write targets: [{ object, nativeKey?, customFieldId? }]
+  alsoWriteTo   Json?
+  order         Int                    @default(0)
+
+  columnId String
+  Column   DiscoveryColumn @relation(fields: [columnId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([columnId])
+}
+
+/// 1–1 Opportunity ↔ Discovery record. Template is locked after create.
+model DiscoveryRecord {
+  id String @id @default(uuid())
+
+  recordId String             @unique
+  Record   CustomObjectRecord @relation(fields: [recordId], references: [id], onDelete: Cascade)
+
+  opportunityId String      @unique
+  Opportunity   Opportunity @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+
+  templateId String
+  Template   DiscoveryTemplate @relation(fields: [templateId], references: [id], onDelete: Restrict)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([templateId])
+}
+
+/// Custom fields on Company or Opportunity. Do not reuse Lead CustomField.
+model ObjectCustomField {
+  id      String                    @id @default(uuid())
+  key     String
+  label   String
+  type    CUSTOM_OBJECT_FIELD_TYPE
+  options Json?
+  order   Int                       @default(0)
+  owner   OBJECT_CUSTOM_FIELD_OWNER
+
+  agencyId   String
+  businessId String
+  Business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  CompanyValues     CompanyCustomFieldValue[]
+  OpportunityValues OpportunityCustomFieldValue[]
+  ProductValues     ProductCustomFieldValue[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([businessId, owner, key])
+  @@index([businessId])
+  @@index([agencyId])
+}
+
+model CompanyCustomFieldValue {
+  id    String  @id @default(uuid())
+  value String? @db.Text
+
+  companyId String
+  Company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  fieldId String
+  Field   ObjectCustomField @relation(fields: [fieldId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([companyId, fieldId])
+  @@index([companyId])
+  @@index([fieldId])
+}
+
+model OpportunityCustomFieldValue {
+  id    String  @id @default(uuid())
+  value String? @db.Text
+
+  opportunityId String
+  Opportunity   Opportunity @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+
+  fieldId String
+  Field   ObjectCustomField @relation(fields: [fieldId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([opportunityId, fieldId])
+  @@index([opportunityId])
+  @@index([fieldId])
+}
+
+enum CUSTOM_MENU_LINK_OPEN_MODE {
+  EMBEDDED
+  NEW_TAB
+}
+
+model CustomMenuLink {
+  id          String                     @id @default(uuid())
+  title       String
+  url         String                     @db.Text
+  icon        String                     @default("link")
+  openMode    CUSTOM_MENU_LINK_OPEN_MODE @default(EMBEDDED)
+  showOnAgencySidebar   Boolean @default(false)
+  showOnBusinessSidebar Boolean @default(true)
+  allowMicrophone Boolean @default(false)
+  allowCamera     Boolean @default(false)
+  applyToAllBusinesses Boolean @default(true)
+  /// JSON string[] of ROLE values: AGENCY, MANAGER, SALES_AGENT
+  visibleRoles Json
+  order       Int @default(0)
+
+  agencyId String
+  Agency   User   @relation("AgencyToCustomMenuLink", fields: [agencyId], references: [id], onDelete: Cascade)
+
+  Businesses CustomMenuLinkBusiness[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([agencyId])
+  @@index([agencyId, order])
+}
+
+model CustomMenuLinkBusiness {
+  menuLinkId String
+  MenuLink   CustomMenuLink @relation(fields: [menuLinkId], references: [id], onDelete: Cascade)
+
+  businessId String
+  Business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  @@id([menuLinkId, businessId])
   @@index([businessId])
 }
 
@@ -1334,6 +1984,13 @@ model Business {
   // Mini-app source tracking
   miniAppSource MINI_APP_SOURCE?
 
+  /// When true, Instagram OAuth requests comment scope and comment webhooks are subscribed.
+  /// Default false until Meta comment permission is approved or ops enables a beta workspace.
+  instaOsWithComment Boolean @default(false)
+
+  /// Discovery worksheet. Off hides nav only; the system object and records stay.
+  discoveryEnabled Boolean @default(false)
+
   /// Hard cap on total Lead rows for this business (anti-abuse, not plan-based).
   /// Enforced at lead creation across every source (Recall, API, mini-apps).
   /// Configurable per business; default 100k. Lead creation is skipped/blocked at/over this.
@@ -1370,24 +2027,35 @@ model Business {
   Meetings             Meeting[]
   Campaigns            Campaign[]
   CampaignLeads        CampaignLead[]
-  Pipelines            Pipeline[]
-  Stages               Stage[]
-  Opportunities        Opportunity[]
-  Preference           Preference?
+  Pipelines             Pipeline[]
+  Stages                Stage[]
+  Opportunities         Opportunity[]
+  Companies             Company[]
+  BusinessObjectConfigs BusinessObjectConfig[]
+  CustomObjects         CustomObject[]
+  CustomObjectRecords   CustomObjectRecord[]
+  AssociationDefinitions AssociationDefinition[]
+  DiscoveryTemplates    DiscoveryTemplate[]
+  ObjectCustomFields    ObjectCustomField[]
+  Products              Product[]
+  DocumentTemplates     DocumentTemplate[]
+  Quotes                Quote[]
+  Contracts             Contract[]
+  CustomMenuLinkBusinesses CustomMenuLinkBusiness[]
+  Preference            Preference?
   Events               Event[]
   FollowUps            FollowUp[]
   LeadCalls            LeadCall[]
   BusinessConfig       BusinessConfig?
-  Agents               Agent[]
   PrimaryAgents        PrimaryAgent[]
   calenderIntegrations CalenderIntegration[]
   n8nIntegrations      N8NIntegration[]
-  ChatSessions         ChatSession[]
   VoiceSessions        VoiceSession[]
   Providers            Provider[]
   VoiceChargeLogs      VoiceChargeLog[]
   MessageChargeLogs    MessageChargeLog[]
   Automations          Automation[]
+  AutomationEnrollments  AutomationEnrollment[]
   CustomField          CustomField[]
   AgentTools           AgentTool[]
   SipTrunks            SipTrunk[]
@@ -1407,13 +2075,19 @@ model Business {
   NumberPools           NumberPool[]
   PoolPhoneNumbers      PoolPhoneNumber[]
   DentalBridgeSettings  DentalBridgeSettings?
+  DentalBridgeTreatments DentalBridgeTreatment[]
   DentalBridgeBookings  DentalBridgeBooking[]
+  DentalBridgeBookingSessions DentalBridgeBookingSession[]
   DentalBridgePatients  DentalBridgePatient[]
+  DentalBridgeReminderConfig DentalBridgeReminderConfig?
+  DentalBridgeReminderLogs DentalBridgeReminderLog[]
   LocalPresenceSettings LocalPresenceSettings?
   BusinessMailConnection BusinessMailConnection?
   BusinessKeywords      BusinessKeyword[]
   KeywordRankingSyncs   KeywordRankingSync[]
   GmbReviews            GmbReview[]
+  BusinessSequenceTemplates BusinessSequenceTemplate[]
+  BusinessSequenceEnrollments BusinessSequenceEnrollment[]
   LandingPages          LandingPage[]
   Websites              Website[]
   FunnelForms           FunnelForm[]
@@ -1429,7 +2103,6 @@ model DentalBridgeSettings {
   Business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
 
   hipaaMode   Boolean                  @default(false)
-  bookingMode DENTAL_BRIDGE_BOOKING_MODE @default(DIRECT)
 
   /// CRMBridge clinic identifiers (credentials live on Provider CRM_BRIDGE).
   crmPracticeId              String @default("")
@@ -1444,10 +2117,165 @@ model DentalBridgeSettings {
   stripeWebhookSecret  String? @db.Text
   stripeDepositAmountCents Int?
 
+  /// IANA timezone for appointments, reminders, and widget display (e.g. America/New_York).
+  /// Must be set explicitly — empty until configured in Settings.
+  timezone       String @default("")
+  /// Public booking widget copy + styling defaults (landing page block may override header fields).
+  widgetSettings Json?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([businessId])
+}
+
+/// Reminder automation master switch + rules for widget/agent bookings.
+model DentalBridgeReminderConfig {
+  id         String   @id @default(uuid())
+  businessId String   @unique
+  Business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  enabled Boolean @default(false)
+  rules   DentalBridgeReminderRule[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model DentalBridgeReminderRule {
+  id       String @id @default(uuid())
+  configId String
+  Config   DentalBridgeReminderConfig @relation(fields: [configId], references: [id], onDelete: Cascade)
+
+  category DENTAL_BRIDGE_REMINDER_CATEGORY
+  trigger  DENTAL_BRIDGE_REMINDER_TRIGGER
+  channel  DENTAL_BRIDGE_REMINDER_CHANNEL @default(EMAIL)
+  amount   Int
+  unit     DENTAL_BRIDGE_REMINDER_OFFSET_UNIT
+  subject  String
+  bodyHtml String @db.Text
+  sortOrder Int   @default(0)
+  enabled  Boolean @default(true)
+
+  logs DentalBridgeReminderLog[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([configId, sortOrder])
+}
+
+/// Semantic dedup — one successful send per booking × trigger × channel × timing.
+/// Not tied to rule row id; survives rule edits/deletes.
+model DentalBridgeReminderDedup {
+  id         String @id @default(uuid())
+  businessId String
+  bookingId  String
+  Booking    DentalBridgeBooking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+
+  trigger DENTAL_BRIDGE_REMINDER_TRIGGER
+  channel DENTAL_BRIDGE_REMINDER_CHANNEL
+  amount  Int
+  unit    DENTAL_BRIDGE_REMINDER_OFFSET_UNIT
+
+  logId String @unique
+  Log   DentalBridgeReminderLog @relation(fields: [logId], references: [id], onDelete: Cascade)
+
+  sentAt DateTime @default(now())
+
+  @@unique([bookingId, trigger, channel, amount, unit])
+  @@index([businessId, sentAt])
+  @@index([bookingId])
+}
+
+model DentalBridgeReminderLog {
+  id         String @id @default(uuid())
+  businessId String
+  Business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  bookingId String?
+  leadId    String?
+  /// Optional — debug only; audit uses snapshot fields below.
+  ruleId    String?
+  Rule      DentalBridgeReminderRule? @relation(fields: [ruleId], references: [id], onDelete: SetNull)
+
+  trigger    DENTAL_BRIDGE_REMINDER_TRIGGER?
+  category   DENTAL_BRIDGE_REMINDER_CATEGORY?
+  channel    DENTAL_BRIDGE_REMINDER_CHANNEL?
+  ruleAmount Int?
+  ruleUnit   DENTAL_BRIDGE_REMINDER_OFFSET_UNIT?
+  status     DENTAL_BRIDGE_REMINDER_LOG_STATUS
+  isTest     Boolean @default(false)
+
+  recipientEmail String
+  subject        String?
+  bodySnapshot   String? @db.Text
+  errorMessage   String? @db.Text
+  messageId      String?
+  sentAt         DateTime @default(now())
+
+  Dedup DentalBridgeReminderDedup?
+
+  @@index([businessId, sentAt])
+  @@index([bookingId])
+  @@index([leadId])
+  @@index([bookingId, trigger, channel, status])
+}
+
+/// Widget/admin treatment catalog — maps to CRMBridge specialty + booking defaults.
+model DentalBridgeTreatment {
+  id                       String   @id @default(uuid())
+  businessId               String
+  Business                 Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  name                     String
+  slug                     String
+  description              String?  @db.Text
+  appointmentReason        String
+  appointmentLengthMinutes Int      @default(30)
+  /// Matches CRMBridge GetProviders.Specialty (e.g. "Dentist", "Hygienist").
+  providerSpecialty        String
+  requiresDeposit          Boolean  @default(true)
+  /// When requiresDeposit; null falls back to DentalBridgeSettings.stripeDepositAmountCents.
+  depositAmountCents       Int?
+  sortOrder                Int      @default(0)
+  active                   Boolean  @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([businessId, slug])
+  @@index([businessId, active])
+  @@index([businessId, sortOrder])
+}
+
+/// Website booking widget session — funnel state + slot operatory candidates.
+model DentalBridgeBookingSession {
+  id                 String   @id @default(uuid())
+  businessId         String
+  Business           Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  websiteId          String?
+  leadId             String?
+  treatmentId        String
+  step               DENTAL_BRIDGE_WIDGET_SESSION_STEP @default(STARTED)
+  providerPreference DENTAL_BRIDGE_PROVIDER_PREFERENCE @default(NAMED)
+  providerId         String?
+  providerDisplayName String?
+  providerSpecialty  String?
+  selectedDate       String?
+  selectedTimeHour   Int?
+  selectedTimeMin    Int?
+  slotCandidates     Json?
+  selectedSlotKey    String?
+  resolvedProviderId String?
+  resolvedOperatoryId String?
+  bookingId          String?
+  expiresAt          DateTime
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  @@index([businessId, expiresAt])
+  @@index([businessId, step])
 }
 
 /// Shared Local Presence settings (GMB review URL, SEO defaults).
@@ -1485,6 +2313,11 @@ model Website {
   pages   LandingPage[]
   globalComponents WebsiteGlobalComponent[]
 
+  supabaseConnection WebsiteSupabaseConnection?
+  secrets            WebsiteSecret[]
+  actions            WebsiteAction[]
+  customPages        WebsiteCustomPage[]
+
   /// Assigned site-wide header/footer global component ids (no FK — avoids relation cycles).
   headerGlobalComponentId String?
   footerGlobalComponentId String?
@@ -1494,6 +2327,87 @@ model Website {
 
   @@unique([businessId, slug])
   @@index([businessId])
+}
+
+/// BYOS Supabase connection for website app mode (Phase 1).
+model WebsiteSupabaseConnection {
+  id        String  @id @default(uuid())
+  websiteId String  @unique
+  Website   Website @relation(fields: [websiteId], references: [id], onDelete: Cascade)
+
+  projectUrl              String
+  publishableKeyEncrypted String @db.Text
+  secretKeyEncrypted      String @db.Text
+  lastTestedAt            DateTime?
+  lastTestStatus          String?
+  lastTestMessage         String? @db.Text
+  schemaVersion           String?
+  schemaSql               String?  @db.Text
+  connectedAt             DateTime @default(now())
+  updatedAt               DateTime @updatedAt
+}
+
+/// Named environment variables for invoke runtime (STRIPE_SECRET_KEY, etc.) — user-managed in dashboard.
+model WebsiteSecret {
+  id        String  @id @default(uuid())
+  websiteId String
+  Website   Website @relation(fields: [websiteId], references: [id], onDelete: Cascade)
+
+  /// UPPER_SNAKE_CASE key, e.g. STRIPE_SECRET_KEY
+  name           String
+  description    String?
+  valueEncrypted String @db.Text
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([websiteId, name])
+  @@index([websiteId])
+}
+
+enum WEBSITE_CUSTOM_PAGE_SOURCE {
+  AGENT
+  IMPORT
+  USER
+}
+
+/// App/admin custom pages — not opened in visual builder (Phase 1 model; routing in Phase 4).
+model WebsiteCustomPage {
+  id        String  @id @default(uuid())
+  websiteId String
+  Website   Website @relation(fields: [websiteId], references: [id], onDelete: Cascade)
+
+  path     String
+  title    String
+  document Json
+  meta     Json?
+  source   WEBSITE_CUSTOM_PAGE_SOURCE @default(AGENT)
+  /// Opt-in for /sitemap.xml — custom app pages default off.
+  includeInSitemap Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([websiteId, path])
+  @@index([websiteId])
+}
+
+/// Configurable invoke actions for website app runtime.
+model WebsiteAction {
+  id        String  @id @default(uuid())
+  websiteId String
+  Website   Website @relation(fields: [websiteId], references: [id], onDelete: Cascade)
+
+  key     String
+  label   String?
+  enabled Boolean @default(true)
+  config  Json
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([websiteId, key])
+  @@index([websiteId])
 }
 
 /// Nested folder within a website — slug segments appear in public URLs.
@@ -1515,6 +2429,7 @@ model WebsiteFolder {
   updatedAt DateTime @updatedAt
 
   @@index([websiteId, parentId])
+  @@index(parentId)
   @@index([websiteId])
 }
 
@@ -1559,6 +2474,8 @@ model LandingPage {
 
   /// Homepage for this website — serves `/` on the connected domain.
   isHomePage    Boolean @default(false)
+  /// When false, page is omitted from /sitemap.xml (still reachable if published).
+  includeInSitemap Boolean @default(true)
   /// Canonical published path e.g. `/`, `/about`, `/services/service-1`
   publishedPath String?
 
@@ -1710,12 +2627,78 @@ model GmbReview {
   pendingBodyHtml String?      @db.Text
   respondedAt     DateTime?
 
+  SequenceEnrollment BusinessSequenceEnrollment?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([businessId, status, createdAt])
   @@index([leadId])
   @@index([campaignId])
+  @@index([campaignLeadId])
+}
+
+/// Email drip sequence template (review follow-ups; extensible to payment/invoice).
+model BusinessSequenceTemplate {
+  id         String   @id @default(uuid())
+  businessId String
+  Business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  type     BusinessSequenceType @default(REVIEW)
+  name     String
+  isActive Boolean              @default(true)
+
+  steps       BusinessSequenceStep[]
+  enrollments BusinessSequenceEnrollment[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([businessId, name])
+  @@index([businessId, type, isActive])
+}
+
+model BusinessSequenceStep {
+  id         String                   @id @default(uuid())
+  sequenceId String
+  sequence   BusinessSequenceTemplate @relation(fields: [sequenceId], references: [id], onDelete: Cascade)
+
+  sortOrder   Int                       @default(0)
+  delayAmount Int                       @default(0)
+  delayUnit   BusinessSequenceDelayUnit @default(HOURS)
+  subject     String
+  bodyHtml    String                    @db.Text
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([sequenceId, sortOrder])
+}
+
+model BusinessSequenceEnrollment {
+  id         String   @id @default(uuid())
+  businessId String
+  Business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  sequenceId String
+  sequence   BusinessSequenceTemplate @relation(fields: [sequenceId], references: [id], onDelete: Restrict)
+
+  gmbReviewId String?    @unique
+  GmbReview   GmbReview? @relation(fields: [gmbReviewId], references: [id], onDelete: SetNull)
+
+  status           BusinessSequenceEnrollmentStatus @default(ACTIVE)
+  currentStepIndex Int                              @default(0)
+  nextRunAt        DateTime?
+  startedAt        DateTime                         @default(now())
+  completedAt      DateTime?
+  lastError        String?                          @db.Text
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([businessId, status, nextRunAt])
+  @@index([sequenceId])
+  @@index([gmbReviewId])
 }
 
 model BusinessKeyword {
@@ -1834,7 +2817,16 @@ model DentalBridgeBooking {
   appointmentReason   String
   appointmentLengthMinutes Int @default(60)
 
+  bookingSource               DENTAL_BRIDGE_BOOKING_SOURCE @default(AI_AGENT)
+  treatmentNameSnapshot       String?
+  requiresDepositSnapshot     Boolean?
+  depositAmountCentsSnapshot  Int?
+  providerDisplayNameSnapshot String?
+  holdExpiresAt               DateTime?
+
   stripeInvoiceId String?
+  /// Cached Stripe hosted invoice URL — avoids repeated API lookups for reminders and widget.
+  stripeHostedInvoiceUrl String? @db.Text
 
   crmPatientId      String?
   crmAppointmentId  String?
@@ -1846,6 +2838,15 @@ model DentalBridgeBooking {
   bridgeStatus      String?
   writebackError    String? @db.Text
 
+  depositRequestedAt DateTime?
+  depositPaidAt      DateTime?
+  remindersEnabled   Boolean @default(true)
+  patientShowedUp    Boolean @default(false)
+  patientShowedUpAt  DateTime?
+  patientShowedUpBy  String?
+
+  reminderDedups DentalBridgeReminderDedup[]
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -1853,6 +2854,7 @@ model DentalBridgeBooking {
   @@index([businessId, status])
   @@index([stripeInvoiceId])
   @@index([crmWritebackId])
+  @@index([businessId, appointmentDate])
 }
 
 /// Per–mini-app billing and usage (Recall core subscription stays on `Business`).
@@ -1906,7 +2908,6 @@ model InstagramAccount {
   ConversationMessages ConversationMessage[]
   LeadIgAccountConfigs LeadIgAccountConfig[]
   BaseAgentsScoped      BaseAgent[] @relation("InstagramAccountBaseAgents")
-  WorkflowAgentsScoped  Agent[]     @relation("InstagramAccountWorkflowAgents")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1964,7 +2965,6 @@ model WhatsAppAccount {
   updatedAt DateTime @updatedAt
 
   BaseAgents         BaseAgent[] @relation("WhatsAppAccountBaseAgents")
-  WorkflowAgents     Agent[]     @relation("WhatsAppAccountWorkflowAgents")
   Conversations      Conversation[]
   MessageTemplates   WhatsAppMessageTemplate[]
 
@@ -2204,7 +3204,6 @@ enum InstaOsNodeType {
 
 enum BaseAgentType {
   STANDARD
-  RECALL
   FLOW
 }
 
@@ -2250,6 +3249,11 @@ model BaseAgent {
 
   /// Website embed widget config: { UI: { title, description }, chat: { primaryColor, title }, ... }
   widgetSettings Json?
+
+  /// Optional Slack channel for handoff / alert notifications from this agent's flow.
+  /// Falls back to the business Slack integration default channel when unset.
+  slackNotificationChannelId   String?
+  slackNotificationChannelName String?
 
   /// At most one auto-connect agent per scoped account when true; enforced in base-agent router.
   autoConnect Boolean @default(false)
@@ -2373,9 +3377,10 @@ model CalenderIntegration {
 
   type CALENDAR_TYPE @default(CAL)
 
-  calEventId  String
-  calUsername String
-  calApiKey   String
+  calEventId   String
+  calEventName String @default("")
+  calUsername  String
+  calApiKey    String
 
   /// Slack channel id for Cal booking notifications (requires Slack integration).
   slackNotificationChannelId   String?
@@ -2418,66 +3423,13 @@ model N8NIntegration {
   @@index([businessIntegrationId])
 }
 
-enum RESTACK_SERVICE {
-  PRIMARY
-  SECONDARY
-  TERTIARY
-}
 
 // Agentic Layer Tables
-model ChatSession {
-  id String @id @default(uuid())
-
-  rsRunId   String // restack run id 
-  rsAgentId String // restack agent id 
-
-  status       AGENT_SESSION_STATUS @default(ACTIVE)
-  statusReason String?              @db.Text // reason for the status change
-
-  /// Which Restack deployment owns this run (standalone stacks; failover = new session + DB replay).
-  restackService RESTACK_SERVICE @default(PRIMARY)
-  /// Throttles attempts to move a SECONDARY session back to PRIMARY (see PRIMARY_FAILBACK_COOLDOWN_MS).
-  lastPrimaryFailbackAttemptAt DateTime?
-
-  messages     Json? // Message[]
-  currentEvent String? // current event name
-
-  // Relations
-  agencyId String
-  Agency   User   @relation(fields: [agencyId], references: [id], onDelete: Cascade)
-
-  businessId String
-  Business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
-
-  leadId String
-  Lead   Lead   @relation(fields: [leadId], references: [id], onDelete: Cascade)
-
-  primaryAgentId String
-  PrimaryAgent   PrimaryAgent @relation(fields: [primaryAgentId], references: [id], onDelete: Cascade)
-
-  agentId String
-  Agent   Agent  @relation(fields: [agentId], references: [id], onDelete: Cascade)
-
-  // sequence & followup 
-  activeSequencePosition Int?
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@index([businessId])
-  @@index([leadId])
-  @@index([agencyId])
-  @@index([primaryAgentId])
-  @@index([agentId])
-  /// Inbound GHL/chat hot path: find ACTIVE session for lead + channel agent (process-inbound-ghl-message).
-  @@index([leadId, agentId, status])
-}
-
 model VoiceSession {
   id String @id @default(uuid())
 
-  rsRunId   String? // restack run id (set after agent starts)
-  rsAgentId String? // restack agent id
+  rsRunId   String? // optional legacy observability
+  rsAgentId String?
 
   /// Browser/widget test sessions (no PSTN). Used for LiveKit join + token minting.
   isWebTest        Boolean @default(false)
@@ -2505,9 +3457,6 @@ model VoiceSession {
   primaryAgentId String
   PrimaryAgent   PrimaryAgent @relation(fields: [primaryAgentId], references: [id], onDelete: Cascade)
 
-  agentId String?
-  Agent   Agent?  @relation(fields: [agentId], references: [id], onDelete: Cascade)
-
   baseAgentId String?
   BaseAgent   BaseAgent? @relation(fields: [baseAgentId], references: [id], onDelete: Cascade)
 
@@ -2521,7 +3470,6 @@ model VoiceSession {
   @@index([leadId])
   @@index([agencyId])
   @@index([primaryAgentId])
-  @@index([agentId])
   @@index([baseAgentId])
   @@index([status])
   @@index([leadCallId])
@@ -2555,17 +3503,17 @@ model ChatLog {
   @@index([leadId, createdAt])
 }
 
+/// Recall workflow definition (in-project executor — no Restack).
 model Automation {
   id String @id @default(uuid())
 
   name        String
-  description String?           @db.Text
-  status      AUTOMATION_STATUS @default(DRAFT)
+  description String?          @db.Text
+  status      AutomationStatus @default(DRAFT)
 
-  flow         Json? // react flow json 
-  flowSettings Json? // react flow settings json 
+  /// Published graph: `{ version: 1, entryNodeId, nodes[], edges[] }`
+  flow Json?
 
-  // Relations 
   businessId String
   Business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
 
@@ -2575,8 +3523,13 @@ model Automation {
   primaryAgentId String
   PrimaryAgent   PrimaryAgent @relation(fields: [primaryAgentId], references: [id], onDelete: Cascade)
 
-  // Campaigns that have opted to run this automation alongside them.
-  Campaigns Campaign[]
+  /// Per-automation secret for webhook trigger URLs (Bearer or ?token=).
+  webhookSecret String? @unique
+
+  Enrollments AutomationEnrollment[]
+  Campaigns   Campaign[]
+  WebhookTestEvents AutomationWebhookTestEvent[]
+  WebhookInvocations AutomationWebhookInvocation[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -2584,30 +3537,88 @@ model Automation {
   @@index([businessId])
   @@index([agencyId])
   @@index([primaryAgentId])
+  @@index([businessId, status])
 }
 
-model AutomationSession {
+/// Per-lead workflow run — DB-backed step pointer + optional wait schedule.
+model AutomationEnrollment {
   id String @id @default(uuid())
 
-  rsRunId   String // restack run id 
-  rsAgentId String // restack agent id 
-
-  status       AGENT_SESSION_STATUS @default(ACTIVE)
-  statusReason String?              @db.Text // reason for the status change
-
-  primaryAgentId String
-  PrimaryAgent   PrimaryAgent @relation(fields: [primaryAgentId], references: [id], onDelete: Cascade)
+  automationId String
+  Automation   Automation @relation(fields: [automationId], references: [id], onDelete: Cascade)
 
   leadId String
   Lead   Lead   @relation(fields: [leadId], references: [id], onDelete: Cascade)
 
+  businessId String
+  Business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  agencyId String
+  Agency   User   @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+
+  status AutomationEnrollmentStatus @default(ACTIVE)
+
+  /// Flow node id (`nodes[].id`) — null until first step resolves.
+  currentStepId String?
+
+  /// When set with status WAITING, cron/QStash resumes at or after this time.
+  nextRunAt DateTime?
+
+  /// Bump on each transition; workers must pass matching version (idempotency).
+  runVersion Int @default(0)
+
+  context Json @default("{}")
+
+  cancelReason String? @db.Text
+  lastError    String? @db.Text
+
+  startedAt   DateTime  @default(now())
+  completedAt DateTime?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  WebhookInvocation AutomationWebhookInvocation?
+
+  @@unique([automationId, leadId])
   @@index([leadId])
-  @@index([primaryAgentId])
-  @@index([rsAgentId])
-  @@index([rsRunId])
+  @@index([automationId])
+  @@index([businessId, status, nextRunAt])
+}
+
+/// Captured test webhook payloads (builder debug — never runs prod enrollment).
+model AutomationWebhookTestEvent {
+  id           String   @id @default(uuid())
+  automationId String
+  Automation   Automation @relation(fields: [automationId], references: [id], onDelete: Cascade)
+  payload      Json
+  headers      Json?
+  query        Json?
+  receivedAt   DateTime @default(now())
+
+  @@index([automationId, receivedAt])
+}
+
+enum AutomationWebhookInvocationStatus {
+  PENDING
+  COMPLETED
+  TIMED_OUT
+}
+
+/// Sync webhook HTTP response state (RESPOND_TO_WEBHOOK mode).
+model AutomationWebhookInvocation {
+  id             String                          @id @default(uuid())
+  automationId   String
+  Automation     Automation                      @relation(fields: [automationId], references: [id], onDelete: Cascade)
+  enrollmentId   String                          @unique
+  Enrollment     AutomationEnrollment            @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
+  status         AutomationWebhookInvocationStatus @default(PENDING)
+  responseStatus Int?
+  responseBody   Json?
+  createdAt      DateTime                        @default(now())
+  completedAt    DateTime?
+
+  @@index([automationId, createdAt])
 }
 
 model Provider {
@@ -2771,13 +3782,24 @@ enum VOICE_SESSION_STATUS {
   QUEUED
 }
 
-enum AUTOMATION_STATUS {
+enum AutomationStatus {
   DRAFT
   ACTIVE
   PAUSED
-  TERMINATED
+}
+
+enum AutomationEnrollmentStatus {
+  ACTIVE
+  WAITING
   COMPLETED
+  CANCELLED
   FAILED
+}
+
+enum AutomationDelayUnit {
+  MINUTES
+  HOURS
+  DAYS
 }
 
 enum ROLE {
@@ -2817,11 +3839,6 @@ enum MINI_APP_SOURCE {
   DENTAL_BRIDGE
 }
 
-enum DENTAL_BRIDGE_BOOKING_MODE {
-  DIRECT
-  STRIPE_DEPOSIT
-}
-
 enum DENTAL_BRIDGE_PATIENT_STATUS {
   QUEUED
   IN_PROGRESS
@@ -2843,6 +3860,58 @@ enum DENTAL_BRIDGE_BOOKING_STATUS {
   /// Patient ready but PMS appointment create failed — staff action needed.
   MANUAL_REQUIRED
   CANCELLED
+}
+
+enum DENTAL_BRIDGE_BOOKING_SOURCE {
+  WEBSITE_WIDGET
+  AI_AGENT
+  STAFF
+  CHAT_WIDGET
+  VOICE_AGENT
+}
+
+enum DENTAL_BRIDGE_WIDGET_SESSION_STEP {
+  STARTED
+  PATIENT_SUBMITTED
+  SLOT_SELECTED
+  PAYMENT_STARTED
+  CONFIRMED
+}
+
+enum DENTAL_BRIDGE_PROVIDER_PREFERENCE {
+  NAMED
+  NO_PREFERENCE
+}
+
+enum DENTAL_BRIDGE_REMINDER_CHANNEL {
+  EMAIL
+  SMS
+  WHATSAPP
+}
+
+enum DENTAL_BRIDGE_REMINDER_CATEGORY {
+  PAYMENT
+  APPOINTMENT
+}
+
+enum DENTAL_BRIDGE_REMINDER_TRIGGER {
+  AFTER_DEPOSIT_REQUESTED
+  BEFORE_DEPOSIT_DUE
+  AFTER_DEPOSIT_PAID
+  BEFORE_APPOINTMENT_START
+  AFTER_APPOINTMENT_OVERDUE
+}
+
+enum DENTAL_BRIDGE_REMINDER_OFFSET_UNIT {
+  MINUTES
+  HOURS
+  DAYS
+}
+
+enum DENTAL_BRIDGE_REMINDER_LOG_STATUS {
+  SENT
+  FAILED
+  SKIPPED
 }
 
 enum PLAN_TERM {
@@ -2882,6 +3951,7 @@ enum LEAD_SOURCE {
   CAL
   WEBSITE_EMBED
   LANDING_PAGE
+  WEBSITE_BOOKING_WIDGET
 }
 
 enum LANDING_PAGE_STATUS {
@@ -2995,6 +4065,25 @@ enum BusinessMailProvider {
   OUTLOOK
 }
 
+enum BusinessSequenceType {
+  REVIEW
+  PAYMENT
+  INVOICE
+}
+
+enum BusinessSequenceDelayUnit {
+  MINUTES
+  HOURS
+  DAYS
+}
+
+enum BusinessSequenceEnrollmentStatus {
+  ACTIVE
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
 enum CAMPAIGN_LEAD_STATUS {
   PENDING
   RETRYING
@@ -3049,6 +4138,12 @@ enum OPPORTUNITY_STATUS {
   LOST
   WON
   ABANDONED
+}
+
+enum SYSTEM_OBJECT {
+  LEAD
+  COMPANY
+  OPPORTUNITY
 }
 
 // Automation Enums
@@ -3175,6 +4270,8 @@ enum PROVIDER {
   CRM_BRIDGE
   DATAFORSEO
   UPLOADTHING
+  EMAIL
+  RECALLSYNC
 }
 
 enum BusinessAssetType {
