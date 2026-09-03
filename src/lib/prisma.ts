@@ -1,6 +1,10 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import { PrismaPlanetScale } from "@prisma/adapter-planetscale";
 import { PrismaClient } from "../generated/client/index.js";
+import dotenv from "dotenv";
+
+// Load .env before any Prisma client is created (imports run before server.ts dotenv.config())
+dotenv.config();
 
 const globalForPrisma = globalThis as unknown as {
   primaryPrisma?: PrismaClient;
@@ -76,7 +80,3 @@ setTimeout(() => {
       console.log("⚠️  Server will continue without database connection");
     });
 }, 1000);
-
-if (process.env.NODE_ENV !== "production") {
-  globalForPrisma.primaryPrisma = getPrimaryPrisma();
-}
