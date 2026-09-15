@@ -65,12 +65,15 @@ export const API_ENDPOINTS = {
     SET_ALL_OVERDUE_NO_SHOW: "/meeting", // PATCH, append `/all` (id ignored server-side)
   },
   NOTE: {
-    CREATE_NOTE: (leadId: string) => `${leadId}/note`,
-    GET_NOTES: (leadId: string) => `${leadId}/note`,
-    UPDATE_NOTE: (leadId: string, noteId: string) => `${leadId}/note/${noteId}`,
-    DELETE_NOTE: (leadId: string, noteId: string) => `${leadId}/note/${noteId}`,
-    GET_NOTE_BY_ID: (leadid: string, noteId: string) =>
-      `${leadid}/note/${noteId}`,
+    LIST_FOR_LEAD: (leadId: string) => `/notes/${leadId}`,
+    LIST_FOR_OPPORTUNITY: (opportunityId: string) =>
+      `/pipeline/opportunity/${opportunityId}/notes`,
+    BY_ID: (id: string) => `/notes/note/${id}`,
+    STATUS: (id: string) => `/notes/note/${id}/status`,
+  },
+  COMPANY: {
+    LIST: "/company",
+    BY_ID: "/company", // GET/PUT/DELETE append `/{id}`
   },
   FOLLOW_UP: {
     CREATE_FOLLOW_UP: "/follow-up",

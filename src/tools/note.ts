@@ -3,169 +3,279 @@ import { API_ENDPOINTS } from "../constants/tool.js";
 import { getApiKey, getBaseUrl } from "../utils/auth.util.js";
 import {
   CreateNoteSchema,
-  CreateNoteRequest,
-  GetNoteSchema,
-  GetNoteRequest,
-  GetAllNotesSchema,
-  GetAllNotesRequest,
-  UpdateNoteSchema,
-  UpdateNoteRequest,
   DeleteNoteSchema,
-  DeleteNoteRequest,
+  GetNoteByIdSchema,
+  ListNotesSchema,
+  UpdateNoteSchema,
+  UpdateNoteStatusSchema,
 } from "../schema/tool.js";
+import { listQueryJsonSchemaProperties } from "../schema/list-query.js";
+import {
+  appendListQueryToUrl,
+  formatPaginatedListText,
+} from "../utils/list-query.util.js";
+
+function formatZodErrors(result: {
+  success: false;
+  error: { errors: { path: (string | number)[]; message: string }[] };
+}) {
+  return result.error.errors
+    .map((err) => `${err.path.join(".")}: ${err.message}`)
+    .join(", ");
+}
+
+async function readErrorText(response: Response): Promise<string> {
+  try {
+    const text = await response.text();
+    if (text.trim().startsWith("{") || text.trim().startsWith("[")) {
+      const json = JSON.parse(text) as { message?: string };
+      return json.message ?? text;
+    }
+    return text || response.statusText;
+  } catch {
+    return response.statusText;
+  }
+}
 
 export const noteTools = [
   {
-    name: "create-note",
-    description: "Create a new note for a lead",
+    name: "list-notes",
+    description:
+      "List paginated notes for a lead or an opportunity (exactly one of leadId or opportunityId). Default pageSize=10. Date filters apply to createdAt. Lean default includes id, note, kind, status, dueAt, completedAt, leadId, opportunityId, createdAt.",
     arguments: [],
     inputSchema: {
       type: "object",
       properties: {
         leadId: {
           type: "string",
-          description: "ID of the lead to create a note for",
+          description: "Lead id (mutually exclusive with opportunityId)",
         },
-        note: {
+        opportunityId: {
           type: "string",
-          description: "Content of the note",
+          description: "Opportunity id (mutually exclusive with leadId)",
         },
+        ...listQueryJsonSchemaProperties,
       },
-      required: ["leadId", "note"],
+      required: [],
       additionalProperties: false,
     },
   },
   {
     name: "get-note",
-    description: "Get a specific note by ID for a lead",
+    description: "Get a single note by id.",
     arguments: [],
     inputSchema: {
       type: "object",
       properties: {
-        leadId: {
-          type: "string",
-          description: "ID of the lead",
-        },
-        noteId: {
-          type: "string",
-          description: "ID of the note to retrieve",
-        },
+        id: { type: "string", description: "Note id" },
       },
-      required: ["leadId", "noteId"],
+      required: ["id"],
       additionalProperties: false,
     },
   },
   {
-    name: "get-lead-notes",
-    description: "Get all notes for a lead using its lead Id",
+    name: "create-note",
+    description:
+      "Create a note on a lead or opportunity. kind INFO (default) or ACTION; dueAt only for ACTION.",
     arguments: [],
     inputSchema: {
       type: "object",
       properties: {
-        leadId: {
+        leadId: { type: "string", description: "Lead id (XOR opportunityId)" },
+        opportunityId: {
           type: "string",
-          description: "ID of the lead to get notes for",
+          description: "Opportunity id (XOR leadId)",
         },
-        all: {
-          type: "boolean",
-          description: "Optional parameter to get all notes",
-          default: true,
+        note: { type: "string", description: "Note body" },
+        kind: {
+          type: "string",
+          enum: ["INFO", "ACTION"],
+          description: "Note kind. Default INFO.",
+        },
+        dueAt: {
+          type: "string",
+          description: "ISO due date for ACTION notes only",
         },
       },
-      required: ["leadId"],
+      required: ["note"],
       additionalProperties: false,
     },
   },
   {
     name: "update-note",
-    description: "Update an existing note for a lead",
+    description:
+      "Update note content, kind, or dueAt by id. Partial updates; at least one field required.",
     arguments: [],
     inputSchema: {
       type: "object",
       properties: {
-        leadId: {
+        id: { type: "string", description: "Note id" },
+        note: { type: "string", description: "New body" },
+        kind: { type: "string", enum: ["INFO", "ACTION"] },
+        dueAt: {
           type: "string",
-          description: "ID of the lead",
-        },
-        noteId: {
-          type: "string",
-          description: "ID of the note to update",
-        },
-        note: {
-          type: "string",
-          description: "New content for the note",
+          description: "ISO due date (ACTION only); pass null to clear",
         },
       },
-      required: ["leadId", "noteId", "note"],
+      required: ["id"],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: "update-note-status",
+    description:
+      "Set status on an ACTION note (PENDING, IN_PROGRESS, COMPLETED, SKIPPED).",
+    arguments: [],
+    inputSchema: {
+      type: "object",
+      properties: {
+        id: { type: "string", description: "Note id" },
+        status: {
+          type: "string",
+          enum: ["PENDING", "IN_PROGRESS", "COMPLETED", "SKIPPED"],
+        },
+      },
+      required: ["id", "status"],
       additionalProperties: false,
     },
   },
   {
     name: "delete-note",
-    description: "Delete a note for a lead",
+    description: "Delete a note by id.",
     arguments: [],
     inputSchema: {
       type: "object",
       properties: {
-        leadId: {
-          type: "string",
-          description: "ID of the lead",
-        },
-        noteId: {
-          type: "string",
-          description: "ID of the note to delete",
-        },
+        id: { type: "string", description: "Note id" },
       },
-      required: ["leadId", "noteId"],
-      additionalProperties: false,
-    },
-  },
-  {
-    name: "get-note-by-id",
-    description: "Get a specific note by its ID",
-    arguments: [],
-    inputSchema: {
-      type: "object",
-      properties: {
-        leadId: {
-          type: "string",
-          description: "ID of the lead that owns the note",
-        },
-        noteId: {
-          type: "string",
-          description: "ID of the note to retrieve",
-        },
-      },
-      required: ["leadId", "noteId"],
+      required: ["id"],
       additionalProperties: false,
     },
   },
 ];
 
-export async function handleCreateNote(request: CallToolRequest) {
+export async function handleListNotes(request: CallToolRequest) {
   try {
-    const args = request.params.arguments as unknown as CreateNoteRequest;
-
-    // Validate the input using Zod
-    const result = CreateNoteSchema.safeParse(args);
-
+    const result = ListNotesSchema.safeParse(request.params.arguments ?? {});
     if (!result.success) {
-      // Format Zod errors into a readable message
-      const errorMessages = result.error.errors
-        .map((err) => `${err.path.join(".")}: ${err.message}`)
-        .join(", ");
       return {
         content: [
           {
             type: "text",
-            text: `Failed to create note: ${errorMessages}. Retry again with correct tool parameters and values.`,
+            text: `Failed to list notes: ${formatZodErrors(result)}`,
           },
         ],
       };
     }
 
-    const { leadId, note } = result.data;
-    const url = `${getBaseUrl(request)}/${leadId}/note`;
+    const { leadId, opportunityId, ...listArgs } = result.data;
+    const listBase = leadId
+      ? `${getBaseUrl(request)}${API_ENDPOINTS.NOTE.LIST_FOR_LEAD(leadId)}`
+      : `${getBaseUrl(request)}${API_ENDPOINTS.NOTE.LIST_FOR_OPPORTUNITY(opportunityId!)}`;
+
+    const url = appendListQueryToUrl(listBase, listArgs);
+    const response = await fetch(url, {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${getApiKey(request)}`,
+      },
+    });
+
+    if (!response.ok) {
+      return {
+        content: [
+          {
+            type: "text",
+            text: `Failed to list notes: ${await readErrorText(response)}`,
+          },
+        ],
+      };
+    }
+
+    const data = await response.json();
+    return {
+      content: [
+        {
+          type: "text",
+          text: formatPaginatedListText("Notes", "notes", data as Record<string, unknown>),
+        },
+      ],
+    };
+  } catch (error: unknown) {
+    const msg = error instanceof Error ? error.message : "Unknown error";
+    return {
+      content: [{ type: "text", text: `Failed to execute list-notes: ${msg}` }],
+    };
+  }
+}
+
+export async function handleGetNote(request: CallToolRequest) {
+  try {
+    const result = GetNoteByIdSchema.safeParse(request.params.arguments);
+    if (!result.success) {
+      return {
+        content: [
+          {
+            type: "text",
+            text: `Failed to get note: ${formatZodErrors(result)}`,
+          },
+        ],
+      };
+    }
+
+    const url = `${getBaseUrl(request)}${API_ENDPOINTS.NOTE.BY_ID(result.data.id)}`;
+    const response = await fetch(url, {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${getApiKey(request)}`,
+      },
+    });
+
+    if (!response.ok) {
+      return {
+        content: [
+          {
+            type: "text",
+            text: `Failed to get note: ${await readErrorText(response)}`,
+          },
+        ],
+      };
+    }
+
+    const data = await response.json();
+    return {
+      content: [{ type: "text", text: `Note:\n${JSON.stringify(data, null, 2)}` }],
+    };
+  } catch (error: unknown) {
+    const msg = error instanceof Error ? error.message : "Unknown error";
+    return {
+      content: [{ type: "text", text: `Failed to execute get-note: ${msg}` }],
+    };
+  }
+}
+
+export async function handleCreateNote(request: CallToolRequest) {
+  try {
+    const result = CreateNoteSchema.safeParse(request.params.arguments ?? {});
+    if (!result.success) {
+      return {
+        content: [
+          {
+            type: "text",
+            text: `Failed to create note: ${formatZodErrors(result)}`,
+          },
+        ],
+      };
+    }
+
+    const { leadId, opportunityId, note, kind, dueAt } = result.data;
+    const url = leadId
+      ? `${getBaseUrl(request)}${API_ENDPOINTS.NOTE.LIST_FOR_LEAD(leadId)}`
+      : `${getBaseUrl(request)}${API_ENDPOINTS.NOTE.LIST_FOR_OPPORTUNITY(opportunityId!)}`;
+
+    const body: Record<string, unknown> = { note };
+    if (kind) body.kind = kind;
+    if (dueAt !== undefined) body.dueAt = dueAt;
 
     const response = await fetch(url, {
       method: "POST",
@@ -173,102 +283,15 @@ export async function handleCreateNote(request: CallToolRequest) {
         "Content-Type": "application/json",
         Authorization: `Bearer ${getApiKey(request)}`,
       },
-      body: JSON.stringify({ note }),
+      body: JSON.stringify(body),
     });
 
     if (!response.ok) {
-      let errorMessage = response.statusText;
-      try {
-        const errorData = await response.text();
-        // Try to parse as JSON if it looks like JSON
-        if (
-          errorData.trim().startsWith("{") ||
-          errorData.trim().startsWith("[")
-        ) {
-          const jsonError = JSON.parse(errorData);
-          errorMessage = jsonError.message || errorData;
-        } else {
-          errorMessage = errorData;
-        }
-      } catch (e) {
-        console.error("Failed to parse error response:", e);
-      }
       return {
         content: [
           {
             type: "text",
-            text: `Failed to create note: ${errorMessage}`,
-          },
-        ],
-      };
-    }
-
-    const data = await response.json();
-
-    return {
-      content: [
-        {
-          type: "text",
-          text: `Successfully created note for lead ${leadId}:\nNote ID: ${data.id}\nContent: ${note}`,
-        },
-      ],
-    };
-  } catch (error: unknown) {
-    console.error("Create Note Exception:", error);
-    return {
-      content: [
-        {
-          type: "text",
-          text: `An error occurred while creating the note: ${
-            error instanceof Error ? error.message : "Unknown error"
-          }`,
-        },
-      ],
-    };
-  }
-}
-
-export async function handleGetNote(request: CallToolRequest) {
-  try {
-    const args = request.params.arguments as unknown as GetNoteRequest;
-
-    // Validate the input using Zod
-    const result = GetNoteSchema.safeParse(args);
-
-    if (!result.success) {
-      // Format Zod errors into a readable message
-      const errorMessages = result.error.errors
-        .map((err) => `${err.path.join(".")}: ${err.message}`)
-        .join(", ");
-      return {
-        content: [
-          {
-            type: "text",
-            text: `Failed to get note: ${errorMessages}. Retry again with correct tool parameters and values.`,
-          },
-        ],
-      };
-    }
-
-    const { leadId, noteId } = result.data;
-    const url = `${getBaseUrl(request)}/${API_ENDPOINTS.NOTE.GET_NOTES(
-      leadId
-    )}/${noteId}`;
-
-    const response = await fetch(url, {
-      method: "GET",
-      headers: {
-        Authorization: `Bearer ${getApiKey(request)}`,
-      },
-    });
-
-    if (!response.ok) {
-      const errorData = await response.json();
-      return {
-        content: [
-          {
-            type: "text",
-            text: errorData.message || "Failed to get note",
+            text: `Failed to create note: ${await readErrorText(response)}`,
           },
         ],
       };
@@ -279,202 +302,127 @@ export async function handleGetNote(request: CallToolRequest) {
       content: [
         {
           type: "text",
-          text: `Successfully retrieved note for lead ${leadId}`,
-        },
-        {
-          type: "data",
-          data,
+          text: `Created note ${data.id}:\n${JSON.stringify(data, null, 2)}`,
         },
       ],
     };
   } catch (error: unknown) {
+    const msg = error instanceof Error ? error.message : "Unknown error";
     return {
-      content: [
-        {
-          type: "text",
-          text: `An error occurred while getting the note: ${
-            error instanceof Error ? error.message : "Unknown error"
-          }`,
-        },
-      ],
-    };
-  }
-}
-
-export async function handleGetAllNotes(request: CallToolRequest) {
-  try {
-    const args = request.params.arguments as unknown as GetAllNotesRequest;
-
-    // Validate the input using Zod
-    const result = GetAllNotesSchema.safeParse(args);
-
-    if (!result.success) {
-      // Format Zod errors into a readable message
-      const errorMessages = result.error.errors
-        .map((err) => `${err.path.join(".")}: ${err.message}`)
-        .join(", ");
-      return {
-        content: [
-          {
-            type: "text",
-            text: `Failed to get notes: ${errorMessages}. Retry again with correct tool parameters and values.`,
-          },
-        ],
-      };
-    }
-
-    const { leadId } = result.data;
-    const url = `${getBaseUrl(request)}/${leadId}/note`;
-    const response = await fetch(url, {
-      method: "GET",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${getApiKey(request)}`,
-      },
-    });
-
-    if (!response.ok) {
-      let errorMessage = response.statusText;
-      try {
-        const errorData = await response.text();
-        errorMessage = errorData;
-      } catch (e) {
-        console.error("Failed to parse error response:", e);
-      }
-      return {
-        content: [
-          {
-            type: "text",
-            text: `Failed to get notes: ${errorMessage}`,
-          },
-        ],
-      };
-    }
-
-    const data = await response.json();
-
-    // format the response in a more readable way
-    if (Array.isArray(data) && data.length > 0) {
-      const formattedNotes = data
-        .map((note: any) => {
-          return `- Note ID: ${note.id}\n  Content: ${
-            note.note
-          }\n  Created: ${new Date(note.createdAt).toLocaleString()}`;
-        })
-        .join("\n\n");
-
-      return {
-        content: [
-          {
-            type: "text",
-            text: `Found ${data.length} notes for lead ${leadId}:\n\n${formattedNotes}`,
-          },
-        ],
-      };
-    } else if (Array.isArray(data) && data.length === 0) {
-      return {
-        content: [
-          {
-            type: "text",
-            text: `No notes found for lead ${leadId}.`,
-          },
-        ],
-      };
-    } else {
-      return {
-        content: [
-          {
-            type: "text",
-            text: "Unexpected response format from the server.",
-          },
-        ],
-      };
-    }
-  } catch (error: unknown) {
-    console.error("Get All Notes Exception:", error);
-    return {
-      content: [
-        {
-          type: "text",
-          text: `An error occurred while getting the notes: ${
-            error instanceof Error ? error.message : "Unknown error"
-          }`,
-        },
-      ],
+      content: [{ type: "text", text: `Failed to execute create-note: ${msg}` }],
     };
   }
 }
 
 export async function handleUpdateNote(request: CallToolRequest) {
   try {
-    const args = request.params.arguments as unknown as UpdateNoteRequest;
-
-    // Validate the input using Zod
-    const result = UpdateNoteSchema.safeParse(args);
-
+    const result = UpdateNoteSchema.safeParse(request.params.arguments ?? {});
     if (!result.success) {
-      // Format Zod errors into a readable message
-      const errorMessages = result.error.errors
-        .map((err) => `${err.path.join(".")}: ${err.message}`)
-        .join(", ");
       return {
         content: [
           {
             type: "text",
-            text: `Failed to update note: ${errorMessages}. Retry again with correct tool parameters and values.`,
+            text: `Failed to update note: ${formatZodErrors(result)}`,
           },
         ],
       };
     }
 
-    const { leadId, noteId, note } = result.data;
+    const { id, ...patch } = result.data;
+    const body: Record<string, unknown> = {};
+    if (patch.note !== undefined) body.note = patch.note;
+    if (patch.kind !== undefined) body.kind = patch.kind;
+    if (patch.dueAt !== undefined) body.dueAt = patch.dueAt;
 
-    const url = `${getBaseUrl(request)}/${API_ENDPOINTS.NOTE.GET_NOTES(
-      leadId
-    )}/${noteId}`;
-
+    const url = `${getBaseUrl(request)}${API_ENDPOINTS.NOTE.BY_ID(id)}`;
     const response = await fetch(url, {
       method: "PUT",
       headers: {
         "Content-Type": "application/json",
         Authorization: `Bearer ${getApiKey(request)}`,
       },
-      body: JSON.stringify({ note }),
+      body: JSON.stringify(body),
     });
 
     if (!response.ok) {
-      const errorData = await response.json();
       return {
         content: [
           {
             type: "text",
-            text: `Failed to update note: ${
-              errorData.message || response.statusText
-            }`,
+            text: `Failed to update note: ${await readErrorText(response)}`,
           },
         ],
       };
     }
 
     const data = await response.json();
-
     return {
       content: [
         {
           type: "text",
-          text: `Successfully updated note for lead ${leadId}:\nNote ID: ${noteId}\nContent: ${note}`,
+          text: `Updated note ${id}:\n${JSON.stringify(data, null, 2)}`,
         },
       ],
     };
   } catch (error: unknown) {
+    const msg = error instanceof Error ? error.message : "Unknown error";
+    return {
+      content: [{ type: "text", text: `Failed to execute update-note: ${msg}` }],
+    };
+  }
+}
+
+export async function handleUpdateNoteStatus(request: CallToolRequest) {
+  try {
+    const result = UpdateNoteStatusSchema.safeParse(
+      request.params.arguments ?? {}
+    );
+    if (!result.success) {
+      return {
+        content: [
+          {
+            type: "text",
+            text: `Failed to update note status: ${formatZodErrors(result)}`,
+          },
+        ],
+      };
+    }
+
+    const url = `${getBaseUrl(request)}${API_ENDPOINTS.NOTE.STATUS(result.data.id)}`;
+    const response = await fetch(url, {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${getApiKey(request)}`,
+      },
+      body: JSON.stringify({ status: result.data.status }),
+    });
+
+    if (!response.ok) {
+      return {
+        content: [
+          {
+            type: "text",
+            text: `Failed to update note status: ${await readErrorText(response)}`,
+          },
+        ],
+      };
+    }
+
+    const data = await response.json();
     return {
       content: [
         {
           type: "text",
-          text: `An error occurred while updating the note: ${
-            error instanceof Error ? error.message : "Unknown error"
-          }`,
+          text: `Note status updated:\n${JSON.stringify(data, null, 2)}`,
         },
+      ],
+    };
+  } catch (error: unknown) {
+    const msg = error instanceof Error ? error.message : "Unknown error";
+    return {
+      content: [
+        { type: "text", text: `Failed to execute update-note-status: ${msg}` },
       ],
     };
   }
@@ -482,29 +430,19 @@ export async function handleUpdateNote(request: CallToolRequest) {
 
 export async function handleDeleteNote(request: CallToolRequest) {
   try {
-    const args = request.params.arguments as unknown as DeleteNoteRequest;
-
-    // Validate the input using Zod
-    const result = DeleteNoteSchema.safeParse(args);
-
+    const result = DeleteNoteSchema.safeParse(request.params.arguments ?? {});
     if (!result.success) {
-      // Format Zod errors into a readable message
-      const errorMessages = result.error.errors
-        .map((err) => `${err.path.join(".")}: ${err.message}`)
-        .join(", ");
       return {
         content: [
           {
             type: "text",
-            text: `Failed to delete note: ${errorMessages}. Retry again with correct tool parameters and values.`,
+            text: `Failed to delete note: ${formatZodErrors(result)}`,
           },
         ],
       };
     }
 
-    const { leadId, noteId } = result.data;
-    const url = `${getBaseUrl(request)}/${leadId}/note/${noteId}`;
-
+    const url = `${getBaseUrl(request)}${API_ENDPOINTS.NOTE.BY_ID(result.data.id)}`;
     const response = await fetch(url, {
       method: "DELETE",
       headers: {
@@ -513,28 +451,11 @@ export async function handleDeleteNote(request: CallToolRequest) {
     });
 
     if (!response.ok) {
-      let errorMessage = response.statusText;
-      try {
-        const errorData = await response.text();
-        console.error("Delete Note Error Response:", errorData);
-        // Try to parse as JSON if it looks like JSON
-        if (
-          errorData.trim().startsWith("{") ||
-          errorData.trim().startsWith("[")
-        ) {
-          const jsonError = JSON.parse(errorData);
-          errorMessage = jsonError.message || errorData;
-        } else {
-          errorMessage = errorData;
-        }
-      } catch (e) {
-        console.error("Failed to parse error response:", e);
-      }
       return {
         content: [
           {
             type: "text",
-            text: `Failed to delete note: ${errorMessage}`,
+            text: `Failed to delete note: ${await readErrorText(response)}`,
           },
         ],
       };
@@ -542,98 +463,13 @@ export async function handleDeleteNote(request: CallToolRequest) {
 
     return {
       content: [
-        {
-          type: "text",
-          text: `Successfully deleted note for lead ${leadId}`,
-        },
+        { type: "text", text: `Deleted note ${result.data.id}.` },
       ],
     };
   } catch (error: unknown) {
+    const msg = error instanceof Error ? error.message : "Unknown error";
     return {
-      content: [
-        {
-          type: "text",
-          text: `An error occurred while deleting the note: ${
-            error instanceof Error ? error.message : "Unknown error"
-          }`,
-        },
-      ],
-    };
-  }
-}
-
-export async function handleGetNoteById(request: CallToolRequest) {
-  try {
-    const { leadId, noteId } = request.params.arguments as {
-      leadId: string;
-      noteId: string;
-    };
-
-    if (!leadId || !noteId) {
-      return {
-        content: [
-          {
-            type: "text",
-            text: "Both Lead ID and Note ID are required",
-          },
-        ],
-      };
-    }
-
-    const url = `${getBaseUrl(request)}/${leadId}/note/${noteId}`;
-
-    const response = await fetch(url, {
-      method: "GET",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${getApiKey(request)}`,
-      },
-    });
-
-    if (!response.ok) {
-      let errorMessage = response.statusText;
-      try {
-        const errorData = await response.text();
-        console.error("Get Note By ID Error Response:", errorData);
-        errorMessage = errorData;
-      } catch (e) {
-        console.error("Failed to parse error response:", e);
-      }
-      return {
-        content: [
-          {
-            type: "text",
-            text: `Failed to get note: ${errorMessage}`,
-          },
-        ],
-      };
-    }
-
-    const data = await response.json();
-
-    return {
-      content: [
-        {
-          type: "text",
-          text: `Note Details:\nID: ${data.id}\nContent: ${
-            data.note
-          }\nCreated: ${new Date(data.createdAt).toLocaleString()}\nLead ID: ${
-            data.leadId
-          }`,
-        },
-      ],
-    };
-  } catch (error: unknown) {
-    console.error("Get Note By ID Exception:", error);
-    return {
-      content: [
-        {
-          type: "text",
-          text: `An error occurred while getting the note: ${
-            error instanceof Error ? error.message : "Unknown error"
-          }`,
-        },
-      ],
+      content: [{ type: "text", text: `Failed to execute delete-note: ${msg}` }],
     };
   }
 }

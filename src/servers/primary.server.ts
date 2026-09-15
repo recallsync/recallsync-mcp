@@ -40,11 +40,19 @@ import {
   noteTools,
   handleCreateNote,
   handleGetNote,
-  handleGetAllNotes,
+  handleListNotes,
   handleUpdateNote,
+  handleUpdateNoteStatus,
   handleDeleteNote,
-  handleGetNoteById,
 } from "../tools/note.js";
+import {
+  companyTools,
+  handleGetCompanies,
+  handleGetCompany,
+  handleCreateCompany,
+  handleUpdateCompany,
+  handleDeleteCompany,
+} from "../tools/company.js";
 import {
   followUpTools,
   handleCreateFollowUp,
@@ -211,6 +219,7 @@ primaryServer.setRequestHandler(ListToolsRequestSchema, async () => {
       ...pipelineTools,
       ...stageTools,
       ...opportunityTools,
+      ...companyTools,
       ...callTools,
       ...customFieldTools,
       ...agentTools,
@@ -347,6 +356,16 @@ primaryServer.setRequestHandler(CallToolRequestSchema, async (request) => {
       return handleUpdateOpportunity(request);
     case "delete-opportunity":
       return handleDeleteOpportunity(request);
+    case "get-companies":
+      return handleGetCompanies(request);
+    case "get-company":
+      return handleGetCompany(request);
+    case "create-company":
+      return handleCreateCompany(request);
+    case "update-company":
+      return handleUpdateCompany(request);
+    case "delete-company":
+      return handleDeleteCompany(request);
     case "get-calls":
       return handleGetCalls(request);
     case "get-call":
@@ -373,14 +392,18 @@ primaryServer.setRequestHandler(CallToolRequestSchema, async (request) => {
       return handleBulkSetLeadCustomFieldValues(request);
     case "delete-lead-custom-field-value":
       return handleDeleteLeadCustomFieldValue(request);
-    case "create-note":
-      return handleCreateNote(request);
+    case "list-notes":
+      return handleListNotes(request);
     case "get-note":
       return handleGetNote(request);
-    case "get-lead-notes":
-      return handleGetAllNotes(request);
-    case "get-note-by-id":
-      return handleGetNoteById(request);
+    case "create-note":
+      return handleCreateNote(request);
+    case "update-note":
+      return handleUpdateNote(request);
+    case "update-note-status":
+      return handleUpdateNoteStatus(request);
+    case "delete-note":
+      return handleDeleteNote(request);
     case "get-primary-agents":
       return handleGetPrimaryAgents(request);
     case "get-primary-agent":
@@ -481,10 +504,6 @@ primaryServer.setRequestHandler(CallToolRequestSchema, async (request) => {
       return handleImportWebsiteAppPack(request);
     case "import-website-app-pack-into-website":
       return handleImportWebsiteAppPackIntoWebsite(request);
-    case "update-note":
-      return handleUpdateNote(request);
-    case "delete-note":
-      return handleDeleteNote(request);
     default:
       throw new Error("Unknown tool");
   }

@@ -495,40 +495,75 @@ export type GetUpcomingMeetingsByLeadRequest = z.infer<
 >;
 
 // Note related schemas
-export const CreateNoteSchema = z.object({
-  leadId: z.string().min(1, "Lead ID is required"),
-  note: z.string().min(1, "Note content is required"),
-});
+const NOTE_KIND_VALUES = ["INFO", "ACTION"] as const;
+const NOTE_STATUS_VALUES = [
+  "PENDING",
+  "IN_PROGRESS",
+  "COMPLETED",
+  "SKIPPED",
+] as const;
 
+const noteParentXorRefine = {
+  refine: (data: { leadId?: string; opportunityId?: string }) =>
+    (Boolean(data.leadId) && !data.opportunityId) ||
+    (Boolean(data.opportunityId) && !data.leadId),
+  message: "Provide exactly one of leadId or opportunityId" as const,
+};
+
+export const ListNotesSchema = z
+  .object({
+    leadId: z.string().optional(),
+    opportunityId: z.string().optional(),
+  })
+  .merge(ListQuerySchema)
+  .refine(noteParentXorRefine.refine, {
+    message: noteParentXorRefine.message,
+  });
+export type ListNotesRequest = z.infer<typeof ListNotesSchema>;
+
+export const CreateNoteSchema = z
+  .object({
+    leadId: z.string().optional(),
+    opportunityId: z.string().optional(),
+    note: z.string().min(1, "Note content is required"),
+    kind: z.enum(NOTE_KIND_VALUES).optional(),
+    dueAt: z.string().optional().nullable(),
+  })
+  .refine(noteParentXorRefine.refine, {
+    message: noteParentXorRefine.message,
+  });
 export type CreateNoteRequest = z.infer<typeof CreateNoteSchema>;
 
-export const GetNoteSchema = z.object({
-  leadId: z.string().min(1, "Lead ID is required"),
-  noteId: z.string().min(1, "Note ID is required"),
+export const GetNoteByIdSchema = z.object({
+  id: z.string().min(1, "Note ID is required"),
 });
+export type GetNoteByIdRequest = z.infer<typeof GetNoteByIdSchema>;
 
-export type GetNoteRequest = z.infer<typeof GetNoteSchema>;
-
-export const GetAllNotesSchema = z.object({
-  leadId: z.string().min(1, "Lead ID is required"),
-  all: z.boolean().optional().default(true),
-});
-
-export type GetAllNotesRequest = z.infer<typeof GetAllNotesSchema>;
-
-export const UpdateNoteSchema = z.object({
-  leadId: z.string().min(1, "Lead ID is required"),
-  noteId: z.string().min(1, "Note ID is required"),
-  note: z.string().min(1, "Note content is required"),
-});
-
+export const UpdateNoteSchema = z
+  .object({
+    id: z.string().min(1, "Note ID is required"),
+    note: z.string().min(1).optional(),
+    kind: z.enum(NOTE_KIND_VALUES).optional(),
+    dueAt: z.string().nullable().optional(),
+  })
+  .refine(
+    (data) =>
+      data.note !== undefined ||
+      data.kind !== undefined ||
+      data.dueAt !== undefined,
+    { message: "Provide at least one of note, kind, or dueAt" }
+  );
 export type UpdateNoteRequest = z.infer<typeof UpdateNoteSchema>;
 
-export const DeleteNoteSchema = z.object({
-  leadId: z.string().min(1, "Lead ID is required"),
-  noteId: z.string().min(1, "Note ID is required"),
+export const UpdateNoteStatusSchema = z.object({
+  id: z.string().min(1, "Note ID is required"),
+  status: z.enum(NOTE_STATUS_VALUES),
 });
+export type UpdateNoteStatusRequest = z.infer<typeof UpdateNoteStatusSchema>;
 
+export const DeleteNoteSchema = z.object({
+  id: z.string().min(1, "Note ID is required"),
+});
 export type DeleteNoteRequest = z.infer<typeof DeleteNoteSchema>;
 
 // Follow-up related schemas
@@ -943,6 +978,53 @@ export const DeleteOpportunitySchema = z.object({
   id: z.string().min(1, "Opportunity ID is required"),
 });
 export type DeleteOpportunityRequest = z.infer<typeof DeleteOpportunitySchema>;
+
+// Company schemas
+export const GetCompaniesSchema = z
+  .object({
+    name: z.string().optional(),
+  })
+  .merge(ListQuerySchema);
+export type GetCompaniesRequest = z.infer<typeof GetCompaniesSchema>;
+
+export const GetCompanyByIdSchema = z.object({
+  id: z.string().min(1, "Company ID is required"),
+});
+export type GetCompanyByIdRequest = z.infer<typeof GetCompanyByIdSchema>;
+
+export const CreateCompanySchema = z.object({
+  name: z.string().min(1, "Company name is required"),
+  email: z.string().optional(),
+  phone: z.string().optional(),
+  website: z.string().optional(),
+  industry: z.string().optional(),
+  address: z.string().optional(),
+  city: z.string().optional(),
+  state: z.string().optional(),
+  zipCode: z.string().optional(),
+  country: z.string().optional(),
+});
+export type CreateCompanyRequest = z.infer<typeof CreateCompanySchema>;
+
+export const UpdateCompanySchema = z.object({
+  id: z.string().min(1, "Company ID is required"),
+  name: z.string().min(1).optional(),
+  email: z.string().optional(),
+  phone: z.string().optional(),
+  website: z.string().optional(),
+  industry: z.string().optional(),
+  address: z.string().optional(),
+  city: z.string().optional(),
+  state: z.string().optional(),
+  zipCode: z.string().optional(),
+  country: z.string().optional(),
+});
+export type UpdateCompanyRequest = z.infer<typeof UpdateCompanySchema>;
+
+export const DeleteCompanySchema = z.object({
+  id: z.string().min(1, "Company ID is required"),
+});
+export type DeleteCompanyRequest = z.infer<typeof DeleteCompanySchema>;
 
 // Call (LeadCall) schemas
 const CALL_TYPE_VALUES = ["INBOUND", "OUTBOUND", "WEB"] as const;
