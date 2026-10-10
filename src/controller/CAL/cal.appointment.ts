@@ -27,6 +27,7 @@ import {
   compactTimeSlots,
   slotsToAIString,
   createDateTimeWithTimezone,
+  formatInstantInTimezone,
 } from "../../utils/cal.utils.js";
 import {
   bookMeeting,
@@ -35,7 +36,7 @@ import {
 } from "../../utils/meeting-book.js";
 import { LeadWithBizz, triggerEvent } from "../../utils/integration.util.js";
 import { prisma } from "../../lib/prisma.js";
-import { formatInTimeZone, toZonedTime } from "date-fns-tz";
+import { formatInTimeZone } from "date-fns-tz";
 
 type CheckAvailabilityInput = {
   args: CheckAvailabilityRequest;
@@ -238,10 +239,8 @@ export const bookAppointment = async ({
 
     const data = res.data; // for @db
     console.log("booking data", { data });
-    const startInTimezone = format(
-      new Date(appointmentDate),
-      "dd MMM yyyy, hh:mm a"
-    );
+    const bookedStart = data.data.start ?? appointmentDate;
+    const startInTimezone = formatInstantInTimezone(bookedStart, timezone);
 
     if (data) {
       await prisma.$transaction(async (tx) => {
@@ -270,10 +269,10 @@ export const bookAppointment = async ({
             },
           });
         }
-        console.log("book meeting", { dateTime });
+        console.log("book meeting", { bookedStart, timezone });
         await bookMeeting({
           businessId: businessId,
-          startTime: new Date(dateTime).toISOString(),
+          startTime: new Date(bookedStart).toISOString(),
           leadId: leadId,
           agencyId: agencyId,
           meetingId: data.data.uid,
@@ -346,12 +345,7 @@ export const rescheduleAppointment = async ({
     const ianaTimezone = lead.ianaTimezone;
     const { newStartTime, rescheduleOrCancelId } = args;
 
-    // Format the time in the lead's timezone without converting to UTC
-    const start = formatInTimeZone(
-      newStartTime,
-      ianaTimezone,
-      "yyyy-MM-dd'T'HH:mm:ss.SSSXXX"
-    );
+    const start = createDateTimeWithTimezone(newStartTime, ianaTimezone);
     console.log({ start });
 
     const { calApiKey } = calendar;
@@ -385,10 +379,9 @@ export const rescheduleAppointment = async ({
               conversationId,
               // system fields
               systemEvent: SYSTEM_EVENT.RESCHEDULE_APPOINTMENT,
-              systemDescription: `Rescheduled the appointment to ${formatInTimeZone(
-                new Date(start),
-                ianaTimezone,
-                "dd MMM yyyy, hh:mm a"
+              systemDescription: `Rescheduled the appointment to ${formatInstantInTimezone(
+                data.data.start ?? start,
+                ianaTimezone
               )} (TZ: ${ianaTimezone})`,
               systemData: {
                 input: {
@@ -403,6 +396,7 @@ export const rescheduleAppointment = async ({
         }
 
         const newMeetingId = data.data.uid;
+        const bookedStart = new Date(data.data.start ?? start).toISOString();
 
         // Check if meeting exists before updating
         const existingMeeting = await findMeetingForBusiness(
@@ -416,7 +410,7 @@ export const rescheduleAppointment = async ({
             where: { id: existingMeeting.id },
             data: {
               meetingId: newMeetingId,
-              startTime: new Date(start).toISOString(),
+              startTime: bookedStart,
             },
           });
         } else {
@@ -428,7 +422,7 @@ export const rescheduleAppointment = async ({
               agencyId: agencyId,
               leadId: id,
               status: "UPCOMING",
-              startTime: new Date(start).toISOString(),
+              startTime: bookedStart,
               messageOfLead: "",
               calendarType: CALENDAR_TYPE.CAL,
               meetingSource: MEETING_SOURCE.OUTSIDE,

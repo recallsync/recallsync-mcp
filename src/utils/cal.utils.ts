@@ -1,9 +1,4 @@
-import {
-  formatInTimeZone,
-  getTimezoneOffset as getTzOffset,
-  toZonedTime,
-} from "date-fns-tz";
-import { format } from "date-fns";
+import { formatInTimeZone, fromZonedTime } from "date-fns-tz";
 import { AvailabilityData } from "../types/cal.types";
 
 interface CompactSlot {
@@ -116,49 +111,30 @@ export function slotsToAIString(
   return result.join("\n");
 }
 
+const HAS_EXPLICIT_OFFSET = /[+-]\d{2}:?\d{2}$|Z$/;
+
 /**
- * Simple function: if datetime has offset, return it. If not, add timezone offset.
- * @param datetimeString - The datetime string
- * @param timezone - IANA timezone (e.g., 'Asia/Kolkata')
- * @returns ISO string with timezone offset
+ * Treat a naive wall-clock datetime as being in `timezone` (DST-aware for that
+ * date) and return ISO-8601 with the correct offset. Strings that already have
+ * Z or ±HH:MM are left unchanged.
  */
 export function createDateTimeWithTimezone(
   datetimeString: string,
   timezone: string
 ): string {
-  // 1. Check if it already has timezone offset
-  const hasOffset = /[+-]\d{2}:?\d{2}$|Z$/.test(datetimeString.trim());
-
-  if (hasOffset) {
-    return datetimeString; // Return as-is
+  const trimmed = datetimeString.trim();
+  if (HAS_EXPLICIT_OFFSET.test(trimmed)) {
+    return trimmed;
   }
 
-  // 2. Use date-fns-tz to get timezone offset string
-  const offsetString = getTimezoneOffsetString(timezone);
-
-  // 3. Format datetime with offset
-  const normalizedDateTime = datetimeString.replace(" ", "T");
-  const withMilliseconds = normalizedDateTime.includes(".")
-    ? normalizedDateTime
-    : normalizedDateTime + ".000";
-
-  return `${withMilliseconds}${offsetString}`;
+  const normalized = trimmed.replace(" ", "T");
+  const utcDate = fromZonedTime(normalized, timezone);
+  return formatInTimeZone(utcDate, timezone, "yyyy-MM-dd'T'HH:mm:ss.SSSXXX");
 }
 
-/**
- * Convert IANA timezone to offset string like +05:30 using date-fns-tz
- */
-function getTimezoneOffsetString(timezone: string): string {
-  // Use any date to get the timezone offset format
-  const sampleDate = new Date("2023-06-15T12:00:00Z"); // Use a date that avoids DST edge cases
-
-  // Use formatInTimeZone to get just the offset part
-  const formattedWithOffset = formatInTimeZone(sampleDate, timezone, "XXX");
-
-  return formattedWithOffset; // This will return something like '+05:30'
-}
-
-// Helper function to get timezone offset in minutes
-function getTimezoneOffset(timezone: string, date: Date): number {
-  return getTzOffset(timezone, date) / (1000 * 60); // Convert milliseconds to minutes
+export function formatInstantInTimezone(
+  instant: Date | string,
+  timezone: string
+): string {
+  return formatInTimeZone(new Date(instant), timezone, "dd MMM yyyy, hh:mm a");
 }

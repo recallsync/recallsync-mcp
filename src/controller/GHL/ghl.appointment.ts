@@ -1,4 +1,4 @@
-import { addDays, format, parse } from "date-fns";
+import { addDays, parse } from "date-fns";
 import {
   BookAppointmentRequest,
   CheckAvailabilityRequest,
@@ -11,7 +11,8 @@ import {
 import { chunkConsecutiveSlots } from "../../utils/ghl.js";
 import { refreshGHLToken } from "../../utils/ghl-token.js";
 import { GHLProviderConfig } from "../../schema/recall.schema.js";
-import { formatInTimeZone, fromZonedTime, toZonedTime } from "date-fns-tz";
+import { formatInTimeZone, fromZonedTime } from "date-fns-tz";
+import { formatInstantInTimezone } from "../../utils/cal.utils.js";
 import {
   EVENT,
   CALENDAR_TYPE,
@@ -36,6 +37,15 @@ type GHLRequestConstructor = {
   body?: unknown;
   path: string;
 };
+/** Treat a naive wall-clock datetime as `timezone` (DST-aware) and return UTC ISO. */
+function wallClockToUtcIso(dateTime: string, timezone: string): string {
+  const normalized = dateTime
+    .trim()
+    .replace(/([+-]\d{2}:\d{2}|Z)$/, "")
+    .replace(" ", "T");
+  return fromZonedTime(normalized, timezone).toISOString();
+}
+
 export const ghlRequestContructor = ({
   apiKey,
   method,
@@ -338,18 +348,9 @@ export const bookAppointment = async ({
     const { dateTime: startTime, leadId, timezone } = input;
     let path = `/calendars/events/appointments`;
 
-    // Normalize: strip timezone offset from startTime if present
-    // Converts "2025-10-02T10:00:00-07:00" to "2025-10-02T10:00:00"
-    const normalizedStartTime = startTime.replace(/([+-]\d{2}:\d{2}|Z)$/, "");
-    console.log({ normalizedStartTime });
-
-    // Convert the startTime from the user's timezone to UTC
-    // startTime is assumed to be in the user's specified timezone
-    const startTimeInUserTz = new Date(normalizedStartTime);
-    const startTimeUTC = fromZonedTime(
-      startTimeInUserTz,
-      timezone
-    ).toISOString();
+    // Wall-clock in the attendee IANA timezone (DST for that date), then UTC for GHL
+    const startTimeUTC = wallClockToUtcIso(startTime, timezone);
+    console.log({ startTime, timezone, startTimeUTC });
 
     const requestBody = {
       calendarId: ghlCalendarId,
@@ -427,11 +428,10 @@ export const bookAppointment = async ({
               // system fields
               systemEvent: SYSTEM_EVENT.BOOK_APPOINTMENT,
               systemEventStatus: SYSTEM_EVENT_STATUS.SUCCESS,
-              systemDescription: `The appointment has been booked for ${formatInTimeZone(
-                new Date(startTimeUTC),
-                timezone,
-                "dd MMM yyyy, hh:mm a"
-              )}`,
+              systemDescription: `The appointment has been booked for ${formatInstantInTimezone(
+                startTimeUTC,
+                timezone
+              )} (TZ: ${timezone})`,
               systemData: {
                 input: {
                   ...input,
@@ -520,9 +520,13 @@ export const updateAppointment = async (props: UpdateGHLAppointment) => {
     const path = `/calendars/events/appointments/${props.rescheduleOrCancelId}`;
     // Build update body based on what's provided
     const updateBody: Record<string, any> = {};
+    const leadTimezone = props.lead.ianaTimezone?.trim();
+    let rescheduleStartUtc: string | undefined;
     if (props.type === "reschedule") {
-      const startTime = props.newStartTime; // iso string
-      updateBody.startTime = startTime;
+      rescheduleStartUtc = leadTimezone
+        ? wallClockToUtcIso(props.newStartTime, leadTimezone)
+        : props.newStartTime;
+      updateBody.startTime = rescheduleStartUtc;
     }
     if (props.type === "cancel") {
       updateBody.appointmentStatus = "cancelled";
@@ -584,10 +588,10 @@ export const updateAppointment = async (props: UpdateGHLAppointment) => {
               systemDescription:
                 props.type === "cancel"
                   ? `Cancelled the appointment`
-                  : `Rescheduled the appointment to ${format(
-                      new Date(appointmentData.startTime),
-                      "dd MMM yyyy, hh:mm a"
-                    )}`,
+                  : `Rescheduled the appointment to ${formatInstantInTimezone(
+                      appointmentData.startTime ?? rescheduleStartUtc ?? "",
+                      leadTimezone || "UTC"
+                    )} (TZ: ${leadTimezone || "UTC"})`,
               systemData: {
                 input: {
                   ...props,
@@ -609,6 +613,12 @@ export const updateAppointment = async (props: UpdateGHLAppointment) => {
 
         let updatedMeeting;
 
+        const persistedStart =
+          rescheduleStartUtc ??
+          (appointmentData.startTime
+            ? new Date(appointmentData.startTime).toISOString()
+            : undefined);
+
         if (existingMeeting) {
           if (props.type === "cancel") {
             updatedMeeting = await updateMeeting({
@@ -622,7 +632,7 @@ export const updateAppointment = async (props: UpdateGHLAppointment) => {
               where: { id: existingMeeting.id },
               data: {
                 meetingId: appointmentData.id,
-                startTime: new Date(appointmentData.startTime).toISOString(),
+                startTime: persistedStart,
                 status: "UPCOMING",
                 updatedAt: new Date(),
               },
@@ -636,7 +646,7 @@ export const updateAppointment = async (props: UpdateGHLAppointment) => {
               agencyId: agencyId,
               leadId: id,
               status: "UPCOMING",
-              startTime: new Date(appointmentData.startTime).toISOString(),
+              startTime: persistedStart,
               messageOfLead: "",
               calendarType: CALENDAR_TYPE.GHL,
               meetingSource: MEETING_SOURCE.OUTSIDE,

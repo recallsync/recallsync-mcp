@@ -34,4 +34,4 @@ docker-compose up --build
 - Uses node-fetch for HTTP requests
 - Built with the Model Context Protocol SDK
 
-NGROK: npx ngrok http --url=bring-envious-trivial.ngrok-free.dev 3008
+NGROK: npx ngrok http --url=subfloor-haste-engross.ngrok-free.dev 3000
