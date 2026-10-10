@@ -613,11 +613,9 @@ export const updateAppointment = async (props: UpdateGHLAppointment) => {
 
         let updatedMeeting;
 
-        const persistedStart =
-          rescheduleStartUtc ??
-          (appointmentData.startTime
-            ? new Date(appointmentData.startTime).toISOString()
-            : undefined);
+        const persistedStart = new Date(
+          rescheduleStartUtc ?? appointmentData.startTime
+        ).toISOString();
 
         if (existingMeeting) {
           if (props.type === "cancel") {
